@@ -1,0 +1,78 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyc
+*.so
+*.dylib
+venv/
+.venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.coverage
+coverage.xml
+htmlcov/
+*.log
+logs/
+tmp/
+temp/
+
+# ML saved models & artifacts
+backend/ml/saved/
+backend/ml/saved/*.pkl
+backend/ml/saved/*.joblib
+*.pkl
+*.joblib
+
+# Environment — NEVER commit secrets
+.env
+.env.local
+.env.production
+.env.development
+.env.test
+.env.*
+!.env.example
+.envrc
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+node_modules/
+*.tsbuildinfo
+
+# dbt generated artifacts
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+logs/dbt.log
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+__MACOSX/
+
+# Data & warehouse (generated/raw artifacts — not source code)
+data/raw/
+data/processed/
+reports/outputs/
+reports/generated/
+warehouse/bronze/
+warehouse/silver/
+warehouse/gold/
+warehouse/
+companies/
+dist/packages/
+*.zip

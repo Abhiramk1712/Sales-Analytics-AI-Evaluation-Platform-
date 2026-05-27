@@ -1,0 +1,21 @@
+version: 2
+
+sources:
+  - name: app
+    description: "Raw application tables used by the FastAPI platform."
+    schema: public
+    tables:
+      - name: teams
+      - name: reps
+      - name: accounts
+      - name: deals
+      - name: revenue
+      - name: quotas
+      - name: plans
+      - name: rules
+      - name: plan_assignments
+      - name: sales_units
+      - name: sales_credits
+      - name: payouts
+      - name: bookings
+      - name: churn_events

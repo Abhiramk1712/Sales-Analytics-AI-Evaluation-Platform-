@@ -1,0 +1,73 @@
+version: 2
+
+models:
+  - name: int_quota_attainment
+    columns:
+      - name: rep_id
+        tests: [not_null]
+      - name: quarter_period
+        tests: [not_null]
+      - name: period_status
+        tests:
+          - accepted_values:
+              values: ['above_plan', 'on_track', 'at_risk', 'no_quota']
+
+  - name: int_payout_quality_signals
+    columns:
+      - name: payout_id
+        tests: [not_null, unique]
+      - name: signal_type
+        tests:
+          - accepted_values:
+              values: ['fallback_used', 'low_confidence', 'negative_or_zero_payout', 'ok']
+
+  - name: mart_exec_kpis
+    columns:
+      - name: quarter_period
+        tests: [not_null]
+
+  - name: mart_rep_performance
+    columns:
+      - name: rep_id
+        tests: [not_null]
+      - name: quarter_period
+        tests: [not_null]
+
+  - name: mart_payout_readiness
+    columns:
+      - name: payout_id
+        tests: [not_null, unique]
+      - name: readiness_status
+        tests:
+          - accepted_values:
+              values: ['ready', 'review']
+
+  - name: mart_forecast_vs_actual
+    columns:
+      - name: rep_id
+        tests: [not_null]
+      - name: month_period
+        tests: [not_null]
+
+  - name: mart_comp_plan_effectiveness
+    columns:
+      - name: plan_id
+        tests: [not_null]
+      - name: period
+        tests: [not_null]
+
+  - name: mart_pipeline_health
+    columns:
+      - name: stage
+        tests:
+          - accepted_values:
+              values: ['Prospecting', 'Qualification', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost']
+
+  - name: mart_payout_anomalies
+    columns:
+      - name: payout_id
+        tests: [not_null]
+      - name: anomaly_type
+        tests:
+          - accepted_values:
+              values: ['fallback_used', 'low_confidence', 'negative_or_zero_payout']

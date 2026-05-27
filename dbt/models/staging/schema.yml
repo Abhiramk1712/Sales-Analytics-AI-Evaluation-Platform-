@@ -1,0 +1,133 @@
+version: 2
+
+models:
+  - name: stg_teams
+    columns:
+      - name: id
+        tests: [not_null, unique]
+
+  - name: stg_reps
+    columns:
+      - name: id
+        tests: [not_null, unique]
+      - name: team_id
+        tests:
+          - relationships:
+              to: ref('stg_teams')
+              field: id
+
+  - name: stg_accounts
+    columns:
+      - name: id
+        tests: [not_null, unique]
+
+  - name: stg_deals
+    columns:
+      - name: id
+        tests: [not_null, unique]
+      - name: account_id
+        tests:
+          - relationships:
+              to: ref('stg_accounts')
+              field: id
+      - name: rep_id
+        tests:
+          - relationships:
+              to: ref('stg_reps')
+              field: id
+      - name: stage
+        tests:
+          - accepted_values:
+              values: ['Prospecting', 'Qualification', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost']
+
+  - name: stg_revenue
+    columns:
+      - name: rep_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_reps')
+              field: id
+      - name: period
+        tests: [not_null]
+
+  - name: stg_quotas
+    columns:
+      - name: rep_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_reps')
+              field: id
+      - name: period
+        tests: [not_null]
+
+  - name: stg_plans
+    columns:
+      - name: id
+        tests: [not_null, unique]
+
+  - name: stg_rules
+    columns:
+      - name: id
+        tests: [not_null, unique]
+      - name: plan_id
+        tests:
+          - relationships:
+              to: ref('stg_plans')
+              field: id
+
+  - name: stg_plan_assignments
+    columns:
+      - name: id
+        tests: [not_null, unique]
+      - name: plan_id
+        tests:
+          - relationships:
+              to: ref('stg_plans')
+              field: id
+
+  - name: stg_sales_units
+    columns:
+      - name: id
+        tests: [not_null, unique]
+      - name: opportunity_id
+        tests:
+          - relationships:
+              to: ref('stg_deals')
+              field: id
+
+  - name: stg_sales_credits
+    columns:
+      - name: id
+        tests: [not_null, unique]
+      - name: sales_unit_id
+        tests:
+          - relationships:
+              to: ref('stg_sales_units')
+              field: id
+
+  - name: stg_payouts
+    columns:
+      - name: id
+        tests: [not_null, unique]
+      - name: plan_id
+        tests:
+          - relationships:
+              to: ref('stg_plans')
+              field: id
+
+  - name: stg_bookings
+    columns:
+      - name: booking_id
+        tests: [not_null, unique]
+      - name: deal_id
+        tests:
+          - relationships:
+              to: ref('stg_deals')
+              field: id
+
+  - name: stg_churn_events
+    columns:
+      - name: event_id
+        tests: [not_null, unique]

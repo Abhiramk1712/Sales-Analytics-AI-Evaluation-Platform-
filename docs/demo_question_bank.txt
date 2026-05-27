@@ -1,0 +1,161 @@
+Demo Question Bank With Suggested Answers
+CEO/CFO/Sales Director + Engineering Lens
+
+How to use this sheet:
+- Keep each answer to 20-40 seconds in live demo mode.
+- Start with business outcome, then one technical proof point.
+- If asked deeper follow-up, open the relevant screen and evidence panel.
+
+CEO Lens (Strategy + Scale)
+
+1. What business decision becomes better in the first 30 days after adoption?
+Suggested answer: Weekly forecast commitment and resource allocation become materially better because leaders see one consistent view of revenue, pipeline quality, and risk flags instead of disconnected reports.
+
+2. Why is this better than our current CRM dashboards and BI reports?
+Suggested answer: CRM and BI show slices of data; this system adds governed metric definitions, forecast diagnostics, payout validation, and an evidence-grounded AI layer in one operating flow.
+
+3. What is the one metric this platform can improve fastest?
+Suggested answer: Forecast reliability. We can improve forecast call quality fastest because we expose MAPE, scenario spread, and commit vs best-case lanes directly in the operating cadence.
+
+4. How does this help us hit revenue targets more predictably?
+Suggested answer: It combines leading indicators (pipeline health, deal risk, rep coverage) with forecast scenarios so we can intervene earlier instead of reacting at quarter-end.
+
+5. What is the adoption plan for sales leaders, managers, and reps?
+Suggested answer: Phase 1 is leadership dashboards and forecast cadence, Phase 2 is manager coaching workflows, Phase 3 is rep-level scorecard and payout transparency. Each phase has a weekly ritual tied to specific screens.
+
+6. How quickly can we onboard a new business unit or region?
+Suggested answer: Fast. We ingest data by company context, run validation checks, and then switch context in the UI. In a production setup this is typically days, not months.
+
+7. What makes this hard for competitors to replicate?
+Suggested answer: The moat is not one model. It is the combination of canonical data contracts, governed metrics, payout reconciliation, and evidence-first AI behavior.
+
+8. How do we know this is trustworthy and not just nice charts?
+Suggested answer: We show data-quality status, explicit warnings, backtest metrics, and audit-friendly traces. The system surfaces uncertainty instead of hiding it.
+
+9. What happens when confidence is low or data is incomplete?
+Suggested answer: The platform degrades safely. It returns warnings, uses deterministic fallback logic where needed, and avoids fabricating numbers.
+
+10. What is the roadmap from demo system to enterprise production rollout?
+Suggested answer: Next steps are stronger RBAC and tenant isolation, deployment hardening, automated monitoring/alerts, and controlled model governance in CI/CD.
+
+CFO Lens (ROI + Risk + Control)
+
+1. What is the expected ROI and payback period?
+Suggested answer: ROI comes from fewer payout disputes, lower manual reporting effort, and tighter forecast variance. For most RevOps-heavy orgs, payback is typically measured in quarters, not years.
+
+2. What is the operating cost per month at current scale and 10x scale?
+Suggested answer: At current scale this architecture is lightweight (FastAPI + PostgreSQL + scheduled ML). At 10x, cost growth is mostly compute and storage linearity; we can control spend via batch inference and caching.
+
+3. How does this reduce payout errors and financial leakage?
+Suggested answer: Payouts are computed from governed rules, reconciled deterministically, and validated with cent-level checks so stale, duplicate, or mismatched rows are flagged before decisions are made.
+
+4. How do we audit a payout number end-to-end?
+Suggested answer: We can trace payout back through credit, revenue/deal facts, plan assignment, and commission rules. The logic path is explicit and reproducible.
+
+5. Can every KPI be traced back to source transactions?
+Suggested answer: Yes, by design. KPI definitions are centralized, and each metric calculation can be tied to canonical tables and period semantics.
+
+6. What controls prevent overpayment or incorrect commission rules?
+Suggested answer: Plan/rule governance, assignment coverage checks, payout consistency validation, and fallback flags provide both prevention and visibility.
+
+7. How do you handle restatements or retroactive data corrections?
+Suggested answer: We support reload/upsert workflows, then recompute and validate downstream metrics and payouts so corrected source data propagates consistently.
+
+8. How are forecast uncertainty and assumptions shown to finance users?
+Suggested answer: Through confidence intervals, scenario matrix, backtest quality metrics, and warnings. Finance can see both forecast value and confidence context.
+
+9. What governance exists for model changes and version approvals?
+Suggested answer: Model runs store version and metadata, predictions are persisted, and changes can be promoted with review gates and rollback paths.
+
+10. What are the top 3 financial risks that still remain?
+Suggested answer: 1) Incomplete upstream source quality, 2) organizational adoption gaps in forecast discipline, 3) production governance maturity (RBAC/tenant hardening) during scale-up.
+
+Sales Director Lens (Execution + Coaching + Forecasting)
+
+1. How would I use this in my weekly forecast call?
+Suggested answer: Start with dashboard and forecast tabs, review commit/base/best-case, inspect scenario spread, then assign actions based on at-risk deals and rep gaps.
+
+2. Which deals are at risk right now, and why?
+Suggested answer: The deal risk and pipeline tools highlight low-probability, stage-stalled, or weak-activity opportunities and provide reason codes you can coach against.
+
+3. Can I drill down from team view to rep, account, and deal level?
+Suggested answer: Yes. The flow supports leadership rollup to rep profile and deal-level inspection, so managers can move from trend to action quickly.
+
+4. How does it separate commit, base, and best-case forecast lanes?
+Suggested answer: It uses probability-aware logic and scenario generation to display conservative, expected, and upside ranges instead of a single optimistic point estimate.
+
+5. How accurate was this forecast versus actuals historically?
+Suggested answer: We expose historical backtest diagnostics such as MAPE and directional quality so you can judge trust before using it in commitments.
+
+6. How does it handle new reps or sparse territory history?
+Suggested answer: It uses safe fallback behavior with explicit warnings and leans on aggregate/team context until enough history exists for stronger personalization.
+
+7. Which reps need coaching, and what action is recommended?
+Suggested answer: Rep scorecards and clustering identify performance personas and highlight practical next actions around pipeline build, conversion discipline, and coverage.
+
+8. How does seasonality affect forecast confidence?
+Suggested answer: Seasonality is profiled in model selection and reflected in interval width and warnings, so high-volatility periods are not overconfidently presented.
+
+9. Can I trust this for quota and territory planning?
+Suggested answer: Yes for evidence-based planning baselines, with manager judgment layered in. It enforces consistent period and scope semantics that reduce planning drift.
+
+10. What behavior change do you expect from frontline managers?
+Suggested answer: A shift from anecdotal forecasting to evidence-driven weekly operating rhythm with measurable follow-through on risk actions.
+
+Engineering-Aware Leadership Lens (Technical Credibility)
+
+1. What is the data flow from ingestion to KPI and forecast output?
+Suggested answer: Ingestion and mapping feed validation checks, then canonical metrics/statistics, then ML and API layers, then frontend and agent surfaces.
+
+2. How is schema drift handled when source files change?
+Suggested answer: Manifest-aware inspection, dry-run diagnostics, and mapping fallbacks detect and isolate drift before full load.
+
+3. Which data-quality checks are blocking versus warning-only?
+Suggested answer: Critical integrity issues are fail-level, while completeness/coverage issues can be warn-level with explicit caveats in responses.
+
+4. How do you prevent metric definition drift across endpoints and reports?
+Suggested answer: Metric logic is centralized in shared services/registry so UI, APIs, and agent tools consume the same definitions.
+
+5. How are models trained, versioned, and rolled back safely?
+Suggested answer: Training and inference paths are explicit, model runs capture metadata and hashes, and prior versions can be restored if quality regresses.
+
+6. What monitoring exists for forecast degradation and model drift?
+Suggested answer: Model monitoring surfaces backtest quality and recent run context; this is the foundation for automated drift alerts in production.
+
+7. How does the AI assistant avoid hallucinating unsupported numbers?
+Suggested answer: The agent uses planner -> tool execution -> verifier. It answers from structured evidence and refuses to invent values when evidence is weak.
+
+8. What is the fallback behavior when the LLM provider is unavailable?
+Suggested answer: It returns deterministic, evidence-backed summaries with warnings, so the experience remains reliable even without live LLM responses.
+
+9. What observability do you have for latency, failures, and traceability?
+Suggested answer: Request correlation IDs, response-time headers, structured logs, and endpoint-level error handling provide traceable runtime behavior.
+
+10. What test strategy proves endpoint and model reliability?
+Suggested answer: Pytest coverage spans analytics, agent workflow, forecasting behavior, payout consistency, ETL paths, and regression-sensitive edge cases.
+
+11. How is RBAC enforced today, and what is the multi-tenant plan?
+Suggested answer: Current implementation includes role-aware surfaces with a documented RBAC target model; next step is strict API-level policy enforcement and tenant scoping.
+
+12. What are the main production hardening steps still pending?
+Suggested answer: Full authn/authz hardening, deeper tenant isolation, automated drift alerting, CI/CD promotion gates, and infrastructure scaling policies.
+
+High-Pressure Board-Style Questions
+
+1. If this had existed last quarter, what decision would we have made differently?
+Suggested answer: We would likely have adjusted commit posture earlier and targeted rescue actions on weak late-stage pipeline before quarter-end pressure peaked.
+
+2. If forecast and sales leadership disagree, who wins and why?
+Suggested answer: The operating model should favor evidence-backed baseline plus explicit leadership override. Disagreement is tracked and later measured against actuals.
+
+3. What is the cost of a false-positive forecast signal in this system?
+Suggested answer: Typical cost is over-commitment risk, poor staffing decisions, and credibility loss. We mitigate this with scenario ranges and confidence warnings.
+
+4. What is the worst-case failure mode, and how is damage contained?
+Suggested answer: Worst case is poor source quality driving wrong planning decisions. Damage is contained through validation gates, warnings, fallback behavior, and auditable traces.
+
+5. What KPI would prove this is truly adopted, not just demoed?
+Suggested answer: Reduction in forecast variance, increase in weekly manager usage, and drop in payout dispute cycle time are strong adoption indicators.
+
+6. What does success look like after 90 days in production?
+Suggested answer: Stable forecast cadence, measurable improvement in predictability, fewer payout escalations, and consistent leader trust in one governed view.

@@ -1,0 +1,483 @@
+{
+  "version": "1.0.0",
+  "name": "sales_schema",
+  "description": "Enterprise sales analytics schema with users, accounts, opportunities, revenue, and compensation tracking",
+  "created_at": "2026-04-29T13:30:00Z",
+  "last_updated": "2026-04-29T13:30:00Z",
+  "tables": {
+    "teams": {
+      "table_name": "teams",
+      "description": "Sales team organizational units",
+      "required_level": "hard_required",
+      "columns": [
+        {
+          "source_name": "team_id",
+          "target_name": "id",
+          "target_type": "string",
+          "nullable": false,
+          "synonyms": ["Team_ID", "team_identifier", "tid"]
+        },
+        {
+          "source_name": "team_name",
+          "target_name": "name",
+          "target_type": "string",
+          "nullable": false,
+          "synonyms": ["Team_Name", "name", "team", "group"]
+        },
+        {
+          "source_name": "region",
+          "target_name": "region",
+          "target_type": "string",
+          "nullable": true,
+          "synonyms": ["Region", "territory", "area"]
+        }
+      ],
+      "primary_key": ["id"],
+      "business_keys": [["name"]],
+      "indexes": [["name"], ["region"]],
+      "source_files": ["teams.csv"]
+    },
+    "users": {
+      "table_name": "users",
+      "description": "Sales representatives and team members",
+      "required_level": "hard_required",
+      "columns": [
+        {
+          "source_name": "user_id",
+          "target_name": "id",
+          "target_type": "string",
+          "nullable": false,
+          "synonyms": ["User_ID", "rep_id", "user_identifier"]
+        },
+        {
+          "source_name": "name",
+          "target_name": "name",
+          "target_type": "string",
+          "nullable": false,
+          "synonyms": ["Name", "full_name", "user_name"]
+        },
+        {
+          "source_name": "email",
+          "target_name": "email",
+          "target_type": "string",
+          "nullable": false,
+          "synonyms": ["Email", "email_address", "work_email"]
+        },
+        {
+          "source_name": "team_id",
+          "target_name": "team_id",
+          "target_type": "string",
+          "nullable": true,
+          "synonyms": ["Team_ID", "team_identifier"]
+        },
+        {
+          "source_name": "hire_date",
+          "target_name": "hire_date",
+          "target_type": "date",
+          "nullable": true,
+          "synonyms": ["Hire_Date", "start_date", "joined_date"],
+          "transform": "date_parse"
+        }
+      ],
+      "primary_key": ["id"],
+      "business_keys": [["email"]],
+      "indexes": [["email"], ["team_id"]],
+      "source_files": ["users.csv", "reps.csv"]
+    },
+    "accounts": {
+      "table_name": "accounts",
+      "description": "Customer/prospect accounts",
+      "required_level": "hard_required",
+      "columns": [
+        {
+          "source_name": "account_id",
+          "target_name": "id",
+          "target_type": "string",
+          "nullable": false,
+          "synonyms": ["Account_ID", "customer_id", "account_identifier"]
+        },
+        {
+          "source_name": "account_name",
+          "target_name": "name",
+          "target_type": "string",
+          "nullable": false,
+          "synonyms": ["Account_Name", "company_name", "name"]
+        },
+        {
+          "source_name": "industry",
+          "target_name": "industry",
+          "target_type": "string",
+          "nullable": true,
+          "synonyms": ["Industry", "sector", "vertical"]
+        },
+        {
+          "source_name": "employee_count",
+          "target_name": "employee_count",
+          "target_type": "integer",
+          "nullable": true,
+          "synonyms": ["Employee_Count", "headcount", "size"]
+        },
+        {
+          "source_name": "annual_revenue",
+          "target_name": "annual_revenue",
+          "target_type": "decimal",
+          "nullable": true,
+          "synonyms": ["Annual_Revenue", "revenue", "arr"]
+        }
+      ],
+      "primary_key": ["id"],
+      "business_keys": [["name"]],
+      "indexes": [["name"], ["industry"]],
+      "source_files": ["accounts.csv"]
+    },
+    "opportunities": {
+      "table_name": "opportunities",
+      "description": "Sales deals and opportunities",
+      "required_level": "hard_required",
+      "columns": [
+        {
+          "source_name": "opportunity_id",
+          "target_name": "id",
+          "target_type": "string",
+          "nullable": false,
+          "synonyms": ["Opportunity_ID", "deal_id", "deal_identifier"]
+        },
+        {
+          "source_name": "user_id",
+          "target_name": "user_id",
+          "target_type": "string",
+          "nullable": false,
+          "synonyms": ["User_ID", "rep_id", "owner_id"]
+        },
+        {
+          "source_name": "account_id",
+          "target_name": "account_id",
+          "target_type": "string",
+          "nullable": false,
+          "synonyms": ["Account_ID", "customer_id"]
+        },
+        {
+          "source_name": "opportunity_name",
+          "target_name": "name",
+          "target_type": "string",
+          "nullable": false,
+          "synonyms": ["Opportunity_Name", "deal_name", "name"]
+        },
+        {
+          "source_name": "product",
+          "target_name": "product",
+          "target_type": "string",
+          "nullable": true,
+          "synonyms": ["Product", "product_name", "solution"]
+        },
+        {
+          "source_name": "stage",
+          "target_name": "stage",
+          "target_type": "string",
+          "nullable": true,
+          "synonyms": ["Stage", "pipeline_stage", "status"],
+          "transform": "stage_normalize"
+        },
+        {
+          "source_name": "amount",
+          "target_name": "amount",
+          "target_type": "decimal",
+          "nullable": true,
+          "synonyms": ["Amount", "deal_size", "contract_value"]
+        },
+        {
+          "source_name": "created_date",
+          "target_name": "created_date",
+          "target_type": "date",
+          "nullable": true,
+          "synonyms": ["Created_Date", "created_at"],
+          "transform": "date_parse"
+        },
+        {
+          "source_name": "close_date",
+          "target_name": "close_date",
+          "target_type": "date",
+          "nullable": true,
+          "synonyms": ["Close_Date", "expected_close", "closed_date"],
+          "transform": "date_parse"
+        }
+      ],
+      "primary_key": ["id"],
+      "business_keys": [["user_id", "account_id", "name"]],
+      "indexes": [["user_id"], ["account_id"], ["stage"]],
+      "source_files": ["opportunities.csv", "deals.csv"]
+    },
+    "quotas": {
+      "table_name": "quotas",
+      "description": "Sales quotas by period and user",
+      "required_level": "strongly_recommended",
+      "columns": [
+        {
+          "source_name": "user_id",
+          "target_name": "user_id",
+          "target_type": "string",
+          "nullable": false,
+          "synonyms": ["User_ID", "rep_id"]
+        },
+        {
+          "source_name": "period",
+          "target_name": "period",
+          "target_type": "string",
+          "nullable": false,
+          "synonyms": ["Period", "month", "quarter"],
+          "transform": "period_normalize"
+        },
+        {
+          "source_name": "quota_amount",
+          "target_name": "amount",
+          "target_type": "decimal",
+          "nullable": false,
+          "synonyms": ["Quota_Amount", "quota", "target"]
+        }
+      ],
+      "primary_key": ["user_id", "period"],
+      "indexes": [["user_id"], ["period"]],
+      "source_files": ["quotas.csv"]
+    },
+    "revenue": {
+      "table_name": "revenue",
+      "description": "Recognized revenue by user and period",
+      "required_level": "hard_required",
+      "columns": [
+        {
+          "source_name": "user_id",
+          "target_name": "user_id",
+          "target_type": "string",
+          "nullable": false,
+          "synonyms": ["User_ID", "rep_id"]
+        },
+        {
+          "source_name": "period",
+          "target_name": "period",
+          "target_type": "string",
+          "nullable": false,
+          "synonyms": ["Period", "month", "quarter"],
+          "transform": "period_normalize"
+        },
+        {
+          "source_name": "revenue_amount",
+          "target_name": "amount",
+          "target_type": "decimal",
+          "nullable": false,
+          "synonyms": ["Revenue_Amount", "revenue", "arr", "mrr"]
+        }
+      ],
+      "primary_key": ["user_id", "period"],
+      "indexes": [["user_id"], ["period"]],
+      "source_files": ["revenue.csv"]
+    },
+    "activities": {
+      "table_name": "activities",
+      "description": "Sales activities and interactions",
+      "required_level": "optional",
+      "columns": [
+        {
+          "source_name": "activity_id",
+          "target_name": "id",
+          "target_type": "string",
+          "nullable": false,
+          "synonyms": ["Activity_ID", "activity_identifier"]
+        },
+        {
+          "source_name": "opportunity_id",
+          "target_name": "opportunity_id",
+          "target_type": "string",
+          "nullable": false,
+          "synonyms": ["Opportunity_ID", "deal_id"]
+        },
+        {
+          "source_name": "user_id",
+          "target_name": "user_id",
+          "target_type": "string",
+          "nullable": false,
+          "synonyms": ["User_ID", "rep_id"]
+        },
+        {
+          "source_name": "activity_type",
+          "target_name": "type",
+          "target_type": "string",
+          "nullable": true,
+          "synonyms": ["Activity_Type", "type", "category"]
+        },
+        {
+          "source_name": "outcome",
+          "target_name": "outcome",
+          "target_type": "string",
+          "nullable": true,
+          "synonyms": ["Outcome", "result", "status"]
+        },
+        {
+          "source_name": "notes",
+          "target_name": "notes",
+          "target_type": "string",
+          "nullable": true,
+          "synonyms": ["Notes", "description", "comments"]
+        },
+        {
+          "source_name": "activity_date",
+          "target_name": "activity_date",
+          "target_type": "date",
+          "nullable": true,
+          "synonyms": ["Activity_Date", "date", "created_date"],
+          "transform": "date_parse"
+        }
+      ],
+      "primary_key": ["id"],
+      "indexes": [["opportunity_id"], ["user_id"]],
+      "source_files": ["activities.csv"]
+    }
+  },
+  "relationships": {
+    "users_team_fk": {
+      "relationship_id": "users_team_fk",
+      "relationship_type": "direct_fk",
+      "description": "Users belong to a team",
+      "direct_fk": {
+        "local_table": "users",
+        "local_column": "team_id",
+        "remote_table": "teams",
+        "remote_column": "id",
+        "nullable": true,
+        "on_delete": "set_null"
+      },
+      "is_required": true,
+      "priority": 1
+    },
+    "opportunities_user_fk": {
+      "relationship_id": "opportunities_user_fk",
+      "relationship_type": "direct_fk",
+      "description": "Opportunities owned by users",
+      "direct_fk": {
+        "local_table": "opportunities",
+        "local_column": "user_id",
+        "remote_table": "users",
+        "remote_column": "id",
+        "nullable": false,
+        "on_delete": "restrict"
+      },
+      "is_required": true,
+      "priority": 2
+    },
+    "opportunities_account_fk": {
+      "relationship_id": "opportunities_account_fk",
+      "relationship_type": "direct_fk",
+      "description": "Opportunities belong to accounts",
+      "direct_fk": {
+        "local_table": "opportunities",
+        "local_column": "account_id",
+        "remote_table": "accounts",
+        "remote_column": "id",
+        "nullable": false,
+        "on_delete": "restrict"
+      },
+      "is_required": true,
+      "priority": 2
+    },
+    "quotas_user_fk": {
+      "relationship_id": "quotas_user_fk",
+      "relationship_type": "direct_fk",
+      "description": "Quotas assigned to users",
+      "direct_fk": {
+        "local_table": "quotas",
+        "local_column": "user_id",
+        "remote_table": "users",
+        "remote_column": "id",
+        "nullable": false,
+        "on_delete": "cascade"
+      },
+      "is_required": true,
+      "priority": 2
+    },
+    "revenue_user_fk": {
+      "relationship_id": "revenue_user_fk",
+      "relationship_type": "direct_fk",
+      "description": "Revenue attributed to users",
+      "direct_fk": {
+        "local_table": "revenue",
+        "local_column": "user_id",
+        "remote_table": "users",
+        "remote_column": "id",
+        "nullable": false,
+        "on_delete": "cascade"
+      },
+      "is_required": true,
+      "priority": 2
+    },
+    "activities_opportunity_fk": {
+      "relationship_id": "activities_opportunity_fk",
+      "relationship_type": "direct_fk",
+      "description": "Activities related to opportunities",
+      "direct_fk": {
+        "local_table": "activities",
+        "local_column": "opportunity_id",
+        "remote_table": "opportunities",
+        "remote_column": "id",
+        "nullable": false,
+        "on_delete": "cascade"
+      },
+      "is_required": false,
+      "priority": 3
+    },
+    "activities_user_fk": {
+      "relationship_id": "activities_user_fk",
+      "relationship_type": "direct_fk",
+      "description": "Activities performed by users",
+      "direct_fk": {
+        "local_table": "activities",
+        "local_column": "user_id",
+        "remote_table": "users",
+        "remote_column": "id",
+        "nullable": false,
+        "on_delete": "restrict"
+      },
+      "is_required": false,
+      "priority": 3
+    }
+  },
+  "required_tables": [
+    "teams",
+    "users",
+    "accounts",
+    "opportunities",
+    "revenue"
+  ],
+  "optional_tables": [
+    "activities",
+    "quotas"
+  ],
+  "metadata": {
+    "schema_type": "sales_analytics",
+    "min_tables": 5,
+    "max_tables": 22,
+    "supported_domains": [
+      "organization",
+      "accounts",
+      "opportunities",
+      "revenue",
+      "quotas",
+      "activities",
+      "compensation",
+      "territory",
+      "brands",
+      "finance"
+    ]
+  },
+  "validation_rules": {
+    "opportunities": [
+      "stage IN ('Prospecting', 'Qualification', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost')",
+      "amount > 0",
+      "close_date >= created_date"
+    ],
+    "revenue": [
+      "amount >= 0"
+    ],
+    "quotas": [
+      "amount > 0"
+    ]
+  }
+}
