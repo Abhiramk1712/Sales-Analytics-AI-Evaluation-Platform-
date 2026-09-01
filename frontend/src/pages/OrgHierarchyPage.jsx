@@ -358,7 +358,7 @@ function PositionsTable({ positions }) {
 }
 
 // ── Main page ────────────────────────────────────────────────────────────────
-export default function OrgHierarchyPage({ refreshKey }) {
+export default function OrgHierarchyPage({ refreshKey, activeCompany, userRole }) {
   const [tab, setTab] = useState("ladder");
   const [orgData, setOrgData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -368,13 +368,17 @@ export default function OrgHierarchyPage({ refreshKey }) {
   const [cascadeRules, setCascadeRules] = useState(null);
   const [rulesLoading, setRulesLoading] = useState(false);
 
+  const _headers = { "Content-Type": "application/json" };
+  if (userRole) _headers["X-User-Role"] = userRole;
+  if (activeCompany) _headers["X-Company-Id"] = activeCompany;
+
   // Reset all cached data when company changes
   useEffect(() => {
     setOrgData(null);
     setPositions(null);
     setCascadeRules(null);
     setError(null);
-  }, [refreshKey]);
+  }, [refreshKey, activeCompany]);
 
   // Lazy load each tab's data when first selected
   const loadOrg = async () => {
@@ -382,7 +386,7 @@ export default function OrgHierarchyPage({ refreshKey }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/analytics/manager-tree`);
+      const res = await fetch(`${API}/analytics/manager-tree`, { headers: _headers });
       if (!res.ok) throw new Error(`Failed to load org tree (${res.status})`);
       setOrgData(await res.json());
     } catch (e) {
@@ -395,7 +399,7 @@ export default function OrgHierarchyPage({ refreshKey }) {
     if (posLoading) return;
     setPosLoading(true);
     try {
-      const res = await fetch(`${API}/analytics/positions`);
+      const res = await fetch(`${API}/analytics/positions`, { headers: _headers });
       if (!res.ok) throw new Error(`Failed to load positions (${res.status})`);
       const body = await res.json();
       setPositions(body.positions || body || []);
@@ -409,7 +413,7 @@ export default function OrgHierarchyPage({ refreshKey }) {
     if (rulesLoading) return;
     setRulesLoading(true);
     try {
-      const res = await fetch(`${API}/analytics/plan-cascade-rules`);
+      const res = await fetch(`${API}/analytics/plan-cascade-rules`, { headers: _headers });
       if (!res.ok) throw new Error(`Failed to load cascade rules (${res.status})`);
       const body = await res.json();
       setCascadeRules(body.rules || body || []);

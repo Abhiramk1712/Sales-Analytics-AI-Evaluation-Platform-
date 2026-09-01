@@ -14,7 +14,7 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from faker import Faker
-from backend.database import AsyncSessionLocal, engine, Base
+from backend.database import get_session_factory, get_engine, Base
 from backend.ingestion.ingestion_run import IngestionRun
 from backend.models import (
     Team,
@@ -148,6 +148,11 @@ CREDIT_SPLIT_PROFILES: dict[str, list[tuple[str, float, float]]] = {
         ("overlay_specialist", 0.25, 0.40),
         ("sdr_sourced", 0.10, 0.15),
     ],
+    "insurance": [
+        ("primary_ae", 0.70, 0.85),
+        ("sdr_sourced", 0.10, 0.20),
+        ("overlay_specialist", 0.05, 0.10),
+    ],
 }
 
 # Revenue type semantics for ARR/MRR decomposition
@@ -211,13 +216,13 @@ ARCHETYPE_PROFILES: dict[str, dict] = {
         "deal_size_range": (15_000, 300_000),
         "cycle_days_range": (30, 120),
         "quota_growth_factor": 1.12,
-        "win_rate_weight": [12, 20, 22, 18, 20, 8],
+        "win_rate_weight": [12, 20, 22, 18, 16, 12],
         "primary_revenue_types": ["new_logo", "renewal", "expansion"],
         "churn_rate": 0.06,
         "expansion_rate": 0.18,
         "description": "Insurance carrier/agency — premium-based, renewal-heavy, territory coverage",
         "base_annual_quota_ic": 150_000.0,
-        "min_deals_won_per_rep": 5,
+        "min_deals_won_per_rep": 3,
         "seasonal_quarterly": {1: 0.82, 2: 0.95, 3: 1.05, 4: 1.18},
     },
 }
@@ -632,7 +637,11 @@ def _build_saas_extension_tables(
         role = role_by_rep.get(rep["id"], "Account Executive")
         if role not in quota_roles or not plan_rows:
             continue
-        selected_plan = random.choice(plan_rows)
+        # Prefer the most recent (current/open) plan instead of random selection
+        # so plan effective dates align with the data period.
+        current_year_plans = [p for p in plan_rows if not p.get("effective_end_date")]
+        latest_plans = current_year_plans or sorted(plan_rows, key=lambda p: p.get("effective_start_date", ""), reverse=True)[:1]
+        selected_plan = random.choice(latest_plans) if latest_plans else random.choice(plan_rows)
         plan_assignments_rows.append(
             {
                 "id": str(uuid.uuid4()),
@@ -1497,14 +1506,17 @@ def _generate_dataset(
         )
 
     for deal in deals:
-        # A4: activity outcomes correlated with deal stage
+        # A4: activity outcomes AND counts correlated with deal stage
         if deal["stage"] == "Closed Won":
             outcome_weights = [50, 30, 15, 5]   # positive, neutral, no_response, negative
+            activity_count = random.randint(4, 10)  # won deals have more engagement
         elif deal["stage"] == "Closed Lost":
             outcome_weights = [15, 30, 25, 30]
+            activity_count = random.randint(1, 4)   # lost deals have fewer touches
         else:
             outcome_weights = [25, 35, 25, 15]
-        for _ in range(random.randint(1, 8)):
+            activity_count = random.randint(2, 7)   # open deals moderate
+        for _ in range(activity_count):
             dataset["activities"].append(
                 {
                     "id": str(uuid.uuid4()),
@@ -2006,11 +2018,13 @@ def _validate_company_csv_integrity(company_dir: Path) -> list[str]:
 
 async def _load_csvs_into_database(company_dir: Path) -> dict[str, int]:
     """Drop-and-recreate all tables, then load rows from CSV files."""
-    async with engine.begin() as conn:
+    _engine = get_engine()
+    async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
 
-    async with AsyncSessionLocal() as db:
+    _session_factory = get_session_factory()
+    async with _session_factory() as db:
         counts: dict[str, int] = {}
 
         team_rows = _read_csv_rows(company_dir / "teams.csv")
@@ -3043,7 +3057,7 @@ async def _validate_payout_math_consistency(payout_delta_tolerance: float = 0.01
     from backend.models import PayoutRecord
     from sqlalchemy import select as _sel
 
-    async with AsyncSessionLocal() as db:
+    async with get_session_factory()() as db:
         expected_rows = await _build_expected_payout_rows(db)
         expected_by_key = {
             (row["user_id"], row["period"], row["plan_id"]): row
@@ -3123,7 +3137,7 @@ async def _seed_payout_records(company_dir: Path | None = None) -> int:
     from backend.models import PayoutRecord
     from sqlalchemy import select as _sel
 
-    async with AsyncSessionLocal() as db:
+    async with get_session_factory()() as db:
         expected_rows = await _build_expected_payout_rows(db)
         if not expected_rows:
             return 0
@@ -3271,7 +3285,7 @@ async def _auto_seed_cascade_rules() -> int:
     Plan, PlanCascadeRule, UserProfile, Position = _Plan, _PCR, _UP, _Pos
     from sqlalchemy import select as _select
     select = _select
-    async with AsyncSessionLocal() as db:
+    async with get_session_factory()() as db:
         # Find users with rank <= director
         user_pos_rows = (
             await db.execute(
@@ -3462,17 +3476,108 @@ async def seed(
           f"forecast next-Q: ${_audit_report.forecast.company_forecast_next_q:,.0f})")
 
 
+# ── CRM Auto-Scaffold ──────────────────────────────────────────────────────
+# When a company directory was created from CRM export (Salesforce, HubSpot,
+# etc.), it typically only has core tables (teams, reps, accounts, deals,
+# revenue, quotas, activities).  This function detects missing extension tables
+# and generates them from the existing core data so that the compensation
+# engine, org hierarchy, and payout pipeline work end-to-end.
+
+_EXTENSION_TABLES_REQUIRED = [
+    "positions", "users", "managers", "plans", "rules",
+    "plan_assignments", "rep_hierarchy", "sales_units", "sales_credits",
+]
+
+
+def _scaffold_missing_extension_tables(
+    company_dir: Path,
+    archetype: str = "saas_enterprise",
+    n_plans: int = 2,
+    n_products: int = 4,
+    n_territories: int = 3,
+    n_subregions_per_territory: int = 2,
+) -> list[str]:
+    """Auto-generate missing extension CSVs from existing core data.
+
+    Returns list of table names that were scaffolded.
+    """
+    # Check which extension tables already exist with data
+    missing = []
+    for table in _EXTENSION_TABLES_REQUIRED:
+        csv_path = company_dir / f"{table}.csv"
+        rows = _read_csv_rows(csv_path)
+        if not rows:
+            missing.append(table)
+
+    if not missing:
+        return []  # All extension tables already present
+
+    # Read core dataset from existing CSVs
+    dataset: dict[str, list[dict]] = {}
+    for table in TABLE_ORDER:
+        dataset[table] = _read_csv_rows(company_dir / f"{table}.csv")
+
+    if not dataset.get("reps"):
+        return []  # Cannot scaffold without reps
+
+    # Generate extension tables from core data
+    extension_tables = _build_saas_extension_tables(
+        dataset=dataset,
+        n_plans=n_plans,
+        n_rules=4,  # standard 4-tier for SaaS, 6-tier for insurance
+        n_products=n_products,
+        n_territories=n_territories,
+        n_subregions_per_territory=n_subregions_per_territory,
+        include_org_hierarchy=True,
+        archetype=archetype,
+    )
+
+    # Only write tables that were missing — don't overwrite user-provided data
+    scaffolded: list[str] = []
+    for table in missing:
+        rows = extension_tables.get(table, [])
+        if rows:
+            csv_path = company_dir / f"{table}.csv"
+            _write_rows_csv(csv_path, rows)
+            scaffolded.append(table)
+
+    # Also scaffold dependent tables that might be missing
+    for extra in ["products", "territories", "user_territory_assignments",
+                   "rep_product_assignments", "rep_ramp", "bookings",
+                   "attainment_snapshots", "arr_waterfall", "churn_events"]:
+        csv_path = company_dir / f"{extra}.csv"
+        existing = _read_csv_rows(csv_path)
+        if not existing and extra in extension_tables:
+            rows = extension_tables[extra]
+            if rows:
+                _write_rows_csv(csv_path, rows)
+                scaffolded.append(extra)
+
+    return scaffolded
+
+
 async def load_company_dataset(company_name: str, base_dir: str = "companies") -> dict[str, int]:
     """Load an existing companies/<company_name> CSV dataset into DB."""
     company_dir = Path(base_dir) / _safe_company_dir_name(company_name)
     if not company_dir.exists() or not company_dir.is_dir():
         raise FileNotFoundError(f"Company dataset folder not found: {company_dir}")
 
+    # Auto-scaffold missing extension tables for CRM imports
+    scaffolded = _scaffold_missing_extension_tables(company_dir)
+    import logging as _log
+    if scaffolded:
+        _log.getLogger(__name__).info(
+            "Auto-scaffolded %d missing tables for %s: %s",
+            len(scaffolded), company_name, ", ".join(scaffolded),
+        )
+
     integrity_errors = _validate_company_csv_integrity(company_dir)
     if integrity_errors:
         raise ValueError("; ".join(integrity_errors))
 
     counts = await _load_csvs_into_database(company_dir)
+    if scaffolded:
+        counts["auto_scaffolded_tables"] = scaffolded
 
     # Recompute payout records using plan-aware engine so imported companies
     # with their own Plan/Rule data get accurate commission calculations.

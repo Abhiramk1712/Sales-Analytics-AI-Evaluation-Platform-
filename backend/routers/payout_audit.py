@@ -34,8 +34,52 @@ class AdjustPayoutRequest(BaseModel):
 async def list_payout_records(
     lifecycle_state: Optional[str] = Query(None),
     company_id: str = Depends(get_current_company_id),
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     rows = list_payouts(company_id=company_id)
+
+    # Fallback: if in-memory audit trail is empty but DB has PayoutRecord rows,
+    # surface them so the /payouts list is never empty after a fresh company load.
+    if not rows:
+        from sqlalchemy import select as _sel
+        from backend.models import PayoutRecord, UserProfile, Rep
+        payout_records = (await db.execute(
+            _sel(PayoutRecord).order_by(PayoutRecord.created_at.desc())
+        )).scalars().all()
+        if payout_records:
+            # Build rep lookup for display names
+            rep_rows = (await db.execute(_sel(Rep.id, Rep.name, Rep.email))).all()
+            rep_name_by_email: dict[str, str] = {str(r.email).lower(): r.name for r in rep_rows if r.email}
+            user_rows = (await db.execute(_sel(UserProfile.id, UserProfile.email, UserProfile.name))).all()
+            user_id_to_email: dict[str, str] = {str(u.id): str(u.email or "").lower() for u in user_rows}
+
+            for pr in payout_records:
+                email = user_id_to_email.get(str(pr.user_id), "")
+                rep_name = rep_name_by_email.get(email, "Unknown")
+                rows.append({
+                    "payout_id": str(pr.id),
+                    "company_id": company_id,
+                    "rep_id": None,
+                    "user_id": str(pr.user_id),
+                    "plan_id": str(pr.plan_id) if pr.plan_id else None,
+                    "rule_id": None,
+                    "sales_credit_id": None,
+                    "period": pr.period,
+                    "rep_name": rep_name,
+                    "credited_amount": float(pr.payout_amount or 0),
+                    "quota": 0,
+                    "attainment_pct": 0,
+                    "base_commission": float(pr.payout_amount or 0),
+                    "accelerator_amount": 0,
+                    "spiff_amount": 0,
+                    "clawback_amount": 0,
+                    "final_payout": float(pr.payout_amount or 0),
+                    "lifecycle_state": "draft",
+                    "confidence": float(pr.confidence or 0),
+                    "fallback_used": pr.fallback_used,
+                    "source": "db_fallback",
+                })
+
     if lifecycle_state:
         rows = [r for r in rows if str(r.get("lifecycle_state", "")).lower() == lifecycle_state.lower()]
 

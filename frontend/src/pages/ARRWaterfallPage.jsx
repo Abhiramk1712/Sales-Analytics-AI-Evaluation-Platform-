@@ -72,12 +72,15 @@ function ArrTrendChart({ data }) {
   );
 }
 
-export default function ARRWaterfallPage({ refreshKey }) {
+export default function ARRWaterfallPage({ refreshKey, activeCompany, userRole }) {
+  const role = userRole || "executive";
+  const company = activeCompany || "";
   const [months, setMonths] = useState(12);
 
   // Use ML forecast arr-waterfall — returns real ARR derived from revenue data
   const { data, loading, error } = useFetch(
-    withRefresh(`/ml/forecast/arr-waterfall`, refreshKey)
+    withRefresh(`/ml/forecast/arr-waterfall`, refreshKey),
+    { role, company }
   );
 
   // Backend returns columnar arrays under data.waterfall

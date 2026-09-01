@@ -1,0 +1,11 @@
+rep_id,manager_rep_id,role,level,effective_start_date,effective_end_date,source_system
+a488066b-f5f7-4cbe-a836-43d11bcda709,,Chief Revenue Officer,L0,2024-07-01,,generated
+3c023c25-2678-4bea-92c5-7662f1a7ca75,a488066b-f5f7-4cbe-a836-43d11bcda709,Sales Manager,L4,2024-07-01,,generated
+45729505-fc18-43ae-83d6-9e3928d4d5a1,a488066b-f5f7-4cbe-a836-43d11bcda709,Sales Manager,L4,2024-07-01,,generated
+523a6734-973b-43b1-8a23-01c7c905083a,3c023c25-2678-4bea-92c5-7662f1a7ca75,Senior Account Executive,L5,2024-07-01,,generated
+ceb899a0-18c2-424a-8e78-b74496ad1fe3,45729505-fc18-43ae-83d6-9e3928d4d5a1,Sales Development Representative,L5,2024-07-01,,generated
+92ca4f5e-3944-47e6-bdbc-e9a6ec783778,3c023c25-2678-4bea-92c5-7662f1a7ca75,Senior Account Executive,L5,2024-07-01,,generated
+e4d095e6-f88c-41b4-9f30-3da49209a2dd,45729505-fc18-43ae-83d6-9e3928d4d5a1,Sales Development Representative,L5,2024-07-01,,generated
+31840926-ac4a-45ff-bb8a-1382837aa32b,3c023c25-2678-4bea-92c5-7662f1a7ca75,Account Executive,L5,2024-07-01,,generated
+8855c974-d62f-4d15-a655-0091e8a316de,45729505-fc18-43ae-83d6-9e3928d4d5a1,Senior Account Executive,L5,2024-07-01,,generated
+11c317d5-9177-43e8-8435-10259cc49bf8,3c023c25-2678-4bea-92c5-7662f1a7ca75,Senior Account Executive,L5,2024-07-01,,generated

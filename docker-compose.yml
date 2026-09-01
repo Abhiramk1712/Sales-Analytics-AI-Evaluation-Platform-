@@ -32,10 +32,15 @@ services:
       DEMO_MODE: "true"
       DEMO_DEFAULT_ROLE: executive
       DEMO_DEFAULT_COMPANY: techo-solutions
+      AUTO_CREATE_TABLES: "true"
+      ALLOW_DESTRUCTIVE_LOAD: "false"
       OPENAI_API_KEY: ""
       ANTHROPIC_API_KEY: ""
     ports:
       - "8000:8000"
+    volumes:
+      - ./companies:/app/companies:ro
+      - ./sample_data:/app/sample_data:ro
 
   frontend:
     image: node:20-alpine

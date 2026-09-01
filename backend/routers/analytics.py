@@ -195,17 +195,19 @@ async def rep_performance(
 
     results = []
     for rep in reps:
-        # Skip executive/leadership roles that don't carry a quota bag
-        if selling_ids and str(rep.id) not in selling_ids:
-            continue
         pos_id = position_id_by_email.get((rep.email or "").lower())
         pos = positions_by_id.get(str(pos_id)) if pos_id else None
+        is_quota_carrying = not selling_ids or str(rep.id) in selling_ids
+        # Skip executive/leadership roles that don't carry a quota bag
+        if not is_quota_carrying:
+            continue
         perf = await calculators.get_rep_performance(db, rep_id=str(rep.id), filters=perf_filters or None)
         if perf["data"]:
             data = perf["data"]
             data["email"] = rep.email
             data["position"] = pos.name if pos else None
             data["position_level"] = pos.level if pos else None
+            data["quota_carrying"] = is_quota_carrying
             results.append(data)
 
     return sorted(results, key=lambda x: -x["attainment_pct"])
@@ -996,9 +998,30 @@ async def rep_profile(rep_id: str, db: AsyncSession = Depends(get_db)):
             "average_deal_size": round(average_deal_size, 2),
         },
         "commission_tier": commission_tier,
+        "plan_name": assigned_plans[0]["name"] if assigned_plans else None,
+        "ramp_factor": None,  # populated below
+        "ramp_status": None,
         "rank": rank,
         "total_reps": total_reps,
     }
+
+    # Add ramp data from RepRamp table if available
+    try:
+        from backend.models import RepRamp as _RepRamp
+        ramp_row = (await db.execute(
+            select(_RepRamp)
+            .where(_RepRamp.rep_id == rep.id)
+            .order_by(_RepRamp.period.desc())
+            .limit(1)
+        )).scalars().first()
+        if ramp_row:
+            rf = float(ramp_row.ramp_factor or 1.0)
+            profile_resp["ramp_factor"] = round(rf, 4)
+            profile_resp["ramp_status"] = "fully_ramped" if rf >= 1.0 else "ramping"
+    except Exception:
+        pass
+
+    return profile_resp
 
 
 @router.get("/revops-kpis")
@@ -1026,6 +1049,8 @@ async def get_revops_kpis(
     return {
         "nrr_pct": nrr["nrr_pct"],
         "grr_pct": grr["grr_pct"],
+        "grr_methodology": "GRR = (prior_12m_recognized_revenue - churn_revenue) / prior_12m_recognized_revenue × 100. Excludes new logo and expansion.",
+        "nrr_methodology": "NRR = (prior_12m_recognized_revenue + expansion - contraction - churn) / prior_12m_recognized_revenue × 100.",
         "arr_growth_pct": arr_growth["arr_growth_pct"],
         "arr_current_12m": arr_growth.get("arr_current_12m", 0),
         "arr_prior_12m": arr_growth.get("arr_prior_12m", 0),

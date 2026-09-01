@@ -1,0 +1,5 @@
+id,external_id,product_sku,name,category,source_system,created_at
+ed652354-c59c-4f91-b7c8-9fef2186b016,PROD-001,SAAS-SKU-001,Enterprise Suite,SaaS,generated,2026-07-01T20:34:22.618580+00:00
+622f7edf-d3a0-41fd-ac42-f878decafc41,PROD-002,SAAS-SKU-002,Pro Platform,SaaS,generated,2026-07-01T20:34:22.618608+00:00
+38f6d880-213e-4925-b42a-82cbd2434219,PROD-003,SAAS-SKU-003,Growth Package,SaaS,generated,2026-07-01T20:34:22.618619+00:00
+c3dd5174-c8b5-4516-b98e-127b4cfa7558,PROD-004,SAAS-SKU-004,Starter Plan,SaaS,generated,2026-07-01T20:34:22.618638+00:00

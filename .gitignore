@@ -25,10 +25,10 @@ temp/
 
 # ML saved models & artifacts
 backend/ml/saved/
-backend/ml/saved/*.pkl
-backend/ml/saved/*.joblib
 *.pkl
 *.joblib
+*.pt
+*.onnx
 
 # Environment — NEVER commit secrets
 .env
@@ -41,10 +41,10 @@ backend/ml/saved/*.joblib
 .envrc
 
 # Node
+node_modules/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
-node_modules/
 *.tsbuildinfo
 
 # dbt generated artifacts
@@ -73,6 +73,9 @@ warehouse/bronze/
 warehouse/silver/
 warehouse/gold/
 warehouse/
-companies/
+
+# Packaging artifacts
+dist/
 dist/packages/
 *.zip
+*.tar.gz

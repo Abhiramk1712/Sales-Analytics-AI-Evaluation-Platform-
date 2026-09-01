@@ -12,6 +12,12 @@ _store: dict[str, dict[str, Any]] = {}
 _store_lock = Lock()
 
 
+def clear_store() -> None:
+    """Clear all in-memory payout audit trail records (used on company switch)."""
+    with _store_lock:
+        _store.clear()
+
+
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
 

@@ -67,6 +67,12 @@ async def load_company_into_context(
 
         _company_load_in_progress = True
         try:
+            # Clear in-memory caches scoped to previous company
+            try:
+                from backend.payout.audit_trail_service import clear_store as _clear_payout_store
+                _clear_payout_store()
+            except ImportError:
+                pass
             counts = await use_loader(normalized)
             _active_company = normalized
             return counts or {}

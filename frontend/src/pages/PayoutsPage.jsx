@@ -17,12 +17,12 @@ const TIER_COLORS = ["#B5D4F4", "#378ADD", "#1D9E75", "#185FA5"];
 const ATTAINMENT_COLOR = (v) => (v >= 100 ? "#1D9E75" : v >= 80 ? "#EF9F27" : "#D85A30");
 const fmtIncentive = (v) => Number(v || 0) > 0 ? fmt(v) : "—";
 
-function TeamSummaryPane({ period, refreshKey }) {
+function TeamSummaryPane({ period, refreshKey, role, company }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const periodQuery = period ? `period=${encodeURIComponent(period)}` : "";
   const url = withRefresh(`/payout/team-summary${periodQuery ? `?${periodQuery}` : ""}`, refreshKey);
-  const { data, loading, error } = useFetch(url);
+  const { data, loading, error } = useFetch(url, { role, company });
 
   if (loading) return <Skeleton h={320} />;
   if (error) return <ErrorMessage message={error} />;
@@ -188,9 +188,9 @@ function RepStatementPane({ repId, repName, periods }) {
   );
 }
 
-function QuotaFairnessPane({ period }) {
+function QuotaFairnessPane({ period, role, company }) {
   const url = period ? `/payout/quota-fairness?period=${encodeURIComponent(period)}` : `/payout/quota-fairness`;
-  const { data, loading, error } = useFetch(url);
+  const { data, loading, error } = useFetch(url, { role, company });
 
   if (loading) return <Skeleton h={150} />;
   if (error) return <ErrorMessage message={error} />;
@@ -227,7 +227,9 @@ function QuotaFairnessPane({ period }) {
   );
 }
 
-export default function PayoutsPage({ refreshKey }) {
+export default function PayoutsPage({ refreshKey, activeCompany, userRole }) {
+  const role = userRole || "executive";
+  const company = activeCompany || "";
   // Build last 8 quarter labels for the period selector
   const QUARTER_OPTIONS = (() => {
     const opts = [];
@@ -260,7 +262,7 @@ export default function PayoutsPage({ refreshKey }) {
   }, [refreshKey]);
 
   // Fetch rep list to pick for statements
-  const { data: repsData } = useFetch(withRefresh("/analytics/reps/performance", refreshKey));
+  const { data: repsData } = useFetch(withRefresh("/analytics/reps/performance", refreshKey), { role, company });
   const sortedReps = useMemo(
     () => [...(repsData || [])].sort((a, b) => Number(b.attainment_pct || 0) - Number(a.attainment_pct || 0)),
     [repsData]
@@ -372,18 +374,18 @@ export default function PayoutsPage({ refreshKey }) {
         )}
       </div>
 
-      {activeView === "team" && <TeamSummaryPane period={period} refreshKey={refreshKey} />}
+      {activeView === "team" && <TeamSummaryPane period={period} refreshKey={refreshKey} role={role} company={company} />}
       {activeView === "statement" && repId && <RepStatementPane repId={repId} repName={repName} periods={stmtPeriods} />}
       {activeView === "statement" && !repId && <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>Select a rep to view their commission statement.</div>}
-      {activeView === "fairness" && <QuotaFairnessPane period={period} />}
-      {activeView === "config" && <PayoutConfigPane />}
-      {activeView === "forecast" && <PayoutForecastPane refreshKey={refreshKey} />}
+      {activeView === "fairness" && <QuotaFairnessPane period={period} role={role} company={company} />}
+      {activeView === "config" && <PayoutConfigPane role={role} company={company} />}
+      {activeView === "forecast" && <PayoutForecastPane refreshKey={refreshKey} role={role} company={company} />}
     </div>
   );
 }
 
-function PayoutConfigPane() {
-  const { data, loading, error } = useFetch("/payout/config");
+function PayoutConfigPane({ role, company }) {
+  const { data, loading, error } = useFetch("/payout/config", { role, company });
 
   if (loading) return <Skeleton h={200} />;
   if (error) return <ErrorMessage message={error} />;
@@ -427,10 +429,10 @@ const FORECAST_ACCEL_COLOR = "#1D9E75";
 const FORECAST_BONUS_COLOR = "#EF9F27";
 const FORECAST_ATTAIN_COLOR = "#D85A30";
 
-function PayoutForecastPane({ refreshKey }) {
+function PayoutForecastPane({ refreshKey, role, company }) {
   const [forecastPeriods, setForecastPeriods] = useState(4);
   const url = withRefresh(`/payout/forecast?periods=${forecastPeriods}`, refreshKey);
-  const { data, loading, error } = useFetch(url);
+  const { data, loading, error } = useFetch(url, { role, company });
 
   if (loading) return <Skeleton h={320} />;
   if (error) return <ErrorMessage message={error} />;

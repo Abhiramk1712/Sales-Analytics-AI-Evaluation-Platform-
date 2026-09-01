@@ -1,0 +1,11 @@
+id,name,email,region,team_id,hire_date
+a488066b-f5f7-4cbe-a836-43d11bcda709,Sarah Chen,sarah.chen@meridiancloud.com,APAC,550e99c3-98c4-45e5-9b09-a71e64aef60c,2023-04-20
+3c023c25-2678-4bea-92c5-7662f1a7ca75,Marcus Johnson,marcus.j@meridiancloud.com,East,e11abe9d-9138-4de6-a32d-8f1a0fe8a3fd,2021-04-05
+45729505-fc18-43ae-83d6-9e3928d4d5a1,Emily Rodriguez,emily.r@meridiancloud.com,West,ba9b47b3-9c35-4fa6-ae1a-0aa8b96c5b6f,2022-12-13
+523a6734-973b-43b1-8a23-01c7c905083a,David Kim,david.kim@meridiancloud.com,West,5b2c52aa-cfb0-4902-a976-1c7e43f5b891,2024-08-07
+ceb899a0-18c2-424a-8e78-b74496ad1fe3,Lisa Thompson,lisa.t@meridiancloud.com,APAC,550e99c3-98c4-45e5-9b09-a71e64aef60c,2024-10-07
+92ca4f5e-3944-47e6-bdbc-e9a6ec783778,James Wilson,james.w@meridiancloud.com,Central,e11abe9d-9138-4de6-a32d-8f1a0fe8a3fd,2023-11-07
+e4d095e6-f88c-41b4-9f30-3da49209a2dd,Ana Garcia,ana.g@meridiancloud.com,East,550e99c3-98c4-45e5-9b09-a71e64aef60c,2023-11-06
+31840926-ac4a-45ff-bb8a-1382837aa32b,Robert Taylor,robert.t@meridiancloud.com,Central,5b2c52aa-cfb0-4902-a976-1c7e43f5b891,2020-12-17
+8855c974-d62f-4d15-a655-0091e8a316de,Michelle Lee,michelle.l@meridiancloud.com,West,ba9b47b3-9c35-4fa6-ae1a-0aa8b96c5b6f,2023-06-13
+11c317d5-9177-43e8-8435-10259cc49bf8,Chris Brown,chris.b@meridiancloud.com,West,e11abe9d-9138-4de6-a32d-8f1a0fe8a3fd,2022-09-01

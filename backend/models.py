@@ -623,3 +623,34 @@ class RepRamp(Base):
 
 Index("idx_attainment_snapshots_period", AttainmentSnapshot.period)
 Index("idx_rep_ramp_period", RepRamp.period)
+
+
+class PayoutConfiguration(Base):
+    """Persistent payout config by company/tenant with versioning."""
+    __tablename__ = "payout_configs"
+    id:               Mapped[uuid.UUID]        = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id:       Mapped[str]              = mapped_column(String(100), index=True)
+    version:          Mapped[int]              = mapped_column(Integer, default=1)
+    config_json:      Mapped[dict]             = mapped_column(JSONB, nullable=False)
+    effective_date:   Mapped[Optional[date]]   = mapped_column(Date)
+    is_active:        Mapped[bool]             = mapped_column(Boolean, default=True)
+    created_at:       Mapped[datetime]         = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at:       Mapped[datetime]         = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("company_id", "version", name="uq_payout_config_company_version"),
+    )
+
+
+class JobStatus(Base):
+    """Background job status tracking."""
+    __tablename__ = "job_status"
+    id:            Mapped[uuid.UUID]        = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    job_type:      Mapped[str]              = mapped_column(String(100), index=True)
+    status:        Mapped[str]              = mapped_column(String(20), default="queued")  # queued|running|success|failed
+    progress:      Mapped[Optional[int]]    = mapped_column(Integer)
+    metadata_json: Mapped[Optional[dict]]   = mapped_column(JSONB)
+    error_message: Mapped[Optional[str]]    = mapped_column(Text)
+    started_at:    Mapped[Optional[datetime]] = mapped_column(DateTime)
+    finished_at:   Mapped[Optional[datetime]] = mapped_column(DateTime)
+    created_at:    Mapped[datetime]         = mapped_column(DateTime, default=datetime.utcnow)

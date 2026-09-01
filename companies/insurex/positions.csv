@@ -1,0 +1,10 @@
+id,external_id,name,level,rank,rank_label,source_system,created_at,effective_start_date,effective_end_date
+5f05aaa9-49e4-411c-8b15-b5ece8db23c4,POS-001,Chief Revenue Officer,Executive,1,Executive,generated,2026-07-01T20:00:17.351718+00:00,2024-07-01,
+b5beba09-244c-4885-b418-c99528ecb098,POS-002,SVP Sales,Senior Leadership,2,VP,generated,2026-07-01T20:00:17.351727+00:00,2024-07-01,
+3d4f1c02-89e7-4ede-a995-f20daa73926e,POS-003,VP Sales,Leadership,2,VP,generated,2026-07-01T20:00:17.351734+00:00,2024-07-01,
+dc8f4406-067b-497a-bf42-3bb8f8a1c42e,POS-004,Director of Sales,Leadership,3,Director,generated,2026-07-01T20:00:17.351741+00:00,2024-07-01,
+6471d35d-ad93-4e48-8158-04a9a08e0519,POS-005,Sales Manager,Management,4,Manager,generated,2026-07-01T20:00:17.351748+00:00,2024-07-01,
+192b017b-24ea-4b65-8438-0fff753e19ca,POS-006,Overlay Specialist,Individual Contributor,5,IC,generated,2026-07-01T20:00:17.351755+00:00,2024-07-01,
+cdcc630f-6bdf-4310-96ec-7d9ec4c5976a,POS-007,Senior Account Executive,Individual Contributor,5,IC,generated,2026-07-01T20:00:17.351762+00:00,2024-07-01,
+da1c6f40-719c-4d6c-88c0-2a0270a974be,POS-008,Account Executive,Individual Contributor,5,IC,generated,2026-07-01T20:00:17.351769+00:00,2024-07-01,
+59dbe301-9c5c-4446-abf2-1e33835d88c8,POS-009,Sales Development Representative,Individual Contributor,5,IC,generated,2026-07-01T20:00:17.351776+00:00,2024-07-01,

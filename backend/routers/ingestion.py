@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from backend.company_context import get_active_company, load_company_into_context, set_active_company
+from backend.config import settings
 from backend.data_generator import load_company_dataset
 from backend.ingestion.intelligent_ingestion import intelligent_ingest, inspect_source_directory
 from backend.ingestion.manifest_loader import build_manifest_canonical_dataset
@@ -22,7 +23,7 @@ LOAD_MODES = {"full_reload", "upsert", "append"}
 class IntelligentIngestionRequest(BaseModel):
     source_dir: str = Field(..., description="Directory containing source CSV/PDF files")
     company_name: str = Field(..., description="Logical company name for output folder")
-    reset_database: bool = Field(default=True, description="Drop and recreate DB tables before load (only applies to full_reload mode)")
+    reset_database: bool = Field(default=False, description="Drop and recreate DB tables before load (only applies to full_reload mode). Requires ALLOW_DESTRUCTIVE_LOAD=true.")
     load_mode: str = Field(default="full_reload", description="Load mode: full_reload | upsert | append")
     use_manifest: bool = Field(default=True, description="Use manifest-driven mapping pipeline with fallback")
     manifest_name: str = Field(default="sales_schema", description="Manifest name")
@@ -137,6 +138,13 @@ def dry_run_load(req: IntelligentIngestionRequest):
 async def intelligent_load(req: IntelligentIngestionRequest):
     if req.load_mode not in LOAD_MODES:
         raise HTTPException(status_code=400, detail=f"Invalid load_mode '{req.load_mode}'. Must be one of: {sorted(LOAD_MODES)}")
+    # Guard: destructive reset requires explicit env opt-in
+    effective_reset = req.reset_database and req.load_mode == "full_reload"
+    if effective_reset and not settings.ALLOW_DESTRUCTIVE_LOAD:
+        raise HTTPException(
+            status_code=403,
+            detail="Destructive database reset is disabled. Set ALLOW_DESTRUCTIVE_LOAD=true to enable full_reload with reset_database=true.",
+        )
     try:
         result = await intelligent_ingest(
             source_dir=req.source_dir,
@@ -180,7 +188,7 @@ def _write_uploaded_sources(files: list[UploadFile]) -> Path:
 @router.post("/upload-intelligent-load")
 async def upload_and_intelligent_load(
     company_name: str = Form(..., description="Logical company name for output folder"),
-    reset_database: bool = Form(True, description="Drop and recreate DB tables before load"),
+    reset_database: bool = Form(False, description="Drop and recreate DB tables before load (requires ALLOW_DESTRUCTIVE_LOAD=true)"),
     load_mode: str = Form("full_reload", description="Load mode: full_reload | upsert | append"),
     use_manifest: bool = Form(True, description="Use manifest-driven mapping pipeline with fallback"),
     manifest_name: str = Form("sales_schema", description="Manifest name"),
@@ -191,6 +199,12 @@ async def upload_and_intelligent_load(
         raise HTTPException(status_code=400, detail="No files supplied")
     if load_mode not in LOAD_MODES:
         raise HTTPException(status_code=400, detail=f"Invalid load_mode '{load_mode}'.")
+    effective_reset = reset_database and load_mode == "full_reload"
+    if effective_reset and not settings.ALLOW_DESTRUCTIVE_LOAD:
+        raise HTTPException(
+            status_code=403,
+            detail="Destructive database reset is disabled. Set ALLOW_DESTRUCTIVE_LOAD=true to enable full_reload with reset_database=true.",
+        )
 
     try:
         source_dir = _write_uploaded_sources(files)

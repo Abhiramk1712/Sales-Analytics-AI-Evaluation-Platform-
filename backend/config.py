@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     APP_TITLE: str = "Sales Analytics AI"
     APP_VERSION: str = "1.0.0"
 
+    # Schema management
+    AUTO_CREATE_TABLES: bool = True  # Set False in production; use Alembic instead
+
+    # Destructive operations guard
+    ALLOW_DESTRUCTIVE_LOAD: bool = False
+
     # CORS — add your React dev server
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 

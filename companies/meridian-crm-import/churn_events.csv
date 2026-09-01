@@ -1,0 +1,2 @@
+event_id,account_id,period,event_type,arr_change,reason,detected_at
+b289ed7a-f01f-4adb-b9d0-3c995f596b48,f8a07533-0c10-4002-a578-da365ec10a2e,2025-08,partial_contraction,-79388.65,low_adoption,2026-07-01T20:34:22.620584+00:00

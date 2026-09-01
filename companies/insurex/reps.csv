@@ -1,0 +1,13 @@
+id,team_id,name,email,region,hire_date
+a33f5b72-3754-4c7d-a770-fb8205f226e0,98f38051-ee46-4786-9d83-10c37fdb500c,Benjamin Macdonald,benjamin.macdonald@insurex.com,West,2022-04-24
+c260e256-cef6-40a3-a3af-1cc136e02508,309a4d56-1e00-40b5-be35-5523961b8c80,George King,george.king@insurex.com,EMEA,2021-05-09
+23971210-c45e-4043-886c-f69c92eedf22,e71b168a-50e5-43bb-986d-fd93f2cc1afa,John Powell,john.powell@insurex.com,Central,2020-07-23
+4df4bb58-afd1-40e1-9459-9fd2f38c9cd8,bfd16f1c-9571-4397-9b8d-0ee9193db5d3,Deborah Decker,deborah.decker@insurex.com,APAC,2022-01-03
+49ee0e04-55bc-4d24-89d5-288672473cb1,309a4d56-1e00-40b5-be35-5523961b8c80,Alexander Byrd,alexander.byrd@insurex.com,Central,2019-06-13
+c78e9bd7-0760-4595-a848-a494101a4147,a6f68188-2275-478c-8b81-d111cf28311d,Justin Robinson,justin.robinson@insurex.com,West,2022-06-01
+40713600-da14-4eda-a084-05bb58930679,98f38051-ee46-4786-9d83-10c37fdb500c,Jennifer Reese,jennifer.reese@insurex.com,East,2022-11-03
+db5de4a8-68d7-40ac-931b-56ee0158fb6e,98f38051-ee46-4786-9d83-10c37fdb500c,Ashley Hill,ashley.hill@insurex.com,Central,2020-03-11
+7c28f429-6319-4ce8-b38a-5d0b486b407b,309a4d56-1e00-40b5-be35-5523961b8c80,Willie Chang,willie.chang@insurex.com,EMEA,2022-01-08
+d6c5c187-0f44-4678-8f06-e8c1b894687b,309a4d56-1e00-40b5-be35-5523961b8c80,Shawn Jones,shawn.jones@insurex.com,EMEA,2021-10-07
+11c59b73-1c6f-4521-8df0-fa6552bd4feb,e71b168a-50e5-43bb-986d-fd93f2cc1afa,Kyle Wise,kyle.wise@insurex.com,EMEA,2021-08-16
+a41c24be-a766-481d-958b-f5f7864ccaa1,a6f68188-2275-478c-8b81-d111cf28311d,Justin Sanchez,justin.sanchez@insurex.com,Central,2019-08-17
