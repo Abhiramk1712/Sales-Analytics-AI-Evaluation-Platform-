@@ -1,16 +1,15 @@
 id,team_id,name,email,region,hire_date
-79958e89-4a5b-444f-8b4d-52fba376e324,c8bb596f-3d8a-4c59-b15b-874d69f675d5,Steven Mills,steven.mills@meridiancloud.com,West,2022-04-24
-28615fdd-f208-43f5-9830-15dfe9f1e754,6cef8faf-2bca-4576-95d6-742e4837d6e3,Natasha Zamora,natasha.zamora@meridiancloud.com,EMEA,2021-05-09
-5f3f33ca-d46b-41bb-b3d6-b88dfbb7137e,15c0c6f0-501e-48bd-9159-d48a687eb67f,Marcus Doyle,marcus.doyle@meridiancloud.com,Central,2020-07-23
-0335d118-e8a1-45b1-9098-ea6f51da1b33,7746d74e-1ba0-48df-bcc1-335eb0a9afd1,Caitlin Marsh,caitlin.marsh@meridiancloud.com,APAC,2022-01-03
-248abef5-bdf3-44b7-ba1c-a83da97bce81,6cef8faf-2bca-4576-95d6-742e4837d6e3,Tonya Fernandez,tonya.fernandez@meridiancloud.com,Central,2019-06-13
-c871c852-11fd-4dcb-8e0a-305264beb2b2,b5e25449-dd1f-40fc-9a09-b6997e39c5d5,Janet Parker,janet.parker@meridiancloud.com,West,2022-06-01
-97b42328-e8b1-47d8-b18a-fd9db794cf35,c8bb596f-3d8a-4c59-b15b-874d69f675d5,Yvonne Osborn,yvonne.osborn@meridiancloud.com,East,2022-11-03
-926747b3-0605-45e2-b8d0-fcc92bbf0bed,c8bb596f-3d8a-4c59-b15b-874d69f675d5,Joshua Santiago,joshua.santiago@meridiancloud.com,Central,2020-03-11
-6f429a5c-b62b-484b-ac7a-28f39d560dbd,6cef8faf-2bca-4576-95d6-742e4837d6e3,Dr. Marcus Nicholson,dr..nicholson@meridiancloud.com,EMEA,2022-01-08
-03047d55-6b0c-4ed2-ade3-e979453d38ea,6cef8faf-2bca-4576-95d6-742e4837d6e3,Mia Adams,mia.adams@meridiancloud.com,EMEA,2021-10-07
-2504e3b3-25e8-4345-bf72-c6a2d0e388f1,15c0c6f0-501e-48bd-9159-d48a687eb67f,Mr. Timothy Barker,mr..barker@meridiancloud.com,EMEA,2021-08-16
-21f6019b-7c7e-480c-8cae-8b04a34eb58d,b5e25449-dd1f-40fc-9a09-b6997e39c5d5,Donna Russell,donna.russell@meridiancloud.com,Central,2019-08-17
-cd236f80-c9cc-43ed-96ad-09d2afa212d4,b5e25449-dd1f-40fc-9a09-b6997e39c5d5,Richard Davies,richard.davies@meridiancloud.com,EMEA,2022-06-01
-d26cf0a9-2fe7-4c98-bb58-4a257210d63b,b5e25449-dd1f-40fc-9a09-b6997e39c5d5,Barbara Brown,barbara.brown@meridiancloud.com,Central,2020-05-05
-8fbc7b28-5a14-4a2b-84cd-726d9d74feba,7746d74e-1ba0-48df-bcc1-335eb0a9afd1,Mario Smith,mario.smith@meridiancloud.com,EMEA,2023-04-18
+d446139e-1ade-41f0-b434-bfe1859dccfe,f6ea832b-2a78-4770-95dc-7437967da9ec,Zachary Bailey,zachary.bailey@meridiancloud.com,West,2022-04-24
+e6e3da5c-10ac-46fc-bbd8-7e5378e7d631,dac0364e-73db-4aab-b565-bba5b3e99c36,Lisa Cook,lisa.cook@meridiancloud.com,EMEA,2021-05-09
+29452830-c830-41dc-bde2-225c35008a56,49407eb0-8bc5-4eda-9dad-2e6a1996bdde,Robin Flores,robin.flores@meridiancloud.com,Central,2020-07-23
+ec847390-1f72-4f2c-aece-d6c8a794b9e6,9f1ef326-fb54-42d3-93ef-56099ffdc2e1,Jason Turner,jason.turner@meridiancloud.com,APAC,2022-01-03
+e86a69d9-3595-4c07-9821-248f968e091d,dac0364e-73db-4aab-b565-bba5b3e99c36,Daniel Young,daniel.young@meridiancloud.com,Central,2019-06-13
+645d5f16-eab8-4b66-b614-b170c42fcd94,8d176bbc-5ad9-426a-bdce-0d13e88c9945,Monique Wilcox,monique.wilcox@meridiancloud.com,West,2022-06-01
+9895fd25-57cb-467c-b4fe-dab4d011b85f,f6ea832b-2a78-4770-95dc-7437967da9ec,Melissa Matthews,melissa.matthews@meridiancloud.com,East,2022-11-03
+0a6236fc-5bf0-447d-92fd-4eaca555dad6,f6ea832b-2a78-4770-95dc-7437967da9ec,Karen James,karen.james@meridiancloud.com,Central,2020-03-11
+fc933254-1509-4dc5-9dbf-67455f3bd728,dac0364e-73db-4aab-b565-bba5b3e99c36,Pamela Edwards MD,pamela.md@meridiancloud.com,EMEA,2022-01-08
+0cbf9a48-fbf3-4c51-b5ec-ac820e68f0b5,dac0364e-73db-4aab-b565-bba5b3e99c36,Crystal Clark,crystal.clark@meridiancloud.com,EMEA,2021-10-07
+564f69a7-9964-449d-a1ae-4e07a409b8a6,49407eb0-8bc5-4eda-9dad-2e6a1996bdde,James Allen,james.allen@meridiancloud.com,EMEA,2021-08-16
+a3b7910e-fd2c-4344-a297-b8c11b639e56,8d176bbc-5ad9-426a-bdce-0d13e88c9945,Roberto Hernandez,roberto.hernandez@meridiancloud.com,Central,2019-08-17
+f61e3218-5e2d-439b-8b66-aad1cb7e037e,8d176bbc-5ad9-426a-bdce-0d13e88c9945,Brett Smith,brett.smith@meridiancloud.com,EMEA,2022-06-01
+2f57768e-edff-4eae-9153-eaeca2be9514,8d176bbc-5ad9-426a-bdce-0d13e88c9945,Alyssa Taylor,alyssa.taylor@meridiancloud.com,Central,2020-05-05

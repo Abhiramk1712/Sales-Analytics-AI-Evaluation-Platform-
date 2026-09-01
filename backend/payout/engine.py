@@ -82,6 +82,34 @@ DEFAULT_PAYOUT_CONFIG = PayoutConfig(
     team_bonus_min_win_rate_pct=55.0,
     team_bonus_min_deals=3,
     cap_multiplier=None,
+    # Both surfaces returned an empty list, and neither engine branch ever ran
+    # against data, despite SPIFs and clawbacks being named capabilities. These
+    # are deliberately modest and threshold-gated so they exercise the code
+    # paths without dominating a payout: the SPIF is a flat quarterly incentive
+    # for genuine overachievement, the clawback a small deduction for a win rate
+    # far below plan.
+    spiff_rules=[
+        SpiffRule(
+            name="Quarterly overachiever",
+            amount=1500.0,
+            trigger_metric="attainment",
+            trigger_threshold=120.0,
+        ),
+        SpiffRule(
+            name="High win rate",
+            amount=750.0,
+            trigger_metric="win_rate",
+            trigger_threshold=75.0,
+        ),
+    ],
+    clawback_rules=[
+        ClawbackRule(
+            name="Win rate below plan",
+            penalty_pct=0.05,
+            trigger_metric="win_rate",
+            trigger_below=40.0,
+        ),
+    ],
 )
 
 

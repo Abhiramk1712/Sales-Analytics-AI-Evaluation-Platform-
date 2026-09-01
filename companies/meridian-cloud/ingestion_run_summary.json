@@ -1,47 +1,47 @@
 {
-  "run_id": "3fa0229f-ad4f-47d4-8988-d6e2037c77e9",
+  "run_id": "262abbdf-a9f6-4f75-891e-8b81513582bc",
   "company_name": "meridian-cloud",
   "company_directory": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud",
-  "generated_at": "2026-07-01T20:19:10.842459+00:00",
+  "generated_at": "2026-09-01T16:48:40.429587+00:00",
   "status": "success",
-  "total_csv_rows": 3709,
+  "total_csv_rows": 4943,
   "db_rows_loaded": {
     "teams": 5,
-    "reps": 15,
-    "quotas": 84,
-    "accounts": 80,
-    "deals": 260,
-    "activities": 1016,
-    "revenue": 690,
+    "reps": 14,
+    "quotas": 156,
+    "accounts": 90,
+    "deals": 304,
+    "activities": 1097,
+    "revenue": 1199,
     "positions": 9,
-    "users": 15,
-    "managers": 15,
+    "users": 14,
+    "managers": 14,
     "plans": 4,
     "rules": 16,
     "territories": 20,
-    "plan_assignments": 14,
+    "plan_assignments": 13,
     "products": 5,
-    "rep_product_assignments": 55,
-    "user_territory_assignments": 15,
-    "attainment_snapshots": 259,
-    "rep_ramp": 180,
-    "leads": 79,
-    "opportunities": 260,
-    "arr_waterfall": 225,
-    "bookings": 109,
-    "churn_events": 8,
-    "sales_units": 109,
+    "rep_product_assignments": 52,
+    "user_territory_assignments": 14,
+    "attainment_snapshots": 505,
+    "rep_ramp": 168,
+    "leads": 113,
+    "opportunities": 304,
+    "arr_waterfall": 504,
+    "bookings": 128,
+    "churn_events": 9,
+    "sales_units": 128,
     "sales_unit_line_items": 0,
-    "sales_credits": 147,
-    "payouts": 90,
-    "auto_repair_quota_rows": 6,
-    "auto_repair_sales_units": 0,
-    "auto_repair_sales_credits": 0,
+    "sales_credits": 44,
+    "payouts": 168,
+    "auto_repair_quota_rows": 12,
+    "auto_repair_sales_units": 2,
+    "auto_repair_sales_credits": 2,
     "plan_cascade_rules": 1,
-    "payout_math_expected_rows": 90,
-    "payout_math_rows_validated": 90,
-    "payout_math_reps_validated": 15,
-    "payout_math_periods_validated": 6,
+    "payout_math_expected_rows": 168,
+    "payout_math_rows_validated": 168,
+    "payout_math_reps_validated": 14,
+    "payout_math_periods_validated": 12,
     "payout_math_missing_rows": 0,
     "payout_math_mismatched_rows": 0,
     "payout_math_duplicate_rows": 0,
@@ -65,25 +65,25 @@
     ]
   },
   "revops_reconciliation": {
-    "closed_won_total": 18226527.11,
-    "bookings_total": 18226527.11,
-    "revenue_total": 4513187.55,
-    "quota_total": 3878024.6,
-    "quota_to_revenue_ratio": 0.8593,
+    "closed_won_total": 3149692.38,
+    "bookings_total": 3149692.38,
+    "revenue_total": 2358549.14,
+    "quota_total": 2766576.14,
+    "quota_to_revenue_ratio": 1.173,
     "booking_to_closed_won_ratio": 1.0,
-    "closed_won_count": 109,
-    "bookings_count": 109,
+    "closed_won_count": 128,
+    "bookings_count": 128,
     "rep_ratio_outlier_threshold": 5.0,
     "rep_ratio_outliers": 0,
     "rep_ratio_outliers_gt5x": 0,
-    "team_ratio_avg": 1.0855,
-    "team_ratio_max": 1.7976,
+    "team_ratio_avg": 1.173,
+    "team_ratio_max": 1.2789,
     "team_count_with_ratio": 5
   },
   "sources": [
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/teams.csv",
-      "loaded_at": "2026-07-01T20:19:10.111791+00:00",
+      "loaded_at": "2026-09-01T16:48:39.758106+00:00",
       "row_count": 5,
       "column_count": 3,
       "columns": [
@@ -99,8 +99,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/reps.csv",
-      "loaded_at": "2026-07-01T20:19:10.111935+00:00",
-      "row_count": 15,
+      "loaded_at": "2026-09-01T16:48:39.758201+00:00",
+      "row_count": 14,
       "column_count": 6,
       "columns": [
         "id",
@@ -118,8 +118,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/quotas.csv",
-      "loaded_at": "2026-07-01T20:19:10.112090+00:00",
-      "row_count": 84,
+      "loaded_at": "2026-09-01T16:48:39.758373+00:00",
+      "row_count": 156,
       "column_count": 3,
       "columns": [
         "rep_id",
@@ -134,8 +134,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/accounts.csv",
-      "loaded_at": "2026-07-01T20:19:10.112268+00:00",
-      "row_count": 80,
+      "loaded_at": "2026-09-01T16:48:39.758521+00:00",
+      "row_count": 90,
       "column_count": 5,
       "columns": [
         "id",
@@ -152,8 +152,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/deals.csv",
-      "loaded_at": "2026-07-01T20:19:10.113002+00:00",
-      "row_count": 260,
+      "loaded_at": "2026-09-01T16:48:39.759193+00:00",
+      "row_count": 304,
       "column_count": 11,
       "columns": [
         "id",
@@ -176,8 +176,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/activities.csv",
-      "loaded_at": "2026-07-01T20:19:10.115377+00:00",
-      "row_count": 1016,
+      "loaded_at": "2026-09-01T16:48:39.761279+00:00",
+      "row_count": 1097,
       "column_count": 7,
       "columns": [
         "id",
@@ -196,8 +196,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/revenue.csv",
-      "loaded_at": "2026-07-01T20:19:10.116663+00:00",
-      "row_count": 690,
+      "loaded_at": "2026-09-01T16:48:39.763113+00:00",
+      "row_count": 1199,
       "column_count": 8,
       "columns": [
         "rep_id",
@@ -217,8 +217,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/arr_waterfall.csv",
-      "loaded_at": "2026-07-01T20:19:10.117104+00:00",
-      "row_count": 225,
+      "loaded_at": "2026-09-01T16:48:39.763896+00:00",
+      "row_count": 504,
       "column_count": 10,
       "columns": [
         "rep_id",
@@ -240,8 +240,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/attainment_snapshots.csv",
-      "loaded_at": "2026-07-01T20:19:10.117576+00:00",
-      "row_count": 259,
+      "loaded_at": "2026-09-01T16:48:39.764666+00:00",
+      "row_count": 505,
       "column_count": 8,
       "columns": [
         "id",
@@ -261,8 +261,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/bookings.csv",
-      "loaded_at": "2026-07-01T20:19:10.117899+00:00",
-      "row_count": 109,
+      "loaded_at": "2026-09-01T16:48:39.764997+00:00",
+      "row_count": 128,
       "column_count": 12,
       "columns": [
         "booking_id",
@@ -286,8 +286,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/churn_events.csv",
-      "loaded_at": "2026-07-01T20:19:10.117982+00:00",
-      "row_count": 8,
+      "loaded_at": "2026-09-01T16:48:39.765070+00:00",
+      "row_count": 9,
       "column_count": 7,
       "columns": [
         "event_id",
@@ -306,8 +306,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/leads.csv",
-      "loaded_at": "2026-07-01T20:19:10.118192+00:00",
-      "row_count": 79,
+      "loaded_at": "2026-09-01T16:48:39.765316+00:00",
+      "row_count": 113,
       "column_count": 9,
       "columns": [
         "id",
@@ -328,8 +328,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/managers.csv",
-      "loaded_at": "2026-07-01T20:19:10.118277+00:00",
-      "row_count": 15,
+      "loaded_at": "2026-09-01T16:48:39.765395+00:00",
+      "row_count": 14,
       "column_count": 5,
       "columns": [
         "id",
@@ -346,8 +346,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/opportunities.csv",
-      "loaded_at": "2026-07-01T20:19:10.118892+00:00",
-      "row_count": 260,
+      "loaded_at": "2026-09-01T16:48:39.766031+00:00",
+      "row_count": 304,
       "column_count": 10,
       "columns": [
         "id",
@@ -369,8 +369,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/plan_assignments.csv",
-      "loaded_at": "2026-07-01T20:19:10.118995+00:00",
-      "row_count": 14,
+      "loaded_at": "2026-09-01T16:48:39.766123+00:00",
+      "row_count": 13,
       "column_count": 9,
       "columns": [
         "id",
@@ -391,7 +391,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/plans.csv",
-      "loaded_at": "2026-07-01T20:19:10.119061+00:00",
+      "loaded_at": "2026-09-01T16:48:39.766182+00:00",
       "row_count": 4,
       "column_count": 8,
       "columns": [
@@ -412,7 +412,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/positions.csv",
-      "loaded_at": "2026-07-01T20:19:10.119130+00:00",
+      "loaded_at": "2026-09-01T16:48:39.766245+00:00",
       "row_count": 9,
       "column_count": 10,
       "columns": [
@@ -435,7 +435,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/products.csv",
-      "loaded_at": "2026-07-01T20:19:10.119191+00:00",
+      "loaded_at": "2026-09-01T16:48:39.766303+00:00",
       "row_count": 5,
       "column_count": 7,
       "columns": [
@@ -455,8 +455,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/rep_hierarchy.csv",
-      "loaded_at": "2026-07-01T20:19:10.119263+00:00",
-      "row_count": 15,
+      "loaded_at": "2026-09-01T16:48:39.766369+00:00",
+      "row_count": 14,
       "column_count": 7,
       "columns": [
         "rep_id",
@@ -475,8 +475,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/rep_product_assignments.csv",
-      "loaded_at": "2026-07-01T20:19:10.119437+00:00",
-      "row_count": 55,
+      "loaded_at": "2026-09-01T16:48:39.766540+00:00",
+      "row_count": 52,
       "column_count": 11,
       "columns": [
         "id",
@@ -499,8 +499,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/rep_ramp.csv",
-      "loaded_at": "2026-07-01T20:19:10.119686+00:00",
-      "row_count": 180,
+      "loaded_at": "2026-09-01T16:48:39.766815+00:00",
+      "row_count": 168,
       "column_count": 7,
       "columns": [
         "rep_id",
@@ -519,7 +519,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/rules.csv",
-      "loaded_at": "2026-07-01T20:19:10.119783+00:00",
+      "loaded_at": "2026-09-01T16:48:39.766928+00:00",
       "row_count": 16,
       "column_count": 15,
       "columns": [
@@ -547,8 +547,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/sales_credits.csv",
-      "loaded_at": "2026-07-01T20:19:10.120092+00:00",
-      "row_count": 147,
+      "loaded_at": "2026-09-01T16:48:39.767078+00:00",
+      "row_count": 44,
       "column_count": 8,
       "columns": [
         "id",
@@ -568,8 +568,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/sales_units.csv",
-      "loaded_at": "2026-07-01T20:19:10.120369+00:00",
-      "row_count": 109,
+      "loaded_at": "2026-09-01T16:48:39.767431+00:00",
+      "row_count": 128,
       "column_count": 10,
       "columns": [
         "id",
@@ -591,7 +591,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/territories.csv",
-      "loaded_at": "2026-07-01T20:19:10.120471+00:00",
+      "loaded_at": "2026-09-01T16:48:39.767537+00:00",
       "row_count": 20,
       "column_count": 11,
       "columns": [
@@ -615,8 +615,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/user_territory_assignments.csv",
-      "loaded_at": "2026-07-01T20:19:10.120556+00:00",
-      "row_count": 15,
+      "loaded_at": "2026-09-01T16:48:39.767626+00:00",
+      "row_count": 14,
       "column_count": 10,
       "columns": [
         "id",
@@ -638,8 +638,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-cloud/users.csv",
-      "loaded_at": "2026-07-01T20:19:10.120647+00:00",
-      "row_count": 15,
+      "loaded_at": "2026-09-01T16:48:39.767716+00:00",
+      "row_count": 14,
       "column_count": 14,
       "columns": [
         "id",

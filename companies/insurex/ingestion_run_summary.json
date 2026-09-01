@@ -1,47 +1,47 @@
 {
-  "run_id": "72830e96-82fa-45ea-92af-2426219a485e",
+  "run_id": "d6828c47-87d7-4a35-a10c-7115b3459e3a",
   "company_name": "insurex",
   "company_directory": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex",
-  "generated_at": "2026-07-01T20:00:17.913365+00:00",
+  "generated_at": "2026-09-01T16:48:38.421199+00:00",
   "status": "success",
-  "total_csv_rows": 2683,
+  "total_csv_rows": 3346,
   "db_rows_loaded": {
     "teams": 5,
-    "reps": 12,
-    "quotas": 66,
-    "accounts": 60,
-    "deals": 186,
-    "activities": 723,
-    "revenue": 450,
+    "reps": 10,
+    "quotas": 108,
+    "accounts": 80,
+    "deals": 210,
+    "activities": 814,
+    "revenue": 653,
     "positions": 9,
-    "users": 12,
-    "managers": 12,
+    "users": 10,
+    "managers": 10,
     "plans": 4,
     "rules": 24,
     "territories": 20,
-    "plan_assignments": 11,
+    "plan_assignments": 9,
     "products": 5,
-    "rep_product_assignments": 44,
-    "user_territory_assignments": 12,
-    "attainment_snapshots": 203,
-    "rep_ramp": 144,
-    "leads": 65,
-    "opportunities": 186,
-    "arr_waterfall": 180,
-    "bookings": 68,
-    "churn_events": 6,
-    "sales_units": 68,
+    "rep_product_assignments": 36,
+    "user_territory_assignments": 10,
+    "attainment_snapshots": 367,
+    "rep_ramp": 120,
+    "leads": 89,
+    "opportunities": 210,
+    "arr_waterfall": 350,
+    "bookings": 53,
+    "churn_events": 8,
+    "sales_units": 53,
     "sales_unit_line_items": 0,
-    "sales_credits": 96,
-    "payouts": 72,
-    "auto_repair_quota_rows": 6,
+    "sales_credits": 69,
+    "payouts": 120,
+    "auto_repair_quota_rows": 12,
     "auto_repair_sales_units": 0,
     "auto_repair_sales_credits": 0,
     "plan_cascade_rules": 1,
-    "payout_math_expected_rows": 72,
-    "payout_math_rows_validated": 72,
-    "payout_math_reps_validated": 12,
-    "payout_math_periods_validated": 6,
+    "payout_math_expected_rows": 120,
+    "payout_math_rows_validated": 120,
+    "payout_math_reps_validated": 10,
+    "payout_math_periods_validated": 12,
     "payout_math_missing_rows": 0,
     "payout_math_mismatched_rows": 0,
     "payout_math_duplicate_rows": 0,
@@ -65,25 +65,25 @@
     ]
   },
   "revops_reconciliation": {
-    "closed_won_total": 7791125.55,
-    "bookings_total": 7791125.55,
-    "revenue_total": 2089086.77,
-    "quota_total": 1911804.96,
-    "quota_to_revenue_ratio": 0.9151,
+    "closed_won_total": 5809341.5,
+    "bookings_total": 5809341.5,
+    "revenue_total": 3034680.98,
+    "quota_total": 3709820.78,
+    "quota_to_revenue_ratio": 1.2225,
     "booking_to_closed_won_ratio": 1.0,
-    "closed_won_count": 68,
-    "bookings_count": 68,
+    "closed_won_count": 53,
+    "bookings_count": 53,
     "rep_ratio_outlier_threshold": 5.0,
     "rep_ratio_outliers": 0,
     "rep_ratio_outliers_gt5x": 0,
-    "team_ratio_avg": 1.0887,
-    "team_ratio_max": 1.9207,
+    "team_ratio_avg": 1.4913,
+    "team_ratio_max": 2.2627,
     "team_count_with_ratio": 5
   },
   "sources": [
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/teams.csv",
-      "loaded_at": "2026-07-01T20:00:17.369375+00:00",
+      "loaded_at": "2026-09-01T16:48:37.906975+00:00",
       "row_count": 5,
       "column_count": 3,
       "columns": [
@@ -99,8 +99,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/reps.csv",
-      "loaded_at": "2026-07-01T20:00:17.369553+00:00",
-      "row_count": 12,
+      "loaded_at": "2026-09-01T16:48:37.907067+00:00",
+      "row_count": 10,
       "column_count": 6,
       "columns": [
         "id",
@@ -118,8 +118,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/quotas.csv",
-      "loaded_at": "2026-07-01T20:00:17.369673+00:00",
-      "row_count": 66,
+      "loaded_at": "2026-09-01T16:48:37.907209+00:00",
+      "row_count": 108,
       "column_count": 3,
       "columns": [
         "rep_id",
@@ -134,8 +134,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/accounts.csv",
-      "loaded_at": "2026-07-01T20:00:17.369810+00:00",
-      "row_count": 60,
+      "loaded_at": "2026-09-01T16:48:37.907346+00:00",
+      "row_count": 80,
       "column_count": 5,
       "columns": [
         "id",
@@ -152,8 +152,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/deals.csv",
-      "loaded_at": "2026-07-01T20:00:17.370469+00:00",
-      "row_count": 186,
+      "loaded_at": "2026-09-01T16:48:37.907867+00:00",
+      "row_count": 210,
       "column_count": 11,
       "columns": [
         "id",
@@ -176,8 +176,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/activities.csv",
-      "loaded_at": "2026-07-01T20:00:17.372067+00:00",
-      "row_count": 723,
+      "loaded_at": "2026-09-01T16:48:37.911841+00:00",
+      "row_count": 814,
       "column_count": 7,
       "columns": [
         "id",
@@ -196,8 +196,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/revenue.csv",
-      "loaded_at": "2026-07-01T20:00:17.372960+00:00",
-      "row_count": 450,
+      "loaded_at": "2026-09-01T16:48:37.912827+00:00",
+      "row_count": 653,
       "column_count": 8,
       "columns": [
         "rep_id",
@@ -217,8 +217,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/arr_waterfall.csv",
-      "loaded_at": "2026-07-01T20:00:17.373307+00:00",
-      "row_count": 180,
+      "loaded_at": "2026-09-01T16:48:37.913385+00:00",
+      "row_count": 350,
       "column_count": 10,
       "columns": [
         "rep_id",
@@ -240,8 +240,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/attainment_snapshots.csv",
-      "loaded_at": "2026-07-01T20:00:17.373686+00:00",
-      "row_count": 203,
+      "loaded_at": "2026-09-01T16:48:37.914007+00:00",
+      "row_count": 367,
       "column_count": 8,
       "columns": [
         "id",
@@ -261,8 +261,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/bookings.csv",
-      "loaded_at": "2026-07-01T20:00:17.373919+00:00",
-      "row_count": 68,
+      "loaded_at": "2026-09-01T16:48:37.914192+00:00",
+      "row_count": 53,
       "column_count": 12,
       "columns": [
         "booking_id",
@@ -286,8 +286,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/churn_events.csv",
-      "loaded_at": "2026-07-01T20:00:17.374009+00:00",
-      "row_count": 6,
+      "loaded_at": "2026-09-01T16:48:37.914261+00:00",
+      "row_count": 8,
       "column_count": 7,
       "columns": [
         "event_id",
@@ -306,8 +306,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/leads.csv",
-      "loaded_at": "2026-07-01T20:00:17.374207+00:00",
-      "row_count": 65,
+      "loaded_at": "2026-09-01T16:48:37.914468+00:00",
+      "row_count": 89,
       "column_count": 9,
       "columns": [
         "id",
@@ -328,8 +328,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/managers.csv",
-      "loaded_at": "2026-07-01T20:00:17.374300+00:00",
-      "row_count": 12,
+      "loaded_at": "2026-09-01T16:48:37.914538+00:00",
+      "row_count": 10,
       "column_count": 5,
       "columns": [
         "id",
@@ -346,8 +346,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/opportunities.csv",
-      "loaded_at": "2026-07-01T20:00:17.374745+00:00",
-      "row_count": 186,
+      "loaded_at": "2026-09-01T16:48:37.914991+00:00",
+      "row_count": 210,
       "column_count": 10,
       "columns": [
         "id",
@@ -369,8 +369,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/plan_assignments.csv",
-      "loaded_at": "2026-07-01T20:00:17.374833+00:00",
-      "row_count": 11,
+      "loaded_at": "2026-09-01T16:48:37.915072+00:00",
+      "row_count": 9,
       "column_count": 9,
       "columns": [
         "id",
@@ -391,7 +391,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/plans.csv",
-      "loaded_at": "2026-07-01T20:00:17.374895+00:00",
+      "loaded_at": "2026-09-01T16:48:37.915129+00:00",
       "row_count": 4,
       "column_count": 8,
       "columns": [
@@ -412,7 +412,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/positions.csv",
-      "loaded_at": "2026-07-01T20:00:17.374966+00:00",
+      "loaded_at": "2026-09-01T16:48:37.915193+00:00",
       "row_count": 9,
       "column_count": 10,
       "columns": [
@@ -435,7 +435,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/products.csv",
-      "loaded_at": "2026-07-01T20:00:17.375026+00:00",
+      "loaded_at": "2026-09-01T16:48:37.915250+00:00",
       "row_count": 5,
       "column_count": 7,
       "columns": [
@@ -455,8 +455,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/rep_hierarchy.csv",
-      "loaded_at": "2026-07-01T20:00:17.375091+00:00",
-      "row_count": 12,
+      "loaded_at": "2026-09-01T16:48:37.915315+00:00",
+      "row_count": 10,
       "column_count": 7,
       "columns": [
         "rep_id",
@@ -475,8 +475,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/rep_product_assignments.csv",
-      "loaded_at": "2026-07-01T20:00:17.375232+00:00",
-      "row_count": 44,
+      "loaded_at": "2026-09-01T16:48:37.915437+00:00",
+      "row_count": 36,
       "column_count": 11,
       "columns": [
         "id",
@@ -499,8 +499,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/rep_ramp.csv",
-      "loaded_at": "2026-07-01T20:00:17.375443+00:00",
-      "row_count": 144,
+      "loaded_at": "2026-09-01T16:48:37.915616+00:00",
+      "row_count": 120,
       "column_count": 7,
       "columns": [
         "rep_id",
@@ -519,7 +519,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/rules.csv",
-      "loaded_at": "2026-07-01T20:00:17.375555+00:00",
+      "loaded_at": "2026-09-01T16:48:37.915726+00:00",
       "row_count": 24,
       "column_count": 15,
       "columns": [
@@ -547,8 +547,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/sales_credits.csv",
-      "loaded_at": "2026-07-01T20:00:17.375871+00:00",
-      "row_count": 96,
+      "loaded_at": "2026-09-01T16:48:37.915897+00:00",
+      "row_count": 69,
       "column_count": 8,
       "columns": [
         "id",
@@ -568,8 +568,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/sales_units.csv",
-      "loaded_at": "2026-07-01T20:00:17.376153+00:00",
-      "row_count": 68,
+      "loaded_at": "2026-09-01T16:48:37.916052+00:00",
+      "row_count": 53,
       "column_count": 10,
       "columns": [
         "id",
@@ -591,7 +591,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/territories.csv",
-      "loaded_at": "2026-07-01T20:00:17.376290+00:00",
+      "loaded_at": "2026-09-01T16:48:37.916143+00:00",
       "row_count": 20,
       "column_count": 11,
       "columns": [
@@ -615,8 +615,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/user_territory_assignments.csv",
-      "loaded_at": "2026-07-01T20:00:17.376384+00:00",
-      "row_count": 12,
+      "loaded_at": "2026-09-01T16:48:37.916216+00:00",
+      "row_count": 10,
       "column_count": 10,
       "columns": [
         "id",
@@ -638,8 +638,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/insurex/users.csv",
-      "loaded_at": "2026-07-01T20:00:17.376480+00:00",
-      "row_count": 12,
+      "loaded_at": "2026-09-01T16:48:37.916289+00:00",
+      "row_count": 10,
       "column_count": 14,
       "columns": [
         "id",

@@ -17,7 +17,7 @@ setup:
 seed:
 	"$(VENV_BIN)/python" -m backend.data_generator \
 		--company-name "$(COMPANY)" \
-		--n-reps 12 --n-accounts 60 --n-deals 150 --months 18 \
+		--n-reps 12 --n-accounts 60 --n-deals 150 --months 36 \
 		--include-org-hierarchy
 
 backend:

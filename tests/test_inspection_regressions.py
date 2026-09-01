@@ -11,6 +11,8 @@ in a branch the tests never took.
 """
 from __future__ import annotations
 
+import statistics
+
 import numpy as np
 import pytest
 
@@ -137,3 +139,93 @@ def test_analytics_module_does_not_rebuild_the_cohort_expression():
     assert body.count('func.to_char(Deal.actual_close_date, "YYYY-MM")') == 1, (
         "the cohort expression is rebuilt instead of reused; GROUP BY will not match"
     )
+
+
+# ── #11: quotas must be calibrated against generated revenue ─────────────────
+
+
+def test_quota_calibration_targets_a_realistic_attainment_spread():
+    """
+    Quotas were built top-down from a constant and never referred to the revenue
+    the same generator produced, so attainment averaged 218% with individual
+    rep-quarters at 452% and 768%, and some quarters carried a $1.00 quota.
+
+    Beyond realism that defeated the compensation demo: the plans define four
+    attainment tiers, and with nearly every rep in the top one the tiering was
+    never exercised.
+    """
+    from backend.data_generator import _calibrate_quotas_to_revenue
+
+    quota_rows = [{"rep_id": f"r{i}", "period": "2026-Q1", "amount": "1.00"} for i in range(200)]
+    revenue_rows = [
+        {"rep_id": f"r{i}", "period": "2026-02", "amount": "100000"} for i in range(200)
+    ]
+
+    calibrated = _calibrate_quotas_to_revenue(quota_rows, revenue_rows)
+    attainments = [100_000 / float(r["amount"]) * 100 for r in calibrated]
+
+    assert len(calibrated) == 200
+    # Centred near plan rather than several times over it.
+    assert 90 <= statistics.median(attainments) <= 115, statistics.median(attainments)
+    # And spread across the tiers rather than piled into one.
+    assert min(attainments) < 90
+    assert max(attainments) > 115
+
+
+def test_quota_calibration_floors_tiny_quotas():
+    """A ramp factor on a small base produced $1.00 quotas, which made attainment
+    a meaningless ratio."""
+    from backend.data_generator import MIN_QUARTERLY_QUOTA, _calibrate_quotas_to_revenue
+
+    rows = _calibrate_quotas_to_revenue(
+        [{"rep_id": "r1", "period": "2026-Q1", "amount": "1.00"}],
+        [],  # no revenue to calibrate against
+    )
+    assert float(rows[0]["amount"]) >= MIN_QUARTERLY_QUOTA
+
+
+def test_quota_calibration_leaves_row_identity_intact():
+    """Only the amount changes; rep and period must survive."""
+    from backend.data_generator import _calibrate_quotas_to_revenue
+
+    rows = _calibrate_quotas_to_revenue(
+        [{"rep_id": "r1", "period": "2026-Q1", "amount": "5.00"}],
+        [{"rep_id": "r1", "period": "2026-01", "amount": "50000"}],
+    )
+    assert rows[0]["rep_id"] == "r1"
+    assert rows[0]["period"] == "2026-Q1"
+    assert float(rows[0]["amount"]) > 5.0
+
+
+# ── #12: SPIFs and clawbacks must exist and fire ─────────────────────────────
+
+
+def test_default_config_ships_spiff_and_clawback_rules():
+    """Both endpoints returned empty lists, so two advertised features showed
+    nothing and neither engine branch ran against data."""
+    from backend.payout.engine import DEFAULT_PAYOUT_CONFIG
+
+    assert DEFAULT_PAYOUT_CONFIG.spiff_rules, "no SPIF rules configured"
+    assert DEFAULT_PAYOUT_CONFIG.clawback_rules, "no clawback rules configured"
+
+
+def test_spiff_fires_for_an_overachiever_and_not_on_plan():
+    from backend.payout.engine import DEFAULT_PAYOUT_CONFIG, PayoutEngine
+
+    engine = PayoutEngine(config=DEFAULT_PAYOUT_CONFIG)
+    over = engine.compute(150_000, 100_000, 9, 1)   # 150% attainment, 90% win rate
+    on_plan = engine.compute(105_000, 100_000, 6, 4)  # 105%, 60%
+
+    assert over["spiff_total"] > 0
+    assert on_plan["spiff_total"] == 0
+
+
+def test_clawback_fires_only_when_win_rate_is_far_below_plan():
+    from backend.payout.engine import DEFAULT_PAYOUT_CONFIG, PayoutEngine
+
+    engine = PayoutEngine(config=DEFAULT_PAYOUT_CONFIG)
+    poor = engine.compute(50_000, 100_000, 2, 8)     # 20% win rate
+    healthy = engine.compute(105_000, 100_000, 6, 4)  # 60% win rate
+
+    assert poor["clawback_total"] > 0
+    assert healthy["clawback_total"] == 0
