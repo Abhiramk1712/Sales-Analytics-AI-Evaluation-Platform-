@@ -568,21 +568,33 @@ async def data_quality_checks(db: AsyncSession = Depends(get_db)) -> dict[str, A
 
 @router.get("/summary")
 async def data_quality_summary(db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    from backend.company_context import get_active_company
     raw_checks = await _build_checks(db)
     checks = [c if c.get("severity") else _enrich_check(c) for c in raw_checks]
     critical_count = sum(1 for c in checks if c.get("severity") == "critical")
     error_count = sum(1 for c in checks if c.get("severity") == "error")
     warning_count = sum(1 for c in checks if c.get("severity") == "warning")
     score = max(0, 100 - (critical_count * 20) - (error_count * 12) - (warning_count * 4))
-    status = "FAIL" if (critical_count + error_count) > 0 else ("WARN" if warning_count > 0 else "PASS")
+    overall_status = "fail" if (critical_count + error_count) > 0 else ("warning" if warning_count > 0 else "pass")
 
     return {
-        "status": status,
+        "company": get_active_company() or settings.DEMO_DEFAULT_COMPANY,
+        "status": overall_status,
         "score": score,
+        "checks": [
+            {
+                "name": c.get("name", ""),
+                "status": "fail" if c.get("status") == "FAIL" else ("warning" if c.get("status") == "WARN" else "pass"),
+                "details": c.get("message", ""),
+                "affected_rows": c.get("affected_rows", 0),
+                "severity": c.get("severity", "info"),
+                "remediation": c.get("remediation", ""),
+            }
+            for c in checks
+        ],
         "critical_count": critical_count,
         "error_count": error_count,
         "warning_count": warning_count,
         "blocks_sensitive_actions": critical_count > 0,
-        "checks": checks,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }

@@ -1,0 +1,13 @@
+id,team_id,name,email,region,hire_date
+2e84bd52-7df5-459d-ab52-be0a4951d0d7,f385bcfe-6ea8-475a-bc10-49f1ad02cbee,Robert Taylor,robert.taylor@techosolutions.com,West,2022-04-24
+f2c0b9d2-c44d-4ae1-9353-3b3f3fc2a1c2,bda2d4e6-b9d3-45c5-a9d8-51aa37ef8f80,Penny Salas,penny.salas@techosolutions.com,EMEA,2021-05-09
+bd4bb10e-e400-49c5-b578-c2be546c1562,3c6aab70-950d-4e36-98b6-3775b2e001d8,Kathy Morris,kathy.morris@techosolutions.com,Central,2020-07-23
+7526c649-bbdb-4001-a38d-9586cce08af3,e46d7695-d3e2-4972-ae2b-80ee9eff3789,Cody Wilson,cody.wilson@techosolutions.com,APAC,2022-01-03
+87471b18-bfc0-4214-98fc-51cac106e539,bda2d4e6-b9d3-45c5-a9d8-51aa37ef8f80,Stephanie Dillon MD,stephanie.md@techosolutions.com,Central,2019-06-13
+d2c384c1-e51b-4c7e-aede-5f23b2e471f8,63293700-3ac6-4921-8af2-d467c94e287a,Marie Flores,marie.flores@techosolutions.com,West,2022-06-01
+7f3ae53d-7a26-4c3f-b716-aaed6f37379f,f385bcfe-6ea8-475a-bc10-49f1ad02cbee,John Gonzalez,john.gonzalez@techosolutions.com,East,2022-11-03
+ed7d7474-e7ef-44b6-aab3-0ba018420e1c,f385bcfe-6ea8-475a-bc10-49f1ad02cbee,Bradley Lowe MD,bradley.md@techosolutions.com,Central,2020-03-11
+2e0048a5-6ab0-4ac9-8e17-12c74e31ba4f,bda2d4e6-b9d3-45c5-a9d8-51aa37ef8f80,Shane Mitchell,shane.mitchell@techosolutions.com,EMEA,2022-01-08
+a5754b11-ecdc-438a-afd5-4f23892cc5d5,bda2d4e6-b9d3-45c5-a9d8-51aa37ef8f80,Anna Chambers,anna.chambers@techosolutions.com,EMEA,2021-10-07
+2f1fc9c6-62e9-4db7-beba-707ee6a1d81a,3c6aab70-950d-4e36-98b6-3775b2e001d8,Alyssa Buckley,alyssa.buckley@techosolutions.com,EMEA,2021-08-16
+70828046-099d-4fe1-a262-4b11ec73efde,63293700-3ac6-4921-8af2-d467c94e287a,James Howard,james.howard@techosolutions.com,Central,2019-08-17

@@ -18,7 +18,9 @@ import { API, fmt, pct } from "../utils/format";
 
 const SCENARIOS = ["base", "optimistic", "conservative"];
 
-export default function MLInsightsPage({ refreshKey = 0 }) {
+export default function MLInsightsPage({ refreshKey = 0, activeCompany, userRole }) {
+  const role = userRole || "executive";
+  const company = activeCompany || "";
   const [target, setTarget] = useState("revenue");
   const [horizon, setHorizon] = useState(6);
   const [scenario, setScenario] = useState("base");
@@ -28,15 +30,15 @@ export default function MLInsightsPage({ refreshKey = 0 }) {
   const [runError, setRunError] = useState("");
 
   const { data: targetsData, loading: targetsLoading, error: targetsError } = useFetch(
-    `/ml/forecast/targets?_r=${refreshKey}`
+    `/ml/forecast/targets?_r=${refreshKey}`, { role, company }
   );
   const { data: explainData, loading: explainLoading, error: explainError } = useFetch(
-    `/ml/explain/global-importance?top_n=10&_r=${refreshKey}`
+    `/ml/explain/global-importance?top_n=10&_r=${refreshKey}`, { role, company }
   );
   const { data: evalData, loading: evalLoading, error: evalError } = useFetch(
-    `/ml/evaluate/deal-scoring?_r=${refreshKey}`
+    `/ml/evaluate/deal-scoring?_r=${refreshKey}`, { role, company }
   );
-  const { data: clusteringData, loading: clusteringLoading } = useFetch(`/ml/cluster/reps?_r=${refreshKey}`);
+  const { data: clusteringData, loading: clusteringLoading } = useFetch(`/ml/cluster/reps?_r=${refreshKey}`, { role, company });
   const includeLstmCandidate = Boolean(includeLstm);
   const isPercentTarget = target === "quota_attainment";
 

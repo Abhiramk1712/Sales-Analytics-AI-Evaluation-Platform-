@@ -27,7 +27,9 @@ function ActivityTypeTag({ type }) {
   );
 }
 
-export default function RepScorecardPage({ refreshKey }) {
+export default function RepScorecardPage({ refreshKey, activeCompany, userRole }) {
+  const role = userRole || "executive";
+  const company = activeCompany || "";
   const [selectedRepId, setSelectedRepId] = useState(null);
   const [activeTab, setActiveTab] = useState("overview"); // overview | deals | activities | quota
   const [dealsPage, setDealsPage] = useState(1);
@@ -35,18 +37,18 @@ export default function RepScorecardPage({ refreshKey }) {
   const [activitiesPage, setActivitiesPage] = useState(1);
   const [activitiesPageSize, setActivitiesPageSize] = useState(10);
 
-  const { data: repsData, loading: repsLoading } = useFetch(withRefresh("/analytics/reps/performance", refreshKey));
+  const { data: repsData, loading: repsLoading } = useFetch(withRefresh("/analytics/reps/performance", refreshKey), { role, company });
   const { data: profileData, loading: profileLoading } = useFetch(
-    selectedRepId ? `/analytics/reps/${selectedRepId}/profile` : null
+    selectedRepId ? `/analytics/reps/${selectedRepId}/profile` : null, { role, company }
   );
   const { data: dealsData, loading: dealsLoading } = useFetch(
-    selectedRepId && activeTab === "deals" ? `/analytics/reps/${selectedRepId}/deals?limit=50` : null
+    selectedRepId && activeTab === "deals" ? `/analytics/reps/${selectedRepId}/deals?limit=50` : null, { role, company }
   );
   const { data: activitiesData, loading: activitiesLoading } = useFetch(
-    selectedRepId && activeTab === "activities" ? `/analytics/reps/${selectedRepId}/activities?limit=50` : null
+    selectedRepId && activeTab === "activities" ? `/analytics/reps/${selectedRepId}/activities?limit=50` : null, { role, company }
   );
   const { data: stmtData, loading: stmtLoading } = useFetch(
-    selectedRepId && activeTab === "quota" ? `/payout/statements/${selectedRepId}?periods=12` : null
+    selectedRepId && activeTab === "quota" ? `/payout/statements/${selectedRepId}?periods=12` : null, { role, company }
   );
   const { data: attainData, loading: attainLoading } = useFetch(
     activeTab === "forecast" ? withRefresh("/ml/forecast/rep-attainment", refreshKey) : null

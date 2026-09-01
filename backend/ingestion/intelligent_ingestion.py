@@ -23,7 +23,7 @@ from backend.data_generator import (
     _write_dataset_to_csv,
     _write_ingestion_audit,
 )
-from backend.database import AsyncSessionLocal, Base, engine
+from backend.database import get_session_factory, Base, get_engine
 from backend.ingestion.loaders.pdf_loader import PDFLoader
 from backend.ingestion.loaders.excel_loader import ExcelLoader
 from backend.ingestion.manifest_loader import build_manifest_canonical_dataset
@@ -904,11 +904,13 @@ def _parse_datetime(raw: str) -> datetime:
 
 async def _load_dataset_to_db(dataset: dict[str, list[dict[str, str]]], reset_database: bool = True) -> dict[str, int]:
     if reset_database:
-        async with engine.begin() as conn:
+        _engine = get_engine()
+        async with _engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
 
-    async with AsyncSessionLocal() as db:
+    _session_factory = get_session_factory()
+    async with _session_factory() as db:
         return await _insert_dataset_rows(db, dataset)
 
 

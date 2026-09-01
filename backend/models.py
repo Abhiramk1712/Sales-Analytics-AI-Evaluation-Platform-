@@ -10,7 +10,20 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.database import Base
 
 
-class Team(Base):
+class TenantScoped:
+    """
+    Marks a table as belonging to one company.
+
+    Nullable for now: the column is introduced ahead of the query migration, so
+    existing rows and the CSV loader keep working while call sites are moved
+    over to `apply_company_scope` one at a time. It becomes NOT NULL once every
+    write path populates it — tightening it before then would just break loads
+    without making anything safer.
+    """
+    company_id: Mapped[Optional[str]] = mapped_column(String(100), index=True, nullable=True)
+
+
+class Team(Base, TenantScoped):
     __tablename__ = "teams"
     id:         Mapped[uuid.UUID]        = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name:       Mapped[str]              = mapped_column(String(100))
@@ -19,7 +32,7 @@ class Team(Base):
     reps:       Mapped[list["Rep"]]      = relationship(back_populates="team")
 
 
-class Rep(Base):
+class Rep(Base, TenantScoped):
     __tablename__ = "reps"
     id:         Mapped[uuid.UUID]        = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     team_id:    Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("teams.id"))
@@ -34,7 +47,7 @@ class Rep(Base):
     revenues:   Mapped[list["Revenue"]]  = relationship(back_populates="rep")
 
 
-class Quota(Base):
+class Quota(Base, TenantScoped):
     __tablename__ = "quotas"
     id:         Mapped[uuid.UUID]    = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     rep_id:     Mapped[uuid.UUID]    = mapped_column(ForeignKey("reps.id"))
@@ -44,7 +57,7 @@ class Quota(Base):
     rep:        Mapped[Rep]          = relationship(back_populates="quotas")
 
 
-class Account(Base):
+class Account(Base, TenantScoped):
     __tablename__ = "accounts"
     id:             Mapped[uuid.UUID]       = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name:           Mapped[str]             = mapped_column(String(150))
@@ -56,7 +69,7 @@ class Account(Base):
     deals:          Mapped[list["Deal"]]    = relationship(back_populates="account")
 
 
-class Deal(Base):
+class Deal(Base, TenantScoped):
     __tablename__ = "deals"
     id:                  Mapped[uuid.UUID]       = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     account_id:          Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("accounts.id"))
@@ -75,7 +88,7 @@ class Deal(Base):
     activities:  Mapped[list["Activity"]]   = relationship(back_populates="deal")
 
 
-class Activity(Base):
+class Activity(Base, TenantScoped):
     __tablename__ = "activities"
     id:            Mapped[uuid.UUID]       = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     deal_id:       Mapped[uuid.UUID]       = mapped_column(ForeignKey("deals.id"))
@@ -87,7 +100,7 @@ class Activity(Base):
     deal:          Mapped[Deal]            = relationship(back_populates="activities")
 
 
-class Revenue(Base):
+class Revenue(Base, TenantScoped):
     __tablename__ = "revenue"
     id:          Mapped[uuid.UUID]    = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     rep_id:      Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("reps.id"))
@@ -105,7 +118,7 @@ class Revenue(Base):
     rep:         Mapped[Optional[Rep]] = relationship(back_populates="revenues")
 
 
-class MLPrediction(Base):
+class MLPrediction(Base, TenantScoped):
     __tablename__ = "ml_predictions"
     id:            Mapped[uuid.UUID]       = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     model_name:    Mapped[str]             = mapped_column(String(100))
@@ -117,7 +130,7 @@ class MLPrediction(Base):
     predicted_at:  Mapped[datetime]        = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class ModelRunRecord(Base):
+class ModelRunRecord(Base, TenantScoped):
     __tablename__ = "model_runs"
     id:            Mapped[uuid.UUID]       = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     model_name:    Mapped[str]             = mapped_column(String(100))
@@ -150,7 +163,7 @@ POSITION_RANK_LABELS: dict[int, str] = {
 }
 
 
-class Position(Base):
+class Position(Base, TenantScoped):
     __tablename__ = "positions"
     id:              Mapped[uuid.UUID]       = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     external_id:     Mapped[Optional[str]]   = mapped_column(String(100), unique=True)
@@ -166,7 +179,7 @@ class Position(Base):
     effective_end_date:   Mapped[Optional[date]] = mapped_column(Date)
 
 
-class UserProfile(Base):
+class UserProfile(Base, TenantScoped):
     __tablename__ = "users"
     id:              Mapped[uuid.UUID]        = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     external_id:     Mapped[Optional[str]]    = mapped_column(String(100), unique=True)
@@ -187,7 +200,7 @@ class UserProfile(Base):
     team:            Mapped[Optional[Team]]   = relationship()
 
 
-class Manager(Base):
+class Manager(Base, TenantScoped):
     __tablename__ = "managers"
     id:                  Mapped[uuid.UUID]        = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id:             Mapped[uuid.UUID]        = mapped_column(ForeignKey("users.id"), unique=True)
@@ -196,7 +209,7 @@ class Manager(Base):
     created_at:          Mapped[datetime]         = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class Plan(Base):
+class Plan(Base, TenantScoped):
     __tablename__ = "plans"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     external_id:         Mapped[Optional[str]]  = mapped_column(String(100), unique=True)
@@ -215,7 +228,7 @@ class Plan(Base):
     owner:               Mapped[Optional["UserProfile"]] = relationship(foreign_keys=[owner_user_id])
 
 
-class Rule(Base):
+class Rule(Base, TenantScoped):
     __tablename__ = "rules"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     plan_id:             Mapped[uuid.UUID]      = mapped_column(ForeignKey("plans.id"))
@@ -231,7 +244,7 @@ class Rule(Base):
     plan:                Mapped[Plan]           = relationship()
 
 
-class PlanCascadeRule(Base):
+class PlanCascadeRule(Base, TenantScoped):
     """
     Defines how a plan owned by an executive/manager cascades down the org chart.
 
@@ -267,7 +280,7 @@ class PlanCascadeRule(Base):
     )
 
 
-class PlanAssignment(Base):
+class PlanAssignment(Base, TenantScoped):
     __tablename__ = "plan_assignments"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id:             Mapped[uuid.UUID]      = mapped_column(ForeignKey("users.id"))
@@ -284,7 +297,7 @@ class PlanAssignment(Base):
     )
 
 
-class Territory(Base):
+class Territory(Base, TenantScoped):
     __tablename__ = "territories"
     id:                  Mapped[uuid.UUID]       = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     external_id:         Mapped[Optional[str]]   = mapped_column(String(100), unique=True)
@@ -299,7 +312,7 @@ class Territory(Base):
     effective_end_date:   Mapped[Optional[date]] = mapped_column(Date)
 
 
-class UserTerritoryAssignment(Base):
+class UserTerritoryAssignment(Base, TenantScoped):
     __tablename__ = "user_territory_assignments"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id:             Mapped[uuid.UUID]      = mapped_column(ForeignKey("users.id"))
@@ -313,7 +326,7 @@ class UserTerritoryAssignment(Base):
     effective_end_date:   Mapped[Optional[date]] = mapped_column(Date)
 
 
-class TerritoryHistory(Base):
+class TerritoryHistory(Base, TenantScoped):
     __tablename__ = "territory_history"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     territory_id:        Mapped[uuid.UUID]      = mapped_column(ForeignKey("territories.id"))
@@ -323,7 +336,7 @@ class TerritoryHistory(Base):
     created_at:          Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class Brand(Base):
+class Brand(Base, TenantScoped):
     __tablename__ = "brands"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     external_id:         Mapped[Optional[str]]  = mapped_column(String(100), unique=True)
@@ -335,7 +348,7 @@ class Brand(Base):
     effective_end_date:   Mapped[Optional[date]] = mapped_column(Date)
 
 
-class BrandUser(Base):
+class BrandUser(Base, TenantScoped):
     __tablename__ = "brand_users"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     brand_id:            Mapped[uuid.UUID]      = mapped_column(ForeignKey("brands.id"))
@@ -346,7 +359,7 @@ class BrandUser(Base):
     created_at:          Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class BrandTerritory(Base):
+class BrandTerritory(Base, TenantScoped):
     __tablename__ = "brand_territories"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     brand_id:            Mapped[uuid.UUID]      = mapped_column(ForeignKey("brands.id"))
@@ -357,7 +370,7 @@ class BrandTerritory(Base):
     created_at:          Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class Product(Base):
+class Product(Base, TenantScoped):
     __tablename__ = "products"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     external_id:         Mapped[Optional[str]]  = mapped_column(String(100), unique=True)
@@ -368,7 +381,7 @@ class Product(Base):
     created_at:          Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class RepProductAssignment(Base):
+class RepProductAssignment(Base, TenantScoped):
     """Links a sales rep to the products they are authorized/specialised to sell."""
     __tablename__ = "rep_product_assignments"
     id:                   Mapped[uuid.UUID]        = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -386,7 +399,7 @@ class RepProductAssignment(Base):
     )
 
 
-class BrandProduct(Base):
+class BrandProduct(Base, TenantScoped):
     __tablename__ = "brand_products"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     brand_id:            Mapped[uuid.UUID]      = mapped_column(ForeignKey("brands.id"))
@@ -397,7 +410,7 @@ class BrandProduct(Base):
     created_at:          Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class AccountBrandMap(Base):
+class AccountBrandMap(Base, TenantScoped):
     __tablename__ = "account_brand_maps"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     account_id:          Mapped[uuid.UUID]      = mapped_column(ForeignKey("accounts.id"))
@@ -408,7 +421,7 @@ class AccountBrandMap(Base):
     created_at:          Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class SalesUnit(Base):
+class SalesUnit(Base, TenantScoped):
     __tablename__ = "sales_units"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     external_id:         Mapped[Optional[str]]  = mapped_column(String(100), unique=True)
@@ -422,7 +435,7 @@ class SalesUnit(Base):
     created_at:          Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class SalesUnitLineItem(Base):
+class SalesUnitLineItem(Base, TenantScoped):
     __tablename__ = "sales_unit_line_items"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     sales_unit_id:       Mapped[uuid.UUID]      = mapped_column(ForeignKey("sales_units.id"))
@@ -434,7 +447,7 @@ class SalesUnitLineItem(Base):
     created_at:          Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class SalesCredit(Base):
+class SalesCredit(Base, TenantScoped):
     __tablename__ = "sales_credits"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     sales_unit_id:       Mapped[uuid.UUID]      = mapped_column(ForeignKey("sales_units.id"))
@@ -446,7 +459,7 @@ class SalesCredit(Base):
     created_at:          Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class PayoutRecord(Base):
+class PayoutRecord(Base, TenantScoped):
     __tablename__ = "payouts"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id:             Mapped[uuid.UUID]      = mapped_column(ForeignKey("users.id"))
@@ -464,7 +477,7 @@ class PayoutRecord(Base):
     )
 
 
-class Lead(Base):
+class Lead(Base, TenantScoped):
     __tablename__ = "leads"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     external_id:         Mapped[Optional[str]]  = mapped_column(String(100), unique=True)
@@ -477,7 +490,7 @@ class Lead(Base):
     source_system:       Mapped[Optional[str]]  = mapped_column(String(50), default="uploaded")
 
 
-class Opportunity(Base):
+class Opportunity(Base, TenantScoped):
     __tablename__ = "opportunities"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     external_id:         Mapped[Optional[str]]  = mapped_column(String(100), unique=True)
@@ -492,7 +505,7 @@ class Opportunity(Base):
     updated_at:          Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
-class MonthlyFinance(Base):
+class MonthlyFinance(Base, TenantScoped):
     __tablename__ = "monthly_finance"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     account_id:          Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("accounts.id"))
@@ -508,7 +521,7 @@ class MonthlyFinance(Base):
     )
 
 
-class AccountOwnership(Base):
+class AccountOwnership(Base, TenantScoped):
     __tablename__ = "account_ownership"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     account_id:          Mapped[uuid.UUID]      = mapped_column(ForeignKey("accounts.id"))
@@ -522,7 +535,7 @@ class AccountOwnership(Base):
     effective_end_date:   Mapped[Optional[date]] = mapped_column(Date)
 
 
-class ArrWaterfallEntry(Base):
+class ArrWaterfallEntry(Base, TenantScoped):
     """Monthly ARR waterfall per rep — seeded from arr_waterfall.csv."""
 
     __tablename__ = "arr_waterfall"
@@ -540,7 +553,7 @@ class ArrWaterfallEntry(Base):
     created_at:       Mapped[datetime]          = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class Booking(Base):
+class Booking(Base, TenantScoped):
     """Closed-won booking records — seeded from bookings.csv."""
 
     __tablename__ = "bookings"
@@ -559,7 +572,7 @@ class Booking(Base):
     created_at:            Mapped[datetime]          = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class ChurnEvent(Base):
+class ChurnEvent(Base, TenantScoped):
     """Customer churn and contraction events — seeded from churn_events.csv."""
 
     __tablename__ = "churn_events"
@@ -583,7 +596,7 @@ Index("idx_bookings_rep_date", Booking.rep_id, Booking.booking_date)
 Index("idx_churn_events_period", ChurnEvent.period)
 
 
-class AttainmentSnapshot(Base):
+class AttainmentSnapshot(Base, TenantScoped):
     """Monthly and quarterly attainment snapshots per rep — seeded from attainment_snapshots.csv."""
 
     __tablename__ = "attainment_snapshots"
@@ -602,7 +615,7 @@ class AttainmentSnapshot(Base):
     )
 
 
-class RepRamp(Base):
+class RepRamp(Base, TenantScoped):
     """Rep ramp tracking over monthly periods — seeded from rep_ramp.csv."""
 
     __tablename__ = "rep_ramp"
@@ -623,3 +636,34 @@ class RepRamp(Base):
 
 Index("idx_attainment_snapshots_period", AttainmentSnapshot.period)
 Index("idx_rep_ramp_period", RepRamp.period)
+
+
+class PayoutConfiguration(Base):  # already declares its own, stricter company_id
+    """Persistent payout config by company/tenant with versioning."""
+    __tablename__ = "payout_configs"
+    id:               Mapped[uuid.UUID]        = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id:       Mapped[str]              = mapped_column(String(100), index=True)
+    version:          Mapped[int]              = mapped_column(Integer, default=1)
+    config_json:      Mapped[dict]             = mapped_column(JSONB, nullable=False)
+    effective_date:   Mapped[Optional[date]]   = mapped_column(Date)
+    is_active:        Mapped[bool]             = mapped_column(Boolean, default=True)
+    created_at:       Mapped[datetime]         = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at:       Mapped[datetime]         = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("company_id", "version", name="uq_payout_config_company_version"),
+    )
+
+
+class JobStatus(Base):
+    """Background job status tracking."""
+    __tablename__ = "job_status"
+    id:            Mapped[uuid.UUID]        = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    job_type:      Mapped[str]              = mapped_column(String(100), index=True)
+    status:        Mapped[str]              = mapped_column(String(20), default="queued")  # queued|running|success|failed
+    progress:      Mapped[Optional[int]]    = mapped_column(Integer)
+    metadata_json: Mapped[Optional[dict]]   = mapped_column(JSONB)
+    error_message: Mapped[Optional[str]]    = mapped_column(Text)
+    started_at:    Mapped[Optional[datetime]] = mapped_column(DateTime)
+    finished_at:   Mapped[Optional[datetime]] = mapped_column(DateTime)
+    created_at:    Mapped[datetime]         = mapped_column(DateTime, default=datetime.utcnow)

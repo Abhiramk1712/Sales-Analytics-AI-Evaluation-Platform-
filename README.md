@@ -408,22 +408,71 @@ ENVIRONMENT=development
 DEMO_MODE=true
 DEMO_DEFAULT_ROLE=executive
 DEMO_DEFAULT_COMPANY=techo-solutions
+AUTO_CREATE_TABLES=true
+ALLOW_DESTRUCTIVE_LOAD=false
 OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
 LLM_PROVIDER=openai
 ```
+
+| Variable | Description | Default |
+|---|---|---|
+| `DATABASE_URL` | PostgreSQL async connection URL | `postgresql+asyncpg://postgres:postgres@localhost:5432/sales_analytics` |
+| `DEMO_MODE` | Enable demo persona switching via headers | `true` |
+| `AUTO_CREATE_TABLES` | Auto-create tables on startup (disable in production; use Alembic) | `true` |
+| `ALLOW_DESTRUCTIVE_LOAD` | Allow `reset_database=true` in ingestion (drop/recreate all tables) | `false` |
+| `OPENAI_API_KEY` | OpenAI API key for agent/chat features | _(optional)_ |
+| `ANTHROPIC_API_KEY` | Anthropic API key (alternative LLM) | _(optional)_ |
 
 The project can run in demo mode without real LLM credentials. If an LLM key is missing, the agent layer is designed to return fallback/evidence-backed responses where supported.
 
 ### 3. Install Dependencies
 
 ```bash
+# Backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Frontend
+cd frontend
+npm ci
+cd ..
+```
+
+Or use the Makefile shortcut:
+
+```bash
 make setup
 ```
 
-This creates a Python virtual environment, installs backend dependencies, and installs frontend dependencies.
+### 4. Start Database
 
-### 4. Start Backend
+```bash
+docker compose up -d db
+# Wait for healthy check, then run migrations:
+alembic upgrade head
+```
+
+### 5. Seed a Demo Company
+
+Every company-scoped route resolves `DEMO_DEFAULT_COMPANY` against a folder under
+`companies/`. Without it the API returns `404 — Company dataset folder not found`.
+
+```bash
+make seed
+```
+
+That wraps the generator directly, if you want different volumes:
+
+```bash
+python -m backend.data_generator \
+  --company-name techo-solutions \
+  --n-reps 12 --n-accounts 60 --n-deals 150 --months 18 \
+  --include-org-hierarchy
+```
+
+### 6. Start Backend
 
 ```bash
 make backend
@@ -435,7 +484,7 @@ Backend runs at:
 http://localhost:8000
 ```
 
-### 5. Start Frontend
+### 7. Start Frontend
 
 Open a second terminal:
 
@@ -618,6 +667,31 @@ A strong demo flow for interviews or GitHub reviewers:
 7. Open the API docs at `/docs` and explain the route structure.
 8. Explain how the AI agent uses tools, RAG, and evidence-backed responses.
 9. Finish by explaining how this project connects analytics engineering, ML, backend engineering, and RevOps business logic.
+
+---
+
+## Demo Limitations
+
+This project is a portfolio-grade demonstration platform. Important caveats for reviewers:
+
+- **Header-based RBAC is demo-only.** When `DEMO_MODE=true`, the app trusts `X-User-Role` and `X-Company-Id` headers for persona switching. Production would require JWT-based authentication and token validation.
+- **Company switching reloads data.** Switching companies in the demo UI triggers a full dataset reload. Production would use proper multi-tenant isolation with `company_id` scoping on all tables.
+- **`ALLOW_DESTRUCTIVE_LOAD` guards database resets.** By default, the ingestion API will not drop/recreate all tables. Set `ALLOW_DESTRUCTIVE_LOAD=true` only for local demo use.
+- **ML models are demo-oriented.** The forecasting, scoring, and clustering models are trained on synthetic data. Production use would require retraining on real data with proper model monitoring.
+- **In-memory caching** is used for demo mode dashboard performance. Production should use Redis.
+- **Background jobs** use FastAPI BackgroundTasks for demo simplicity. Production should use Celery or a similar task queue.
+
+---
+
+## Clean Packaging
+
+To create a clean zip for submission or sharing:
+
+```bash
+bash scripts/package_clean.sh
+```
+
+The script excludes `.venv`, `node_modules`, `.git`, build outputs, caches, model artifacts, and OS-specific files. It also runs a verification step that fails if forbidden artifacts are present.
 
 ---
 

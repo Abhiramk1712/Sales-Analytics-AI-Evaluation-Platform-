@@ -35,6 +35,7 @@ from backend.models import (
     Plan,
     PlanAssignment,
     POSITION_RANK_DIRECTOR,
+    POSITION_RANK_VP,
 )
 from backend.ml.forecasting import run_revenue_forecast, build_arr_waterfall
 from backend.ml.forecasting_engine import (
@@ -97,6 +98,7 @@ async def _save_run(db: AsyncSession, run: ModelRun) -> None:
             notes=summary.get("notes"),
         )
     )
+    await db.flush()
     # Keep local fallback for environments where DB persistence is unavailable.
     store.append_run(summary)
 
@@ -1131,7 +1133,8 @@ async def cluster_reps(db: AsyncSession = Depends(get_db)):
         email_key = str(rep.email or "").strip().lower()
         rep_name_l = str(rep.name or "").strip().lower()
         pos_rank = rank_by_email.get(email_key, 99)
-        leadership_by_rank = pos_rank <= POSITION_RANK_DIRECTOR
+        # Only exclude VP+ from clustering (rank <= 2); keep managers/directors in cluster pool
+        leadership_by_rank = pos_rank <= POSITION_RANK_VP
         leadership_by_plan = email_key in global_plan_emails
         leadership_by_title = any(token in rep_name_l for token in leadership_tokens)
         leadership_reasons = []
@@ -1550,7 +1553,34 @@ async def arr_waterfall(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="No revenue data available")
 
     revenue_by_period = {r.period: float(r.total) for r in rows}
-    waterfall = build_arr_waterfall(revenue_by_period)
+
+    # Query revenue broken down by type for accurate waterfall components
+    typed_rows = (
+        await db.execute(
+            select(
+                Revenue.period,
+                Revenue.revenue_type,
+                func.sum(Revenue.amount).label("total"),
+            )
+            .where(Revenue.revenue_type.isnot(None))
+            .group_by(Revenue.period, Revenue.revenue_type)
+            .order_by(Revenue.period)
+        )
+    ).all()
+
+    revenue_by_type: dict[str, dict[str, float]] | None = None
+    if typed_rows:
+        revenue_by_type = {}
+        for r in typed_rows:
+            bucket = revenue_by_type.setdefault(r.period, {})
+            bucket[r.revenue_type or "unknown"] = float(r.total or 0)
+
+    waterfall = build_arr_waterfall(revenue_by_period, revenue_by_type=revenue_by_type)
+
+    # Add net_mrr as an alias for net_new_arr / 12 for frontend compatibility
+    net_new_arr = waterfall.get("net_new_arr", [])
+    waterfall["net_mrr"] = [round(v / 12, 2) if v else 0 for v in net_new_arr]
+
     return {
         "waterfall": waterfall,
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -1682,10 +1712,15 @@ async def model_drift_report(
     baseline_metrics: dict = baseline_run.get("metrics", {})
 
     if not baseline_metrics:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Training run for '{model_name}' has no metrics recorded; cannot detect drift.",
-        )
+        return {
+            "drift_status": "no_baseline",
+            "model_name": model_name,
+            "message": f"Training run for '{model_name}' has no metrics recorded. Run model training first to establish a baseline.",
+            "features": [],
+            "drift_results": [],
+            "baseline_metrics": {},
+            "current_metrics": {},
+        }
 
     # 2. Build current backtest
     rid: uuid.UUID | None = None

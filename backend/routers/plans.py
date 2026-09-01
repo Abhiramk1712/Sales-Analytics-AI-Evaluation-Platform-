@@ -43,11 +43,21 @@ from backend.services.quota_attainment_service import (
     normalize_period,
     period_to_months,
 )
+from backend.auth.dependencies import require_permission
+from backend.auth.tenant import get_tenant_context
 from backend.utils.identity_mapping import get_rep_ids_for_user_ids
 from backend.utils.date_ranges import parse_period_to_range
 
-router = APIRouter(prefix="/plans", tags=["Plans & Rules"])
-territory_router = APIRouter(prefix="/territories", tags=["Territories"])
+router = APIRouter(
+    prefix="/plans",
+    tags=["Plans & Rules"],
+    dependencies=[Depends(require_permission("view_plans")), Depends(get_tenant_context)],
+)
+territory_router = APIRouter(
+    prefix="/territories",
+    tags=["Territories"],
+    dependencies=[Depends(require_permission("view_dashboard")), Depends(get_tenant_context)],
+)
 
 
 def _months_for_period(period: str | None) -> list[str]:

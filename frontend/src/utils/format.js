@@ -2,10 +2,45 @@
 
 export const API = import.meta.env.VITE_API_URL || "";
 
-export const fmt = (n) =>
-  n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(0)}K` : `$${n}`;
+/** Safely coerce a value to a finite number, returning fallback if not possible. */
+export function safeNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
 
-export const pct = (n) => `${Number(n).toFixed(1)}%`;
+/** Format currency — handles null/NaN gracefully. */
+export const fmt = (n) => {
+  const v = safeNumber(n);
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
+  if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}K`;
+  return `$${v.toLocaleString()}`;
+};
+
+/** Format percentage — handles null/NaN gracefully. */
+export const pct = (n) => {
+  const v = safeNumber(n);
+  return `${v.toFixed(1)}%`;
+};
+
+/** Format compact number (no currency sign). */
+export const compactNum = (n) => {
+  const v = safeNumber(n);
+  if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
+  if (v >= 1e3) return `${(v / 1e3).toFixed(0)}K`;
+  return v.toLocaleString();
+};
+
+/** Safe currency format for tables/cards. */
+export const safeCurrency = (n, fallback = "$0") => {
+  const v = safeNumber(n, null);
+  return v === null ? fallback : fmt(v);
+};
+
+/** Safe percentage for tables/cards. */
+export const safePct = (n, fallback = "—") => {
+  const v = safeNumber(n, null);
+  return v === null ? fallback : pct(v);
+};
 
 export const withRefresh = (url, refreshKey) =>
   url.includes("?") ? `${url}&_r=${refreshKey}` : `${url}?_r=${refreshKey}`;

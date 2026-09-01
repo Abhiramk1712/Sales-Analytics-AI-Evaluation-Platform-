@@ -561,3 +561,34 @@ CREATE INDEX IF NOT EXISTS idx_attainment_snapshots_rep    ON attainment_snapsho
 CREATE INDEX IF NOT EXISTS idx_attainment_snapshots_period ON attainment_snapshots(period);
 CREATE INDEX IF NOT EXISTS idx_rep_ramp_rep                ON rep_ramp(rep_id);
 CREATE INDEX IF NOT EXISTS idx_rep_ramp_period             ON rep_ramp(period);
+
+
+-- ── Payout configuration (versioned, per company) ──────────────────────────
+CREATE TABLE IF NOT EXISTS payout_configs (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    company_id      VARCHAR(100) NOT NULL,
+    version         INTEGER DEFAULT 1,
+    config_json     JSONB NOT NULL,
+    effective_date  DATE,
+    is_active       BOOLEAN DEFAULT TRUE,
+    created_at      TIMESTAMP DEFAULT NOW(),
+    updated_at      TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT uq_payout_config_company_version UNIQUE (company_id, version)
+);
+
+-- ── Background job status ──────────────────────────────────────────────────
+-- Deliberately not tenant-scoped: this is process bookkeeping, not tenant data.
+CREATE TABLE IF NOT EXISTS job_status (
+    id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    job_type       VARCHAR(100) NOT NULL,
+    status         VARCHAR(20) DEFAULT 'queued',
+    progress       INTEGER,
+    metadata_json  JSONB,
+    error_message  TEXT,
+    started_at     TIMESTAMP,
+    finished_at    TIMESTAMP,
+    created_at     TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_payout_configs_company ON payout_configs(company_id);
+CREATE INDEX IF NOT EXISTS idx_job_status_type        ON job_status(job_type);

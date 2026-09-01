@@ -11,6 +11,22 @@ models:
         tests:
           - accepted_values:
               values: ['above_plan', 'on_track', 'at_risk', 'no_quota']
+    tests:
+      - unique:
+          column_name: "rep_id || '-' || quarter_period"
+
+  - name: int_team_quarter_attainment
+    description: "Team-level quarterly attainment aggregated from rep-quarter grain"
+    columns:
+      - name: team_id
+        tests: [not_null]
+      - name: quarter_period
+        tests: [not_null]
+      - name: team_quarterly_quota_amount
+        description: "Should NOT be inflated by monthly duplication"
+    tests:
+      - unique:
+          column_name: "team_id || '-' || quarter_period"
 
   - name: int_payout_quality_signals
     columns:

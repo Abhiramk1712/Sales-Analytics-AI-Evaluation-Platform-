@@ -1,0 +1,3 @@
+id,external_id,name,description,source_system,created_at,effective_start_date,effective_end_date
+0f610403-96d2-4e6b-bcb7-7816b83e0f59,PLAN-001,FY2025 Sales Plan 1,New logo + expansion blended plan,generated,2026-07-01T20:34:22.619122+00:00,2025-01-01,2025-12-31
+127eed16-1a4c-4b0d-a2cc-6600078f5163,PLAN-002,FY2026 Sales Plan 2,Enterprise annual contract value plan,generated,2026-07-01T20:34:22.619131+00:00,2026-01-01,

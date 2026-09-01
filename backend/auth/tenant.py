@@ -35,25 +35,55 @@ def _normalize_company(company_id: str | None) -> str | None:
     return normalized or None
 
 
+#: Permission that lets a caller act outside a single company. Held by
+#: revops_admin, which is the operator role that loads and switches datasets.
+PERM_CROSS_TENANT = "manage_tenant_data"
+
+
 def resolve_tenant_context(request: Request, user_ctx: UserContext) -> TenantContext:
     """
-    Resolve active company from request/query/auth context.
+    Resolve the active company for this request.
 
-    Priority order:
-    1) X-Company-ID request header
-    2) query param company_id
-    3) query param company (legacy)
-    4) authenticated user context company_id
-    5) active in-process company context
-    6) DEMO_DEFAULT_COMPANY when DEMO_MODE=true
+    The authenticated company wins. A request hint (header or query param) is
+    caller-controlled, so it may only *confirm* the company the caller is
+    already bound to — never replace it. Previously the hint took precedence
+    over the authenticated context, which meant any user could read any
+    tenant's data by setting one header.
+
+    Resolution order:
+    1) `company_id` claim on the authenticated user — authoritative when present.
+       A conflicting request hint is a cross-tenant attempt and is refused.
+    2) For a caller not bound to a company (demo mode, or a token carrying no
+       `company_id`), the request hint — but in production that requires the
+       cross-tenant permission, so an ordinary user with no company claim
+       cannot pick one freely.
+    3) The active in-process company.
+    4) DEMO_DEFAULT_COMPANY, in demo mode only.
     """
-    company = _normalize_company(extract_company_hint(request))
-    if company:
-        return TenantContext(company_id=company, source="request")
+    hint = _normalize_company(extract_company_hint(request))
+    bound = _normalize_company(user_ctx.company_id)
 
-    company = _normalize_company(user_ctx.company_id)
-    if company:
-        return TenantContext(company_id=company, source="user-context")
+    if bound:
+        if hint and hint != bound:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Not authorized for company '{hint}'. "
+                    f"This identity is scoped to '{bound}'."
+                ),
+            )
+        return TenantContext(company_id=bound, source="user-context")
+
+    if hint:
+        if not user_ctx.is_demo and not user_ctx.can(PERM_CROSS_TENANT):
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Selecting a company requires the 'manage_tenant_data' permission. "
+                    "Ordinary identities are scoped by their token's company_id claim."
+                ),
+            )
+        return TenantContext(company_id=hint, source="request")
 
     active = _normalize_company(get_active_company())
     if active:
@@ -80,13 +110,28 @@ def get_current_company_id(tenant_ctx: TenantContext = Depends(get_tenant_contex
     return tenant_ctx.company_id
 
 
+class ModelNotTenantScopedError(RuntimeError):
+    """Raised when a model without `company_id` is asked to be tenant-scoped."""
+
+
 def apply_company_scope(query: Select[Any], model: Any, company_id: str) -> Select[Any]:
     """
-    Apply company scoping when model contains a company_id column.
+    Restrict `query` to one company.
 
-    This function intentionally no-ops for models without company_id so that
-    existing single-tenant schemas keep working until full tenant migration.
+    Raises when `model` has no `company_id` column. It used to return the query
+    untouched in that case — which meant calling this function on an unmigrated
+    model produced an unscoped query that *looked* scoped at the call site. A
+    guard that silently does nothing is worse than no guard: it reads as
+    protection everywhere it appears.
+
+    Every domain model carries `company_id` as of the tenancy migration, so this
+    should only fire on a genuinely non-tenant table, where the caller should
+    not be scoping in the first place.
     """
-    if hasattr(model, "company_id"):
-        return query.where(getattr(model, "company_id") == company_id)
-    return query
+    if not hasattr(model, "company_id"):
+        raise ModelNotTenantScopedError(
+            f"{getattr(model, '__name__', model)} has no company_id column, so it "
+            "cannot be tenant-scoped. Either add the column or do not call "
+            "apply_company_scope on it."
+        )
+    return query.where(getattr(model, "company_id") == company_id)

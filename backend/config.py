@@ -24,6 +24,24 @@ class Settings(BaseSettings):
     APP_TITLE: str = "Sales Analytics AI"
     APP_VERSION: str = "1.0.0"
 
+    # Authentication — production mode (DEMO_MODE=false)
+    # Requests must carry a signed JWT. AUTH_JWT_SECRET has no default on
+    # purpose: an empty secret is a configuration error, not a permissive mode.
+    AUTH_JWT_SECRET: str = ""
+    AUTH_JWT_ALGORITHM: str = "HS256"
+    AUTH_JWT_ISSUER: str = ""        # verified when set
+    AUTH_JWT_AUDIENCE: str = ""      # verified when set
+    AUTH_JWT_LEEWAY_SECONDS: int = 30
+
+    # Ingestion — filesystem confinement for caller-supplied source paths
+    INGESTION_SOURCE_ROOT: str = "companies"
+
+    # Schema management
+    AUTO_CREATE_TABLES: bool = True  # Set False in production; use Alembic instead
+
+    # Destructive operations guard
+    ALLOW_DESTRUCTIVE_LOAD: bool = False
+
     # CORS — add your React dev server
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 

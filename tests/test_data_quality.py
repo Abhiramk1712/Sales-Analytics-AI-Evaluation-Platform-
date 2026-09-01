@@ -24,7 +24,10 @@ def test_data_quality_summary_route(monkeypatch):
     res = client.get("/data-quality/summary")
     assert res.status_code == 200
     body = res.json()
-    assert body["status"] == "WARN"
+    # The summary endpoint maps the internal PASS/WARN/FAIL vocabulary onto a
+    # lowercase presentation one (pass/warning/fail). That is deliberate; this
+    # assertion had been left on the internal spelling.
+    assert body["status"] == "warning"
     assert "score" in body
     assert isinstance(body["checks"], list)
 

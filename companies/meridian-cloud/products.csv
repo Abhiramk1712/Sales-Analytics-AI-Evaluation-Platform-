@@ -1,0 +1,6 @@
+id,external_id,product_sku,name,category,source_system,created_at
+66e59463-0053-4f7c-acc6-39270901c078,PROD-001,SAAS-SKU-001,Enterprise Suite,SaaS,generated,2026-07-01T20:19:10.093420+00:00
+7fd7ffdf-10ff-4772-8214-42c1991a3331,PROD-002,SAAS-SKU-002,Pro Platform,SaaS,generated,2026-07-01T20:19:10.093433+00:00
+9f114a50-e2db-4e11-a8b0-6286a225db56,PROD-003,SAAS-SKU-003,Growth Package,SaaS,generated,2026-07-01T20:19:10.093438+00:00
+436e3a65-a550-4f5d-afd7-3e7ca81d95d3,PROD-004,SAAS-SKU-004,Starter Plan,SaaS,generated,2026-07-01T20:19:10.093442+00:00
+dccefc0d-4867-4493-b9bc-6b3a519779b6,PROD-005,SAAS-SKU-005,Data Add-on,SaaS,generated,2026-07-01T20:19:10.093446+00:00

@@ -1,17 +1,25 @@
 """ETL orchestration endpoints for admin workflows."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from backend.auth.dependencies import require_permission
 from backend.etl.pipeline import run_etl_pipeline
+from backend.routers.ingestion import resolve_source_dir
 
-router = APIRouter(prefix="/etl", tags=["ETL"])
+router = APIRouter(
+    prefix="/etl",
+    tags=["ETL"],
+    dependencies=[Depends(require_permission("run_ingestion"))],
+)
 
 
 @router.post("/run")
 def run_etl(source_dir: str = Query(..., description="Path to source CSV folder")):
+    # Same confinement as the ingestion endpoints: source_dir is caller-supplied.
+    resolved = str(resolve_source_dir(source_dir))
     try:
-        result = run_etl_pipeline(source_dir)
+        result = run_etl_pipeline(resolved)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:

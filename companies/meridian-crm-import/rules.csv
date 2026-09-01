@@ -1,0 +1,9 @@
+id,plan_id,name,metric_name,threshold_min,threshold_max,rate,accelerator_rate,bonus_amount,rollup_enabled,rollup_pct,carryover_enabled,carryover_cap,source_system,created_at
+d1bda742-0136-497e-8b2b-ee656cbd687e,0f610403-96d2-4e6b-bcb7-7816b83e0f59,Tier 1 Rule,attainment_pct,0,79.99,0.03,0.0,0,false,0.0,false,0.0,generated,2026-07-01T20:34:22.619146+00:00
+ca68ad85-772e-4c5b-8039-9ac6dd5dc2fc,0f610403-96d2-4e6b-bcb7-7816b83e0f59,Tier 2 Rule,attainment_pct,80,99.99,0.05,0.0,0,false,0.0,false,0.0,generated,2026-07-01T20:34:22.619156+00:00
+d632332a-0ad8-43ff-b564-783a89ba4260,0f610403-96d2-4e6b-bcb7-7816b83e0f59,Tier 3 Rule,attainment_pct,100,119.99,0.08,0.01,2000,false,0.0,true,5000.0,generated,2026-07-01T20:34:22.619165+00:00
+e3430b0a-6073-44f2-a590-d4b4c2cb7bf9,0f610403-96d2-4e6b-bcb7-7816b83e0f59,Tier 4 Rule,attainment_pct,120,999.0,0.1,0.02,2000,true,0.15,true,10000.0,generated,2026-07-01T20:34:22.619172+00:00
+285e0f2c-c66b-4f51-8682-034a0e947107,127eed16-1a4c-4b0d-a2cc-6600078f5163,Tier 1 Rule,attainment_pct,0,79.99,0.03,0.0,0,false,0.0,false,0.0,generated,2026-07-01T20:34:22.619180+00:00
+1722e0a7-cc93-4054-beb8-9686d4666ce9,127eed16-1a4c-4b0d-a2cc-6600078f5163,Tier 2 Rule,attainment_pct,80,99.99,0.05,0.0,0,false,0.0,false,0.0,generated,2026-07-01T20:34:22.619188+00:00
+6ff3abda-26cd-424d-b4d2-98e90be94810,127eed16-1a4c-4b0d-a2cc-6600078f5163,Tier 3 Rule,attainment_pct,100,119.99,0.08,0.01,2000,false,0.0,true,5000.0,generated,2026-07-01T20:34:22.619195+00:00
+ea6e7e09-a127-485c-8507-8742235b104b,127eed16-1a4c-4b0d-a2cc-6600078f5163,Tier 4 Rule,attainment_pct,120,999.0,0.1,0.02,2000,true,0.15,true,10000.0,generated,2026-07-01T20:34:22.619201+00:00

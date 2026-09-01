@@ -1,0 +1,10 @@
+id,external_id,territory_code,name,parent_territory_id,region,segment,source_system,created_at,effective_start_date,effective_end_date
+f578b23f-d494-4cb4-a10c-59816e6a65e7,TERR-001,T-001,North America,,North America,Enterprise,generated,2026-07-01T20:34:22.618651+00:00,2024-07-01,
+37c6b738-e59d-4a30-af53-3abeba7c307b,SUBTERR-001-01,T-001-S01,North America Subregion 1,f578b23f-d494-4cb4-a10c-59816e6a65e7,North America,SMB,generated,2026-07-01T20:34:22.618691+00:00,2024-07-01,
+bf117f74-c253-4c4e-bfad-8f6760dae134,SUBTERR-001-02,T-001-S02,North America Subregion 2,f578b23f-d494-4cb4-a10c-59816e6a65e7,North America,Mid-Market,generated,2026-07-01T20:34:22.618704+00:00,2024-07-01,
+9026bf22-8c4d-4e45-99e4-e620ee3b74c2,TERR-002,T-002,EMEA,,EMEA,Enterprise,generated,2026-07-01T20:34:22.618716+00:00,2024-07-01,
+ac1a2a46-210e-40f5-8440-14aecf7daeb2,SUBTERR-002-01,T-002-S01,EMEA Subregion 1,9026bf22-8c4d-4e45-99e4-e620ee3b74c2,EMEA,Mid-Market,generated,2026-07-01T20:34:22.618728+00:00,2024-07-01,
+697cbfbd-b3c4-4130-9c62-9bff6a96f59b,SUBTERR-002-02,T-002-S02,EMEA Subregion 2,9026bf22-8c4d-4e45-99e4-e620ee3b74c2,EMEA,SMB,generated,2026-07-01T20:34:22.618738+00:00,2024-07-01,
+5ebb588c-64b9-4764-b04a-92005abc71c6,TERR-003,T-003,APAC,,APAC,Enterprise,generated,2026-07-01T20:34:22.618748+00:00,2024-07-01,
+e18e08e6-b03a-44cf-8e00-9d7648c282c6,SUBTERR-003-01,T-003-S01,APAC Subregion 1,5ebb588c-64b9-4764-b04a-92005abc71c6,APAC,Enterprise,generated,2026-07-01T20:34:22.618758+00:00,2024-07-01,
+9d75ccd7-3749-4aea-884f-b60078460273,SUBTERR-003-02,T-003-S02,APAC Subregion 2,5ebb588c-64b9-4764-b04a-92005abc71c6,APAC,Mid-Market,generated,2026-07-01T20:34:22.618768+00:00,2024-07-01,

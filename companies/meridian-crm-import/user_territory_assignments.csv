@@ -1,0 +1,11 @@
+id,user_id,territory_id,is_primary,source_system,mapping_basis,evidence_score,created_at,effective_start_date,effective_end_date
+c8bf576d-5137-4596-9caf-a934da3d9248,618e593a-3238-4ecf-9edf-0934cdee8023,37c6b738-e59d-4a30-af53-3abeba7c307b,true,generated,regional-alignment,0.92,2026-07-01T20:34:22.619576+00:00,2025-07-01,
+dda806fe-21fc-49a4-9306-636fa44e6035,27970e72-6a85-42bd-a115-9679cd9d9c5e,bf117f74-c253-4c4e-bfad-8f6760dae134,true,generated,regional-alignment,0.92,2026-07-01T20:34:22.619585+00:00,2025-07-01,
+171934d2-5345-4ada-ac09-5e52d3a657b9,be18bc63-d8f5-4ad3-9d73-d387ea127264,9d75ccd7-3749-4aea-884f-b60078460273,true,generated,regional-alignment,0.92,2026-07-01T20:34:22.619594+00:00,2025-07-01,
+8d9d14e5-a6c4-473b-98bc-5a166afa0356,bfb2132f-e072-450c-b199-0ced7708a4df,697cbfbd-b3c4-4130-9c62-9bff6a96f59b,true,generated,regional-alignment,0.92,2026-07-01T20:34:22.619602+00:00,2025-07-01,
+d35973e1-ea12-4227-906c-782e11102365,9e34d7c1-a3e0-4ecd-ad59-b683077f0eef,ac1a2a46-210e-40f5-8440-14aecf7daeb2,true,generated,regional-alignment,0.92,2026-07-01T20:34:22.619610+00:00,2025-07-01,
+ee3a83b8-a18d-4f0e-8713-b09dcc3baddd,541c974f-914a-4151-bf51-e9bcd734563b,ac1a2a46-210e-40f5-8440-14aecf7daeb2,true,generated,regional-alignment,0.92,2026-07-01T20:34:22.619618+00:00,2025-07-01,
+0865085a-4fa6-40dc-9d4f-33fd12a19980,44a4e15b-1846-4dd6-b1ad-2a785dd1f7bf,bf117f74-c253-4c4e-bfad-8f6760dae134,true,generated,regional-alignment,0.92,2026-07-01T20:34:22.619625+00:00,2025-07-01,
+e0066ca4-b50f-4fe3-97a6-9ca25f83088d,3dd50d3b-21af-4575-a7d3-905ccffd4869,bf117f74-c253-4c4e-bfad-8f6760dae134,true,generated,regional-alignment,0.92,2026-07-01T20:34:22.619633+00:00,2025-07-01,
+f5a1df80-1c58-416f-92b0-764a89e114f0,aa0d501b-3d2e-421d-803e-ffc03ddf38c0,ac1a2a46-210e-40f5-8440-14aecf7daeb2,true,generated,regional-alignment,0.92,2026-07-01T20:34:22.619640+00:00,2025-07-01,
+8c7e9b71-c931-4b12-bd3f-53cda4e2e998,2bc9192e-e8c5-49e4-a088-57abfe6e105c,37c6b738-e59d-4a30-af53-3abeba7c307b,true,generated,regional-alignment,0.92,2026-07-01T20:34:22.619647+00:00,2025-07-01,

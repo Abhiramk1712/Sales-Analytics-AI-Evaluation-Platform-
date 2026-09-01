@@ -4,19 +4,61 @@ Workflow management routes.
 POST /workflows/sales-performance  — run full sales performance pipeline
 GET  /workflows/{workflow_id}       — get a specific workflow result
 GET  /workflows                     — list recent workflows
+GET  /workflows/jobs/{job_id}       — get background job status
 """
 from __future__ import annotations
 
+import uuid as _uuid
+from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.auth.dependencies import require_permission
 from backend.database import get_db
 from backend.workflows import store as workflow_store
 
-router = APIRouter(prefix="/workflows", tags=["Workflows"])
+router = APIRouter(
+    prefix="/workflows",
+    tags=["Workflows"],
+    dependencies=[Depends(require_permission("run_agent_workflow"))],
+)
+
+# ── Lightweight in-memory job status store for demo mode ──────────────────
+# TODO: Replace with DB-backed JobStatus model or Celery/RQ in production.
+_job_store: dict[str, dict[str, Any]] = {}
+
+
+def _create_job(job_type: str, metadata: dict | None = None) -> str:
+    job_id = str(_uuid.uuid4())
+    _job_store[job_id] = {
+        "job_id": job_id,
+        "job_type": job_type,
+        "status": "queued",
+        "progress": 0,
+        "metadata": metadata or {},
+        "error_message": None,
+        "started_at": None,
+        "finished_at": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    return job_id
+
+
+def _update_job(job_id: str, **kwargs: Any) -> None:
+    if job_id in _job_store:
+        _job_store[job_id].update(kwargs)
+
+
+@router.get("/jobs/{job_id}")
+async def get_job_status(job_id: str) -> dict[str, Any]:
+    """Return status of a background job."""
+    job = _job_store.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
 
 
 class SalesPerformanceRequest(BaseModel):

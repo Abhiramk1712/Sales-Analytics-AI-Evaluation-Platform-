@@ -1,0 +1,7 @@
+event_id,account_id,period,event_type,arr_change,reason,detected_at
+c582ea17-d25b-4f0e-a26b-ded7d85a73f8,336aca04-334c-4043-a492-dc713fcf7424,2026-01,full_churn,-142635.34,price_sensitivity,2026-05-24T20:07:05.078986+00:00
+66c30945-70f9-48a7-bc41-3dfcce6cc6d1,e877a3f7-3ba3-46d4-a0dd-5ab1a5f112d9,2026-02,partial_contraction,-12317.33,price_sensitivity,2026-05-24T20:07:05.078998+00:00
+c1fd73d6-65b0-45a6-bc41-9de9c979eada,a4d43992-3445-488e-9053-018dcb4787cc,2025-10,full_churn,-192076.32,budget_cut,2026-05-24T20:07:05.079010+00:00
+3b8e1aad-7abb-481a-918d-1e2c41536bfb,6477fa62-357b-4b72-8f2a-a18bd9619787,2026-02,partial_contraction,-168618.87,price_sensitivity,2026-05-24T20:07:05.079018+00:00
+c4e252dc-d7c7-46df-99db-a937a9ff1676,c17dd031-8a1b-48d6-89e0-83224a75a4ec,2025-11,partial_contraction,-109065.39,price_sensitivity,2026-05-24T20:07:05.079031+00:00
+fd2718ad-ad59-495f-b15c-bc37eabd71f1,7de16614-da8c-44d2-8533-2a393aac609a,2026-02,partial_contraction,-18917.49,low_adoption,2026-05-24T20:07:05.079040+00:00

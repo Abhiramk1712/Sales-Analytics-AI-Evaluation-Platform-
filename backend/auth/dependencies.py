@@ -1,18 +1,27 @@
 """
 backend/auth/dependencies.py
 =============================
-FastAPI dependencies for RBAC with demo and production scaffolds.
+FastAPI dependencies for RBAC.
 
-Headers used (all optional in demo mode):
-  X-User-Id      — user UUID
-  X-User-Role    — one of enterprise roles
+There are exactly two modes, and they do not overlap.
+
+Demo mode (DEMO_MODE=true) — for local exploration and the walkthrough.
+Identity comes from headers, which means the caller chooses their own role.
+That is the point of the demo persona switcher, and it is safe only because
+demo mode is not an authenticated mode at all:
+
+  X-User-Id      — user identifier
+  X-User-Role    — one of the enterprise roles
   X-Team-Id      — team UUID
   X-Territory-Id — territory UUID
-  X-Company-Id   — active tenant/company scope
+  X-Company-Id   — tenant/company scope
 
-Production scaffold behavior:
-  - Requires Authorization: Bearer <token>
-  - Accepts explicit X-User-Role only as temporary migration bridge
+Production mode (DEMO_MODE=false). Identity comes from a signed JWT and
+nothing else. `X-User-Role` and the other identity headers are ignored
+entirely — not "accepted during migration", ignored. Accepting a role header
+in production was a complete authorization bypass: any caller could assert
+`X-User-Role: revops_admin` and approve payouts. Tenant scope comes from the
+token's `company_id` claim; see auth/tenant.py for how a request may narrow it.
 """
 from __future__ import annotations
 
@@ -22,6 +31,7 @@ from fastapi import Depends, Header, HTTPException
 
 from backend.auth.models import UserContext
 from backend.auth.roles import ALL_ROLES, ROLE_EXECUTIVE, has_permission, permissions_for_role
+from backend.auth.tokens import claims_to_context_fields, decode_token
 from backend.config import settings
 
 
@@ -44,48 +54,28 @@ def _parse_bearer_token(authorization: Optional[str]) -> Optional[str]:
     return token.strip()
 
 
-def _parse_placeholder_claims(token: str | None) -> dict[str, str]:
-    """
-    Temporary scaffold parser for local development in production-mode tests.
-
-    Supported shape:
-      Authorization: Bearer demo:user_id=...;role=...;company_id=...
-    """
-    if not token:
-        return {}
-    if not token.startswith("demo:"):
-        return {}
-
-    payload = token[len("demo:") :]
-    claims: dict[str, str] = {}
-    for part in payload.split(";"):
-        key, _, value = part.partition("=")
-        key = key.strip()
-        value = value.strip()
-        if key and value:
-            claims[key] = value
-    return claims
-
-
 def _normalize_role(role: object) -> str:
     normalized = (_coerce_optional_header(role) or "").strip().lower()
     return normalized
 
 
-def _resolve_role(x_user_role: Optional[str], claims: dict[str, str]) -> str:
-    if settings.DEMO_MODE:
-        role = _normalize_role(x_user_role or claims.get("role") or settings.DEMO_DEFAULT_ROLE or ROLE_EXECUTIVE)
-        if role not in ALL_ROLES:
-            role = _normalize_role(settings.DEMO_DEFAULT_ROLE or ROLE_EXECUTIVE)
-        if role not in ALL_ROLES:
-            role = ROLE_EXECUTIVE
-        return role
+def _resolve_demo_role(x_user_role: Optional[str]) -> str:
+    """Demo mode only: the caller picks a persona, falling back to the default."""
+    role = _normalize_role(x_user_role or settings.DEMO_DEFAULT_ROLE or ROLE_EXECUTIVE)
+    if role not in ALL_ROLES:
+        role = _normalize_role(settings.DEMO_DEFAULT_ROLE or ROLE_EXECUTIVE)
+    if role not in ALL_ROLES:
+        role = ROLE_EXECUTIVE
+    return role
 
-    role = _normalize_role(x_user_role or claims.get("role"))
+
+def _resolve_verified_role(claims: dict[str, str]) -> str:
+    """Production mode only: the role comes from the verified token, or not at all."""
+    role = _normalize_role(claims.get("role"))
     if not role:
         raise HTTPException(
             status_code=401,
-            detail="Production mode requires an authenticated role claim. Provide a validated token or X-User-Role during migration.",
+            detail="Token does not carry a 'role' claim.",
         )
     if role not in ALL_ROLES:
         raise HTTPException(status_code=403, detail=f"Unsupported role '{role}'")
@@ -101,35 +91,49 @@ def get_user_context(
     x_territory_id: Optional[str] = Header(None, alias="X-Territory-Id"),
     x_company_id: Optional[str] = Header(None, alias="X-Company-Id"),
 ) -> UserContext:
-    """Extract user context from headers/token with safe defaults in demo mode."""
+    """
+    Build the request's UserContext.
+
+    In demo mode this reads headers; in production mode it reads a verified
+    token and ignores every identity header. The two paths are kept visibly
+    separate so it is never ambiguous which one is in force.
+    """
     auth_header = _coerce_optional_header(authorization)
-    user_id_header = _coerce_optional_header(x_user_id)
-    role_header = _coerce_optional_header(x_user_role)
-    team_id_header = _coerce_optional_header(x_team_id)
-    territory_id_header = _coerce_optional_header(x_territory_id)
-    company_id_header = _coerce_optional_header(x_company_id)
-
     token = _parse_bearer_token(auth_header)
-    claims = _parse_placeholder_claims(token)
 
-    if not settings.DEMO_MODE and token is None:
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required in production mode. Supply Authorization: Bearer <token>",
+    if settings.DEMO_MODE:
+        role = _resolve_demo_role(_coerce_optional_header(x_user_role))
+        return UserContext(
+            user_id=_coerce_optional_header(x_user_id) or "demo-user",
+            role=role,
+            team_id=_coerce_optional_header(x_team_id),
+            territory_id=_coerce_optional_header(x_territory_id),
+            company_id=_coerce_optional_header(x_company_id),
+            permissions=permissions_for_role(role),
+            auth_source="demo",
+            is_demo=True,
         )
 
-    role = _resolve_role(x_user_role=role_header, claims=claims)
-    user_id = user_id_header or claims.get("user_id") or ("demo-user" if settings.DEMO_MODE else None)
+    if token is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required. Supply Authorization: Bearer <token>",
+        )
+
+    # Identity headers are deliberately not consulted below. A verified token is
+    # the only source of identity in production.
+    claims = claims_to_context_fields(decode_token(token))
+    role = _resolve_verified_role(claims)
 
     return UserContext(
-        user_id=user_id,
+        user_id=claims.get("user_id"),
         role=role,
-        team_id=team_id_header,
-        territory_id=territory_id_header,
-        company_id=company_id_header or claims.get("company_id"),
+        team_id=claims.get("team_id"),
+        territory_id=claims.get("territory_id"),
+        company_id=claims.get("company_id"),
         permissions=permissions_for_role(role),
-        auth_source="demo" if settings.DEMO_MODE else "token",
-        is_demo=settings.DEMO_MODE,
+        auth_source="token",
+        is_demo=False,
     )
 
 

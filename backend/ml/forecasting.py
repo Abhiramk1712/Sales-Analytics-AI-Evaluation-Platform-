@@ -297,7 +297,7 @@ def run_revenue_forecast(revenue_by_period: dict[str, float], horizon: int = 6) 
         raise ValueError("No historical revenue data available.")
 
     history_len = len(revenue_by_period)
-    if history_len < 24:
+    if history_len < 6:
         last_value = float(list(revenue_by_period.values())[-1])
         periods = []
         try:
@@ -321,13 +321,66 @@ def run_revenue_forecast(revenue_by_period: dict[str, float], horizon: int = 6) 
             "best_case_lane": bestcase_l,
             "ensemble_weights": {"sarimax": 0.0, "ridge": 0.0, "gbr": 0.0, "baseline": 1.0},
             "model_metrics": {},
-            "model_info": "Baseline carry-forward forecast (demo-safe fallback)",
+            "model_info": "Baseline carry-forward (< 6 months history)",
+            "model_used": "carry_forward",
             "metadata": {
                 "forecast_mode": "baseline",
                 "history_months": history_len,
                 "confidence": "low",
             },
-            "warnings": ["Insufficient history for full model forecast. Using low-confidence baseline forecast."],
+            "warnings": ["Fewer than 6 months of history. Using carry-forward baseline."],
+        }
+
+    if history_len < 24:
+        # Use linear trend extrapolation for 6-23 months of data
+        import numpy as np
+        values = list(revenue_by_period.values())
+        x = np.arange(len(values), dtype=float)
+        y = np.array(values, dtype=float)
+        try:
+            slope, intercept = np.polyfit(x, y, 1)
+        except Exception:
+            slope, intercept = 0.0, float(values[-1])
+
+        periods = []
+        try:
+            last_dt = pd.Period(list(revenue_by_period.keys())[-1], "M")
+            periods = [(last_dt + i + 1).strftime("%Y-%m") for i in range(horizon)]
+        except Exception:
+            periods = [f"T+{i+1}" for i in range(horizon)]
+
+        baseline = []
+        lower = []
+        upper = []
+        commit_l = []
+        bestcase_l = []
+        for i in range(horizon):
+            proj = max(0.0, intercept + slope * (len(values) + i))
+            ci_spread = 0.15 + 0.03 * i  # widen CI per period
+            baseline.append(round(proj, 2))
+            lower.append(round(proj * (1 - ci_spread), 2))
+            upper.append(round(proj * (1 + ci_spread), 2))
+            commit_l.append(round(proj * (1 - ci_spread * 0.6), 2))
+            bestcase_l.append(round(proj * (1 + ci_spread * 0.6), 2))
+
+        return {
+            "historical": {p: v for p, v in revenue_by_period.items()},
+            "forecast_periods": periods,
+            "forecast_values": baseline,
+            "lower_ci": lower,
+            "upper_ci": upper,
+            "commit_lane":    commit_l,
+            "best_case_lane": bestcase_l,
+            "ensemble_weights": {"sarimax": 0.0, "ridge": 0.0, "gbr": 0.0, "trend": 1.0},
+            "model_metrics": {"slope_per_month": round(float(slope), 2)},
+            "model_info": "Linear trend extrapolation (6-23 months history)",
+            "model_used": "linear_trend",
+            "metadata": {
+                "forecast_mode": "trend",
+                "history_months": history_len,
+                "confidence": "medium",
+            },
+            "warnings": [f"Using linear trend with {history_len} months of history. Full ensemble requires 24+ months."],
         }
 
     series = pd.Series(revenue_by_period)
