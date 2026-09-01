@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from backend.auth.tenant import extract_company_hint
 from backend.auth.tokens import assert_auth_configured
-from backend.company_context import ensure_company_loaded, get_active_company, wait_for_company_load_completion
+from backend.tenancy import tenant_scope
 from backend.database import get_engine, Base
 from backend.config import settings
 from backend.routers import analytics, forecasting, agent, reports, grading, ingestion, data_quality, payout, etl
@@ -78,59 +78,35 @@ app.include_router(territory_router)
 
 
 @app.middleware("http")
-async def company_alignment_middleware(request: Request, call_next):
+async def tenant_binding_middleware(request: Request, call_next):
+    """
+    Bind the request's company for the duration of the request.
+
+    Everything downstream — every ORM select and insert — is scoped to this value
+    by backend/tenant_guard.py, so this is the single place a request acquires a
+    tenant. It replaces the company-alignment middleware, which resolved the same
+    value and then *reloaded the database* when it differed from a process-global
+    active company. That is what made an unauthenticated
+    `GET /analytics/kpis?company_id=other` drop and rebuild every table, and it is
+    why only one tenant could be served at a time.
+
+    Resolution is deliberately not done here: `auth/tenant.py` owns it, because
+    the choice of company is an authorization decision (a request hint may only
+    confirm the caller's own company, never replace it) and belongs with the code
+    that knows the caller's identity.
+    """
     path = request.url.path
-    if any(path.startswith(prefix) for prefix in SCOPED_ROUTE_PREFIXES):
-        request_company = extract_company_hint(request)
-        if not request_company:
-            # Avoid read-vs-reload races: wait for in-flight company load to complete
-            # before resolving implicit company context from process state.
-            await wait_for_company_load_completion()
+    if not any(path.startswith(prefix) for prefix in SCOPED_ROUTE_PREFIXES):
+        return await call_next(request)
 
-        active = get_active_company()
-        company = (
-            request_company
-            or active
-            or (settings.DEMO_DEFAULT_COMPANY if settings.DEMO_MODE else None)
-        )
+    company = extract_company_hint(request) or (
+        settings.DEMO_DEFAULT_COMPANY if settings.DEMO_MODE else None
+    )
+    if not company:
+        return await call_next(request)  # route dependencies will reject it
 
-        # Loading a company is destructive — it drops and recreates every table
-        # (data_generator._load_csvs_into_database). A read request must never be
-        # able to trigger that, and `company` here can come straight from an
-        # unauthenticated header or query parameter. So the only implicit load
-        # permitted is the one-time cold-start bootstrap of the *configured*
-        # demo default; switching companies is an explicit, deliberate call to
-        # POST /ingestion/load-company.
-        if company and company != active:
-            if active is not None or company != settings.DEMO_DEFAULT_COMPANY:
-                return JSONResponse(
-                    status_code=409,
-                    content={
-                        "detail": (
-                            f"Company '{company}' is not the active dataset"
-                            + (f" (active: '{active}')." if active else ".")
-                            + " Load it explicitly via POST /ingestion/load-company —"
-                            " this rebuilds the database and is never done implicitly."
-                        )
-                    },
-                )
-            try:
-                await ensure_company_loaded(company)
-            except FileNotFoundError as exc:
-                return JSONResponse(status_code=404, content={"detail": str(exc)})
-            except Exception as exc:
-                correlation_id = request.headers.get("X-Correlation-ID", str(uuid.uuid4()))
-                logger.exception(
-                    "Company alignment failed for '%s' [%s]: %s", company, correlation_id, exc
-                )
-                # Same shape as global_exception_handler — one generic failure
-                # response for the whole API, with the id needed to find the log.
-                return JSONResponse(
-                    status_code=500,
-                    content={"detail": "Internal server error", "correlation_id": correlation_id},
-                )
-
-    return await call_next(request)
+    with tenant_scope(company):
+        return await call_next(request)
 
 
 # ── Observability: request timing + correlation ID ────────────────────────

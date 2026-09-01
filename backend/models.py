@@ -37,7 +37,7 @@ class Rep(Base, TenantScoped):
     id:         Mapped[uuid.UUID]        = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     team_id:    Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("teams.id"))
     name:       Mapped[str]              = mapped_column(String(100))
-    email:      Mapped[str]              = mapped_column(String(150), unique=True)
+    email:      Mapped[str]              = mapped_column(String(150))
     region:     Mapped[Optional[str]]    = mapped_column(String(50))
     hire_date:  Mapped[Optional[date]]   = mapped_column(Date)
     created_at: Mapped[datetime]         = mapped_column(DateTime, default=datetime.utcnow)
@@ -45,6 +45,13 @@ class Rep(Base, TenantScoped):
     deals:      Mapped[list["Deal"]]     = relationship(back_populates="rep")
     quotas:     Mapped[list["Quota"]]    = relationship(back_populates="rep")
     revenues:   Mapped[list["Revenue"]]  = relationship(back_populates="rep")
+
+    # Unique per company, not globally: two tenants legitimately use the
+    # same natural keys (email). A global constraint here made
+    # a second company's load collide on the first company's rows.
+    __table_args__ = (
+        UniqueConstraint("email", "company_id", name="uq_reps_email_company"),
+    )
 
 
 class Quota(Base, TenantScoped):
@@ -166,7 +173,7 @@ POSITION_RANK_LABELS: dict[int, str] = {
 class Position(Base, TenantScoped):
     __tablename__ = "positions"
     id:              Mapped[uuid.UUID]       = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    external_id:     Mapped[Optional[str]]   = mapped_column(String(100), unique=True)
+    external_id:     Mapped[Optional[str]]   = mapped_column(String(100))
     name:            Mapped[str]             = mapped_column(String(120))
     level:           Mapped[Optional[str]]   = mapped_column(String(50))
     # rank: 1=executive, 2=vp, 3=director, 4=manager, 5=ic, 99=unknown
@@ -178,15 +185,22 @@ class Position(Base, TenantScoped):
     effective_start_date: Mapped[Optional[date]] = mapped_column(Date)
     effective_end_date:   Mapped[Optional[date]] = mapped_column(Date)
 
+    # Unique per company, not globally: two tenants legitimately use the
+    # same natural keys (external_id). A global constraint here made
+    # a second company's load collide on the first company's rows.
+    __table_args__ = (
+        UniqueConstraint("external_id", "company_id", name="uq_positions_external_id_company"),
+    )
+
 
 class UserProfile(Base, TenantScoped):
     __tablename__ = "users"
     id:              Mapped[uuid.UUID]        = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    external_id:     Mapped[Optional[str]]    = mapped_column(String(100), unique=True)
+    external_id:     Mapped[Optional[str]]    = mapped_column(String(100))
     position_id:     Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("positions.id"))
     team_id:         Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("teams.id"))
     name:            Mapped[str]              = mapped_column(String(120))
-    email:           Mapped[str]              = mapped_column(String(150), unique=True)
+    email:           Mapped[str]              = mapped_column(String(150))
     region:          Mapped[Optional[str]]    = mapped_column(String(80))
     hire_date:       Mapped[Optional[date]]   = mapped_column(Date)
     source_system:   Mapped[Optional[str]]    = mapped_column(String(50), default="uploaded")
@@ -198,6 +212,14 @@ class UserProfile(Base, TenantScoped):
 
     position:        Mapped[Optional[Position]] = relationship()
     team:            Mapped[Optional[Team]]   = relationship()
+
+    # Unique per company, not globally: two tenants legitimately use the
+    # same natural keys (external_id, email). A global constraint here made
+    # a second company's load collide on the first company's rows.
+    __table_args__ = (
+        UniqueConstraint("external_id", "company_id", name="uq_users_external_id_company"),
+        UniqueConstraint("email", "company_id", name="uq_users_email_company"),
+    )
 
 
 class Manager(Base, TenantScoped):
@@ -212,7 +234,7 @@ class Manager(Base, TenantScoped):
 class Plan(Base, TenantScoped):
     __tablename__ = "plans"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    external_id:         Mapped[Optional[str]]  = mapped_column(String(100), unique=True)
+    external_id:         Mapped[Optional[str]]  = mapped_column(String(100))
     name:                Mapped[str]            = mapped_column(String(140))
     description:         Mapped[Optional[str]]  = mapped_column(Text)
     # scope: global | department | team | individual
@@ -226,6 +248,13 @@ class Plan(Base, TenantScoped):
     effective_end_date:   Mapped[Optional[date]] = mapped_column(Date)
 
     owner:               Mapped[Optional["UserProfile"]] = relationship(foreign_keys=[owner_user_id])
+
+    # Unique per company, not globally: two tenants legitimately use the
+    # same natural keys (external_id). A global constraint here made
+    # a second company's load collide on the first company's rows.
+    __table_args__ = (
+        UniqueConstraint("external_id", "company_id", name="uq_plans_external_id_company"),
+    )
 
 
 class Rule(Base, TenantScoped):
@@ -300,8 +329,8 @@ class PlanAssignment(Base, TenantScoped):
 class Territory(Base, TenantScoped):
     __tablename__ = "territories"
     id:                  Mapped[uuid.UUID]       = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    external_id:         Mapped[Optional[str]]   = mapped_column(String(100), unique=True)
-    territory_code:      Mapped[Optional[str]]   = mapped_column(String(100), unique=True)
+    external_id:         Mapped[Optional[str]]   = mapped_column(String(100))
+    territory_code:      Mapped[Optional[str]]   = mapped_column(String(100))
     name:                Mapped[str]             = mapped_column(String(140))
     parent_territory_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("territories.id"))
     region:              Mapped[Optional[str]]   = mapped_column(String(80))
@@ -310,6 +339,14 @@ class Territory(Base, TenantScoped):
     created_at:          Mapped[datetime]        = mapped_column(DateTime, default=datetime.utcnow)
     effective_start_date: Mapped[Optional[date]] = mapped_column(Date)
     effective_end_date:   Mapped[Optional[date]] = mapped_column(Date)
+
+    # Unique per company, not globally: two tenants legitimately use the
+    # same natural keys (external_id, territory_code). A global constraint here made
+    # a second company's load collide on the first company's rows.
+    __table_args__ = (
+        UniqueConstraint("external_id", "company_id", name="uq_territories_external_id_company"),
+        UniqueConstraint("territory_code", "company_id", name="uq_territories_territory_code_company"),
+    )
 
 
 class UserTerritoryAssignment(Base, TenantScoped):
@@ -339,13 +376,21 @@ class TerritoryHistory(Base, TenantScoped):
 class Brand(Base, TenantScoped):
     __tablename__ = "brands"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    external_id:         Mapped[Optional[str]]  = mapped_column(String(100), unique=True)
-    name:                Mapped[str]            = mapped_column(String(120), unique=True)
+    external_id:         Mapped[Optional[str]]  = mapped_column(String(100))
+    name:                Mapped[str]            = mapped_column(String(120))
     parent_brand_id:     Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("brands.id"))
     source_system:       Mapped[Optional[str]]  = mapped_column(String(50), default="uploaded")
     created_at:          Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
     effective_start_date: Mapped[Optional[date]] = mapped_column(Date)
     effective_end_date:   Mapped[Optional[date]] = mapped_column(Date)
+
+    # Unique per company, not globally: two tenants legitimately use the
+    # same natural keys (external_id, name). A global constraint here made
+    # a second company's load collide on the first company's rows.
+    __table_args__ = (
+        UniqueConstraint("external_id", "company_id", name="uq_brands_external_id_company"),
+        UniqueConstraint("name", "company_id", name="uq_brands_name_company"),
+    )
 
 
 class BrandUser(Base, TenantScoped):
@@ -373,12 +418,20 @@ class BrandTerritory(Base, TenantScoped):
 class Product(Base, TenantScoped):
     __tablename__ = "products"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    external_id:         Mapped[Optional[str]]  = mapped_column(String(100), unique=True)
-    product_sku:         Mapped[Optional[str]]  = mapped_column(String(100), unique=True)
+    external_id:         Mapped[Optional[str]]  = mapped_column(String(100))
+    product_sku:         Mapped[Optional[str]]  = mapped_column(String(100))
     name:                Mapped[str]            = mapped_column(String(140))
     category:            Mapped[Optional[str]]  = mapped_column(String(80))
     source_system:       Mapped[Optional[str]]  = mapped_column(String(50), default="uploaded")
     created_at:          Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
+
+    # Unique per company, not globally: two tenants legitimately use the
+    # same natural keys (external_id, product_sku). A global constraint here made
+    # a second company's load collide on the first company's rows.
+    __table_args__ = (
+        UniqueConstraint("external_id", "company_id", name="uq_products_external_id_company"),
+        UniqueConstraint("product_sku", "company_id", name="uq_products_product_sku_company"),
+    )
 
 
 class RepProductAssignment(Base, TenantScoped):
@@ -424,7 +477,7 @@ class AccountBrandMap(Base, TenantScoped):
 class SalesUnit(Base, TenantScoped):
     __tablename__ = "sales_units"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    external_id:         Mapped[Optional[str]]  = mapped_column(String(100), unique=True)
+    external_id:         Mapped[Optional[str]]  = mapped_column(String(100))
     opportunity_id:      Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("deals.id"))
     account_id:          Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("accounts.id"))
     owner_user_id:       Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
@@ -433,6 +486,13 @@ class SalesUnit(Base, TenantScoped):
     currency:            Mapped[Optional[str]]  = mapped_column(String(10), default="USD")
     source_system:       Mapped[Optional[str]]  = mapped_column(String(50), default="uploaded")
     created_at:          Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
+
+    # Unique per company, not globally: two tenants legitimately use the
+    # same natural keys (external_id). A global constraint here made
+    # a second company's load collide on the first company's rows.
+    __table_args__ = (
+        UniqueConstraint("external_id", "company_id", name="uq_sales_units_external_id_company"),
+    )
 
 
 class SalesUnitLineItem(Base, TenantScoped):
@@ -480,7 +540,7 @@ class PayoutRecord(Base, TenantScoped):
 class Lead(Base, TenantScoped):
     __tablename__ = "leads"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    external_id:         Mapped[Optional[str]]  = mapped_column(String(100), unique=True)
+    external_id:         Mapped[Optional[str]]  = mapped_column(String(100))
     account_id:          Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("accounts.id"))
     owner_user_id:       Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
     source:              Mapped[Optional[str]]  = mapped_column(String(80))
@@ -489,11 +549,18 @@ class Lead(Base, TenantScoped):
     created_at:          Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
     source_system:       Mapped[Optional[str]]  = mapped_column(String(50), default="uploaded")
 
+    # Unique per company, not globally: two tenants legitimately use the
+    # same natural keys (external_id). A global constraint here made
+    # a second company's load collide on the first company's rows.
+    __table_args__ = (
+        UniqueConstraint("external_id", "company_id", name="uq_leads_external_id_company"),
+    )
+
 
 class Opportunity(Base, TenantScoped):
     __tablename__ = "opportunities"
     id:                  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    external_id:         Mapped[Optional[str]]  = mapped_column(String(100), unique=True)
+    external_id:         Mapped[Optional[str]]  = mapped_column(String(100))
     account_id:          Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("accounts.id"))
     owner_user_id:       Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
     name:                Mapped[str]            = mapped_column(String(200))
@@ -503,6 +570,13 @@ class Opportunity(Base, TenantScoped):
     source_system:       Mapped[Optional[str]]  = mapped_column(String(50), default="uploaded")
     created_at:          Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow)
     updated_at:          Mapped[datetime]       = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Unique per company, not globally: two tenants legitimately use the
+    # same natural keys (external_id). A global constraint here made
+    # a second company's load collide on the first company's rows.
+    __table_args__ = (
+        UniqueConstraint("external_id", "company_id", name="uq_opportunities_external_id_company"),
+    )
 
 
 class MonthlyFinance(Base, TenantScoped):
@@ -667,3 +741,11 @@ class JobStatus(Base):
     started_at:    Mapped[Optional[datetime]] = mapped_column(DateTime)
     finished_at:   Mapped[Optional[datetime]] = mapped_column(DateTime)
     created_at:    Mapped[datetime]         = mapped_column(DateTime, default=datetime.utcnow)
+
+
+# Tenant scoping is registered here, at the bottom of the module that defines
+# TenantScoped, so it is active for every session in the process — API requests,
+# scripts and tests alike — rather than depending on an import somewhere else.
+from backend.tenant_guard import install as _install_tenant_guard  # noqa: E402
+
+_install_tenant_guard(TenantScoped)
