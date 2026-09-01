@@ -83,3 +83,8 @@ dist/
 dist/packages/
 *.zip
 *.tar.gz
+
+# Hook evidence — local session state, not a team artifact.
+# scripts/money_path_gate.py records that an approach was agreed for a branch.
+.claude/plan-state/
+.claude/settings.local.json
