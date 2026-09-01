@@ -142,6 +142,29 @@ class ForecastAuditSummary:
     rep_rows: list[RepForecastAuditRow] = field(default_factory=list)
 
 
+def to_native(value: Any) -> Any:
+    """
+    Convert numpy scalars and containers to plain Python types, recursively.
+
+    The audit computes with pandas and numpy, so values like `mape_flagged`
+    arrive as `numpy.bool_` rather than `bool`. Pydantic cannot serialize those,
+    and `/payout/audit/{company}` returned 500 with
+    "Unable to serialize unknown type: <class 'numpy.bool'>".
+
+    Applied once at the serialization boundary rather than at each field, so a
+    numpy value added to the report later cannot reintroduce the failure.
+    """
+    if isinstance(value, dict):
+        return {k: to_native(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [to_native(v) for v in value]
+    # numpy scalars expose .item(); guard on the attribute so numpy stays an
+    # optional import here.
+    if hasattr(value, "item") and hasattr(value, "dtype"):
+        return value.item()
+    return value
+
+
 @dataclass
 class CompanyAuditReport:
     company: str
@@ -151,6 +174,9 @@ class CompanyAuditReport:
     errors: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
+        return to_native(self._raw_dict())
+
+    def _raw_dict(self) -> dict[str, Any]:
         return {
             "company": self.company,
             "passed": self.passed,

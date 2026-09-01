@@ -93,7 +93,12 @@ def fit_survival_model(
         "duration":  durations,
         "event":     event_observed,
         "cohort":    [r.get("cohort", "all") for r in account_records],
-        "account_id": [r.get("account_id", str(i)) for r in account_records],
+        # `i` was never bound here, so any record without an account_id raised
+        # NameError. The fallback path was the failing path, which is why it
+        # survived: complete records never reach the default.
+        "account_id": [
+            r.get("account_id", str(idx)) for idx, r in enumerate(account_records)
+        ],
     })
 
     # ── Kaplan-Meier ──────────────────────────────────────────────────────

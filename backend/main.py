@@ -21,15 +21,26 @@ from backend.routers.payout_audit import router as payout_audit_router
 
 logger = logging.getLogger(__name__)
 
-SCOPED_ROUTE_PREFIXES = (
-    "/analytics",
-    "/payout",
-    "/ml",
-    "/reports",
-    "/data-quality",
-    "/plans",
-    "/territories",
+#: Paths that serve no tenant data and therefore need no tenant bound.
+#: Everything else is scoped — the list is an exemption list, not an allowlist,
+#: so a router added later is tenant-scoped by default rather than silently
+#: unscoped until someone remembers to register it. The previous allowlist
+#: omitted /agent, /workflows, /etl and /grading, and the agent consequently
+#: reported revenue summed across every company in the database.
+TENANT_EXEMPT_PREFIXES = (
+    "/health",
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+    "/favicon.ico",
 )
+
+
+def is_tenant_exempt(path: str) -> bool:
+    """True when `path` serves no tenant data."""
+    if path == "/":
+        return True
+    return path.startswith(TENANT_EXEMPT_PREFIXES)
 
 
 @asynccontextmanager
@@ -90,13 +101,14 @@ async def tenant_binding_middleware(request: Request, call_next):
     `GET /analytics/kpis?company_id=other` drop and rebuild every table, and it is
     why only one tenant could be served at a time.
 
+    Every path is scoped unless explicitly exempt (see TENANT_EXEMPT_PREFIXES).
+
     Resolution is deliberately not done here: `auth/tenant.py` owns it, because
     the choice of company is an authorization decision (a request hint may only
     confirm the caller's own company, never replace it) and belongs with the code
     that knows the caller's identity.
     """
-    path = request.url.path
-    if not any(path.startswith(prefix) for prefix in SCOPED_ROUTE_PREFIXES):
+    if is_tenant_exempt(request.url.path):
         return await call_next(request)
 
     company = extract_company_hint(request) or (

@@ -242,3 +242,42 @@ def test_no_bare_entity_less_counts_in_scoped_queries():
         "entity-less count() bypasses tenant filtering; use func.count(Model.id): "
         + ", ".join(offenders)
     )
+
+
+# ── Every route is scoped unless explicitly exempt ───────────────────────────
+
+
+def test_every_mounted_route_is_tenant_scoped_or_explicitly_exempt():
+    """
+    The middleware exempts paths rather than allowlisting them, so a router
+    added later is scoped by default.
+
+    The previous allowlist named seven prefixes and omitted /agent, /workflows,
+    /etl and /grading. Those four served tenant data with no tenant bound, and
+    the agent reported $10.36M revenue for a company whose revenue is $3.76M —
+    the sum of every company in the database.
+    """
+    from backend.main import app, is_tenant_exempt
+
+    unscoped_paths = [
+        route.path
+        for route in app.routes
+        if getattr(route, "path", None) and is_tenant_exempt(route.path)
+    ]
+
+    # Only the handful of genuinely tenant-free paths may be exempt.
+    allowed_exempt = {"/", "/health", "/docs", "/redoc", "/openapi.json", "/docs/oauth2-redirect"}
+    unexpected = sorted(set(unscoped_paths) - allowed_exempt)
+    assert unexpected == [], f"these routes are exempt from tenant binding: {unexpected}"
+
+
+def test_data_serving_prefixes_are_all_scoped():
+    """Each router that returns tenant data must be bound by the middleware."""
+    from backend.main import is_tenant_exempt
+
+    for prefix in (
+        "/analytics", "/payout", "/payouts", "/ml", "/reports", "/data-quality",
+        "/plans", "/territories", "/agent", "/workflows", "/etl", "/grading",
+        "/ingestion",
+    ):
+        assert not is_tenant_exempt(f"{prefix}/anything"), f"{prefix} is not tenant-scoped"
