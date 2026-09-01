@@ -84,7 +84,14 @@ def test_demo_default_company_fallback() -> None:
         settings.DEMO_DEFAULT_COMPANY = original_default_company
 
 
-def test_apply_company_scope_noop_without_column() -> None:
+def test_apply_company_scope_filters_a_tenant_model() -> None:
+    """
+    Rep carries company_id since the tenancy migration, so scoping it produces
+    a filtered query. This test previously asserted the opposite — that scoping
+    was a no-op — which was true and was the bug: the guard did nothing while
+    reading as protection at every call site.
+    """
     query = select(Rep)
     scoped = apply_company_scope(query, Rep, "co-1")
-    assert scoped is query
+    assert scoped is not query
+    assert "company_id" in str(scoped)

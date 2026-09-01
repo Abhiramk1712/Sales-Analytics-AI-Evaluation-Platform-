@@ -11,7 +11,7 @@ function safeJson(res) {
  * @param {string} path - API path (e.g. "/analytics/kpis")
  * @param {object} opts - { role, company, params }
  */
-export async function apiGet(path, { role, company, params } = {}) {
+export async function apiGet(path, { role, company, params, signal } = {}) {
   const url = new URL(`${API_BASE_URL}${path}`, window.location.origin);
   Object.entries(params || {}).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "") {
@@ -20,6 +20,7 @@ export async function apiGet(path, { role, company, params } = {}) {
   });
 
   const res = await fetch(url, {
+    signal,
     headers: {
       "Content-Type": "application/json",
       ...(role ? { "X-User-Role": role } : {}),

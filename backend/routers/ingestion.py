@@ -5,7 +5,9 @@ import uuid
 from pathlib import Path
 
 from pydantic import BaseModel, Field
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+
+from backend.auth.dependencies import require_permission
 
 from backend.company_context import get_active_company, load_company_into_context, set_active_company
 from backend.config import settings
@@ -16,8 +18,57 @@ from backend.ingestion.source_registry import get_manifest_registry
 
 router = APIRouter(prefix="/ingestion", tags=["Ingestion"])
 
+# Ingestion endpoints span three very different risk levels, so they carry three
+# different permissions rather than one blanket guard:
+#   listing/reading state   → view_dashboard      (harmless)
+#   inspecting source files → view_data_quality   (reads the filesystem)
+#   loading into the DB     → run_ingestion       (destructive)
+# Switching the active company sits apart as switch_company; see permissions.py.
+_READ_STATE = Depends(require_permission("view_dashboard"))
+_INSPECT_SOURCES = Depends(require_permission("view_data_quality"))
+_LOAD_DATA = Depends(require_permission("run_ingestion"))
+_SWITCH_COMPANY = Depends(require_permission("switch_company"))
+
 
 LOAD_MODES = {"full_reload", "upsert", "append"}
+
+
+def resolve_source_dir(raw: str) -> Path:
+    """
+    Resolve a caller-supplied source directory inside INGESTION_SOURCE_ROOT.
+
+    `source_dir` arrives in a request body, so an unconfined value let a caller
+    walk the host filesystem and read back directory contents and CSV headers
+    in the response. Everything is resolved and then checked to be inside the
+    configured root — resolve first, so `../` and symlinks cannot escape it.
+    """
+    root = Path(settings.INGESTION_SOURCE_ROOT).resolve()
+    candidate = Path(raw)
+
+    # Both spellings are accepted, because both are already in use: a path from
+    # the working directory ("companies/techo-solutions") and one relative to
+    # the root itself ("techo-solutions"). Each is resolved before it is
+    # checked, so `..` segments and symlinks cannot escape the root.
+    candidates = [candidate.resolve()] if candidate.is_absolute() else [
+        candidate.resolve(),
+        (root / candidate).resolve(),
+    ]
+
+    inside = [c for c in candidates if c == root or root in c.parents]
+    if not inside:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"source_dir must be inside '{settings.INGESTION_SOURCE_ROOT}'. "
+                "Paths outside it are refused."
+            ),
+        )
+
+    for resolved in inside:
+        if resolved.is_dir():
+            return resolved
+
+    raise HTTPException(status_code=404, detail=f"Source directory not found: {raw}")
 
 
 class IntelligentIngestionRequest(BaseModel):
@@ -34,7 +85,7 @@ class LoadCompanyRequest(BaseModel):
     company_name: str = Field(..., description="Company name/folder under companies/")
 
 
-@router.get("/companies")
+@router.get("/companies", dependencies=[_READ_STATE])
 def list_companies():
     companies_dir = Path("companies")
     if not companies_dir.exists() or not companies_dir.is_dir():
@@ -59,10 +110,11 @@ def list_companies():
     return {"companies": companies}
 
 
-@router.post("/inspect")
+@router.post("/inspect", dependencies=[_INSPECT_SOURCES])
 def inspect_source(req: IntelligentIngestionRequest):
+    source_dir = str(resolve_source_dir(req.source_dir))
     try:
-        result = inspect_source_directory(req.source_dir)
+        result = inspect_source_directory(source_dir)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:  # pragma: no cover
@@ -70,11 +122,12 @@ def inspect_source(req: IntelligentIngestionRequest):
     return result
 
 
-@router.post("/inspect-v2")
+@router.post("/inspect-v2", dependencies=[_INSPECT_SOURCES])
 def inspect_source_v2(req: IntelligentIngestionRequest):
     """Manifest-aware inspection preview without loading to DB."""
+    source_dir = str(resolve_source_dir(req.source_dir))
     try:
-        inspection = inspect_source_directory(req.source_dir)
+        inspection = inspect_source_directory(source_dir)
         dataset, warnings, manifest_details = build_manifest_canonical_dataset(
             inspection=inspection,
             manifest_name=req.manifest_name,
@@ -100,11 +153,12 @@ def inspect_source_v2(req: IntelligentIngestionRequest):
         raise HTTPException(status_code=400, detail=f"Manifest inspection failed: {exc}") from exc
 
 
-@router.post("/dry-run-load")
+@router.post("/dry-run-load", dependencies=[_INSPECT_SOURCES])
 def dry_run_load(req: IntelligentIngestionRequest):
     """Dry-run mapping and quality preview without DB writes."""
+    source_dir = str(resolve_source_dir(req.source_dir))
     try:
-        inspection = inspect_source_directory(req.source_dir)
+        inspection = inspect_source_directory(source_dir)
         if req.use_manifest:
             dataset, warnings, manifest_details = build_manifest_canonical_dataset(
                 inspection=inspection,
@@ -134,12 +188,13 @@ def dry_run_load(req: IntelligentIngestionRequest):
         raise HTTPException(status_code=400, detail=f"Dry-run failed: {exc}") from exc
 
 
-@router.post("/intelligent-load")
+@router.post("/intelligent-load", dependencies=[_LOAD_DATA])
 async def intelligent_load(req: IntelligentIngestionRequest):
     if req.load_mode not in LOAD_MODES:
         raise HTTPException(status_code=400, detail=f"Invalid load_mode '{req.load_mode}'. Must be one of: {sorted(LOAD_MODES)}")
     # Guard: destructive reset requires explicit env opt-in
     effective_reset = req.reset_database and req.load_mode == "full_reload"
+    source_dir = str(resolve_source_dir(req.source_dir))
     if effective_reset and not settings.ALLOW_DESTRUCTIVE_LOAD:
         raise HTTPException(
             status_code=403,
@@ -147,7 +202,7 @@ async def intelligent_load(req: IntelligentIngestionRequest):
         )
     try:
         result = await intelligent_ingest(
-            source_dir=req.source_dir,
+            source_dir=source_dir,
             company_name=req.company_name,
             reset_database=req.reset_database,
             load_mode=req.load_mode,
@@ -185,7 +240,7 @@ def _write_uploaded_sources(files: list[UploadFile]) -> Path:
     return run_dir
 
 
-@router.post("/upload-intelligent-load")
+@router.post("/upload-intelligent-load", dependencies=[_LOAD_DATA])
 async def upload_and_intelligent_load(
     company_name: str = Form(..., description="Logical company name for output folder"),
     reset_database: bool = Form(False, description="Drop and recreate DB tables before load (requires ALLOW_DESTRUCTIVE_LOAD=true)"),
@@ -227,7 +282,7 @@ async def upload_and_intelligent_load(
         raise HTTPException(status_code=500, detail=f"Upload ingestion failed: {exc}") from exc
 
 
-@router.post("/load-company")
+@router.post("/load-company", dependencies=[_SWITCH_COMPANY])
 async def load_company(req: LoadCompanyRequest):
     try:
         counts = await load_company_into_context(
@@ -248,7 +303,7 @@ async def load_company(req: LoadCompanyRequest):
     }
 
 
-@router.get("/active-company")
+@router.get("/active-company", dependencies=[_READ_STATE])
 def active_company_context():
     return {"active_company": get_active_company()}
 
@@ -273,7 +328,7 @@ class DriftDetectionRequest(BaseModel):
     actual_schema: dict[str, list[str]] = Field(..., description="Dict mapping table_name -> list of column names")
 
 
-@router.get("/manifest/list")
+@router.get("/manifest/list", dependencies=[_READ_STATE])
 def list_available_manifests():
     """List all available manifest schemas."""
     try:
@@ -287,7 +342,7 @@ def list_available_manifests():
         raise HTTPException(status_code=500, detail=f"Failed to list manifests: {exc}") from exc
 
 
-@router.post("/manifest/validate")
+@router.post("/manifest/validate", dependencies=[_INSPECT_SOURCES])
 def validate_manifest(req: ManifestValidationRequest):
     """
     Validate a manifest schema.
@@ -314,7 +369,7 @@ def validate_manifest(req: ManifestValidationRequest):
         raise HTTPException(status_code=500, detail=f"Manifest validation failed: {exc}") from exc
 
 
-@router.post("/manifest/load")
+@router.post("/manifest/load", dependencies=[_LOAD_DATA])
 def load_manifest(req: ManifestValidationRequest):
     """
     Load a manifest schema (returns full schema object).
@@ -346,7 +401,7 @@ def load_manifest(req: ManifestValidationRequest):
         raise HTTPException(status_code=500, detail=f"Failed to load manifest: {exc}") from exc
 
 
-@router.post("/manifest/detect-drift")
+@router.post("/manifest/detect-drift", dependencies=[_INSPECT_SOURCES])
 def detect_schema_drift(req: DriftDetectionRequest):
     """
     Detect schema drift between manifest and actual data.

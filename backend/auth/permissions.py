@@ -27,6 +27,13 @@ PERM_ADMIN = "admin"
 PERM_VIEW_OWN_PAYOUT = "view_own_payout"
 PERM_VIEW_OWN_METRICS = "view_own_metrics"
 
+# Choosing which company you are looking at. Deliberately *not* run_ingestion:
+# under a query-scoped tenancy model this is a read-scope change, not an
+# operator action. It only rebuilds the database today because tenancy is
+# implemented as a whole-database swap — that is the bug, not a reason to make
+# viewing privileged.
+PERM_SWITCH_COMPANY = "switch_company"
+
 ALL_PERMISSIONS: set[str] = {
     PERM_VIEW_DASHBOARD,
     PERM_VIEW_FORECASTS,
@@ -50,11 +57,13 @@ ALL_PERMISSIONS: set[str] = {
     PERM_ADMIN,
     PERM_VIEW_OWN_PAYOUT,
     PERM_VIEW_OWN_METRICS,
+    PERM_SWITCH_COMPANY,
 }
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
     "executive": {
         PERM_VIEW_DASHBOARD,
+        PERM_SWITCH_COMPANY,
         PERM_VIEW_FORECASTS,
         PERM_VIEW_PAYOUTS,
         PERM_VIEW_MODEL_MONITORING,
@@ -71,6 +80,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
     },
     "revops_admin": {
         PERM_VIEW_DASHBOARD,
+        PERM_SWITCH_COMPANY,
         PERM_VIEW_FORECASTS,
         PERM_VIEW_PAYOUTS,
         PERM_APPROVE_PAYOUTS,
@@ -95,6 +105,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
     },
     "finance_admin": {
         PERM_VIEW_DASHBOARD,
+        PERM_SWITCH_COMPANY,
         PERM_VIEW_PAYOUTS,
         PERM_APPROVE_PAYOUTS,
         PERM_VIEW_AUDIT_LOGS,
@@ -104,6 +115,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
     },
     "sales_manager": {
         PERM_VIEW_DASHBOARD,
+        PERM_SWITCH_COMPANY,
         PERM_VIEW_FORECASTS,
         PERM_VIEW_PAYOUTS,
         PERM_VIEW_AUDIT_LOGS,
@@ -113,12 +125,14 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
     },
     "sales_rep": {
         PERM_VIEW_DASHBOARD,
+        PERM_SWITCH_COMPANY,
         PERM_VIEW_FORECASTS,
         PERM_VIEW_OWN_PAYOUT,
         PERM_VIEW_OWN_METRICS,
     },
     "data_scientist": {
         PERM_VIEW_DASHBOARD,
+        PERM_SWITCH_COMPANY,
         PERM_VIEW_FORECASTS,
         PERM_VIEW_MODEL_MONITORING,
         PERM_RUN_MODEL_TRAINING,
@@ -128,6 +142,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
     },
     "auditor": {
         PERM_VIEW_DASHBOARD,
+        PERM_SWITCH_COMPANY,
         PERM_VIEW_PAYOUTS,
         PERM_VIEW_MODEL_MONITORING,
         PERM_VIEW_DATA_QUALITY,

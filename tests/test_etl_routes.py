@@ -25,7 +25,11 @@ def test_etl_run_route_success(monkeypatch):
     monkeypatch.setattr(etl_router, "run_etl_pipeline", lambda _: fake_result)
 
     client = TestClient(app)
-    res = client.post("/etl/run", params={"source_dir": "companies/techo-solutions"})
+    res = client.post(
+        "/etl/run",
+        headers={"X-User-Role": "revops_admin"},
+        params={"source_dir": "companies/techo-solutions"},
+    )
 
     assert res.status_code == 200
     payload = res.json()
@@ -44,7 +48,29 @@ def test_etl_run_route_not_found(monkeypatch):
     monkeypatch.setattr(etl_router, "run_etl_pipeline", _raise)
 
     client = TestClient(app)
-    res = client.post("/etl/run", params={"source_dir": "missing"})
+    # The directory exists and passes confinement, so the FileNotFoundError
+    # under test comes from the pipeline — which is what this covers.
+    res = client.post(
+        "/etl/run",
+        headers={"X-User-Role": "revops_admin"},
+        params={"source_dir": "companies/techo-solutions"},
+    )
 
     assert res.status_code == 404
     assert "missing" in res.json()["detail"]
+
+
+def test_etl_run_route_refuses_a_path_outside_the_root(monkeypatch):
+    app = FastAPI()
+    app.include_router(etl_router.router)
+    monkeypatch.setattr(etl_router, "run_etl_pipeline", lambda _: None)
+
+    client = TestClient(app)
+    res = client.post(
+        "/etl/run",
+        headers={"X-User-Role": "revops_admin"},
+        params={"source_dir": "/etc"},
+    )
+
+    assert res.status_code == 400
+    assert "must be inside" in res.json()["detail"]

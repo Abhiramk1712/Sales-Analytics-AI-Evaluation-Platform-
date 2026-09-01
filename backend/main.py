@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from backend.auth.tenant import extract_company_hint
+from backend.auth.tokens import assert_auth_configured
 from backend.company_context import ensure_company_loaded, get_active_company, wait_for_company_load_completion
 from backend.database import get_engine, Base
 from backend.config import settings
@@ -33,6 +34,11 @@ SCOPED_ROUTE_PREFIXES = (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Refuse to boot into production mode without a way to verify tokens.
+    # Failing at startup is the only safe option: the alternative is a server
+    # that accepts every request because it cannot check any of them.
+    assert_auth_configured()
+
     # Create tables on startup when AUTO_CREATE_TABLES is enabled (default: demo/dev mode)
     if settings.AUTO_CREATE_TABLES:
         engine = get_engine()
@@ -113,8 +119,16 @@ async def company_alignment_middleware(request: Request, call_next):
             except FileNotFoundError as exc:
                 return JSONResponse(status_code=404, content={"detail": str(exc)})
             except Exception as exc:
-                logger.exception("Company alignment failed for '%s': %s", company, exc)
-                return JSONResponse(status_code=500, content={"detail": "Failed to align company context"})
+                correlation_id = request.headers.get("X-Correlation-ID", str(uuid.uuid4()))
+                logger.exception(
+                    "Company alignment failed for '%s' [%s]: %s", company, correlation_id, exc
+                )
+                # Same shape as global_exception_handler — one generic failure
+                # response for the whole API, with the id needed to find the log.
+                return JSONResponse(
+                    status_code=500,
+                    content={"detail": "Internal server error", "correlation_id": correlation_id},
+                )
 
     return await call_next(request)
 

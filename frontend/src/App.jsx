@@ -1429,105 +1429,6 @@ function RepsTab({ refreshKey, period, userRole, activeCompany }) {
 }
 
 // ── Agent Tab ─────────────────────────────────────────────────────────────
-function AgentTab() {
-  const [messages, setMessages] = useState([{ role: "assistant", content: "Hi! I have live access to your sales database. Ask me about pipeline, reps, forecasts, or any KPI.", meta: null }]);
-  const [input, setInput]     = useState("");
-  const [loading, setLoading] = useState(false);
-  const { data: mlEvidence, loading: mlLoading, error: mlError } = useFetch("/agent/ml-evidence");
-  const endRef = useRef(null);
-
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-
-  const send = useCallback(async (text) => {
-    const msg = text || input.trim();
-    if (!msg) return;
-    setInput("");
-    const history = messages.filter(m => m.role !== "skeleton");
-    setMessages(prev => [...prev, { role: "user", content: msg }, { role: "skeleton" }]);
-    setLoading(true);
-    try {
-      const res = await fetch(`${API}/agent/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg, history }),
-      });
-      const data = await res.json();
-      const sourceSet = new Set();
-      Object.values(data.evidence_summary || {}).forEach((item) => {
-        (item.sources || []).forEach((s) => sourceSet.add(s));
-      });
-      setMessages(prev => [...prev.filter(m => m.role !== "skeleton"), {
-        role: "assistant",
-        content: data.reply,
-        meta: {
-          intent: data.intent,
-          tools_used: data.tools_used || [],
-          warnings: data.warnings || [],
-          sources: Array.from(sourceSet),
-        },
-      }]);
-    } catch {
-      setMessages(prev => [...prev.filter(m => m.role !== "skeleton"), { role: "assistant", content: "Error connecting to the agent. Is the backend running?", meta: null }]);
-    }
-    setLoading(false);
-  }, [input, messages]);
-
-  const QUICK = ["Which reps are behind quota?", "What's the weighted pipeline forecast?", "Show me at-risk deals", "Q2 performance summary"];
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ border: "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-lg)", padding: 12 }}>
-        <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 8 }}>ML Evidence Snapshot</div>
-        {mlLoading && <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>Loading ML evidence...</div>}
-        {mlError && <div style={{ fontSize: 12, color: "#D85A30" }}>Unable to load ML evidence snapshot.</div>}
-        {!mlLoading && !mlError && mlEvidence && (
-          <>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginBottom: 8 }}>
-              <MetricCard label="Forecast Version" value={mlEvidence.forecast?.latest_model_version || "n/a"} sub={mlEvidence.forecast?.predicted_at || "No forecast run"} />
-              <MetricCard label="High Risk Deals" value={String(mlEvidence.deal_risk?.high_risk_count || 0)} color="#D85A30" />
-              <MetricCard label="Medium Risk" value={String(mlEvidence.deal_risk?.medium_risk_count || 0)} color="#EF9F27" />
-              <MetricCard label="Cluster Groups" value={String(mlEvidence.rep_clusters?.cluster_count || 0)} color="#378ADD" />
-            </div>
-            {(mlEvidence.warnings || []).length > 0 && (
-              <div style={{ fontSize: 11, color: "var(--color-text-secondary)", borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 6 }}>
-                Warnings: {(mlEvidence.warnings || []).join(" | ")}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      <div style={{ border: "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-lg)", padding: 16, minHeight: 320, maxHeight: 420, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
-        {messages.map((m, i) => m.role === "skeleton" ? (
-          <div key={i} style={{ alignSelf: "flex-start", maxWidth: "80%", padding: "10px 14px", background: "var(--color-background-secondary)", borderRadius: "16px 16px 16px 4px", fontSize: 13, opacity: 0.6, fontStyle: "italic" }}>Thinking…</div>
-        ) : (
-          <div key={i} style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "82%", padding: "10px 14px", background: m.role === "user" ? "#E6F1FB" : "var(--color-background-secondary)", color: m.role === "user" ? "#042C53" : "var(--color-text-primary)", borderRadius: m.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
-            <div>{m.content}</div>
-            {m.role === "assistant" && m.meta && (
-              <div style={{ marginTop: 8, fontSize: 11, color: "var(--color-text-secondary)", borderTop: "0.5px solid var(--color-border-tertiary)", paddingTop: 6 }}>
-                <div>Intent: {m.meta.intent || "unknown"}</div>
-                <div>Tools: {(m.meta.tools_used || []).join(", ") || "none"}</div>
-                <div>Sources: {(m.meta.sources || []).join(", ") || "none"}</div>
-                {(m.meta.warnings || []).length > 0 && <div>Warnings: {(m.meta.warnings || []).join(" | ")}</div>}
-              </div>
-            )}
-          </div>
-        ))}
-        <div ref={endRef} />
-      </div>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        {QUICK.map(q => (
-          <button key={q} onClick={() => send(q)} style={{ padding: "5px 12px", border: "0.5px solid var(--color-border-secondary)", borderRadius: 99, background: "none", cursor: "pointer", fontSize: 12, color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)" }}>{q}</button>
-        ))}
-      </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder="Ask about your sales data…" style={{ flex: 1, padding: "10px 14px", border: "0.5px solid var(--color-border-secondary)", borderRadius: "var(--border-radius-md)", background: "var(--color-background-primary)", color: "var(--color-text-primary)", fontSize: 13, fontFamily: "var(--font-sans)" }} />
-        <button onClick={() => send()} disabled={loading} style={{ padding: "10px 18px", border: "0.5px solid var(--color-border-secondary)", borderRadius: "var(--border-radius-md)", background: "var(--color-background-primary)", cursor: "pointer", fontSize: 13, fontFamily: "var(--font-sans)" }}>Send ↗</button>
-      </div>
-    </div>
-  );
-}
-
 function DataQualityTab({ refreshKey, activeCompany, userRole }) {
   const role = userRole || "executive";
   const company = activeCompany || "";
@@ -3214,12 +3115,13 @@ const NAV_MODULES = [
   { label: "People & Territory", tabs: ["Reps", "Rep Scorecard", "Org Hierarchy", "Territories"] },
   { label: "Compensation", tabs: ["Payouts", "Plans"] },
   { label: "AI & Operations", tabs: ["AI Agent", "Data Quality", "Model Monitoring", "Enterprise Grade", "ML Insights"] },
+  { label: "Data Operations", tabs: ["Ingestion"] },
 ];
 
 const ALL_TABS = NAV_MODULES.flatMap((module) => module.tabs);
 const PERIOD_AWARE_TABS = new Set(["Dashboard", "RevOps Control Center", "ARR Health", "Pipeline Health", "Forecast", "Reps", "Territories"]);
 const ROLE_TAB_ACCESS = {
-  executive: new Set(ALL_TABS.filter((t) => !["Data Quality", "Model Monitoring", "Enterprise Grade"].includes(t))),
+  executive: new Set(ALL_TABS.filter((t) => !["Data Quality", "Model Monitoring", "Enterprise Grade", "Ingestion"].includes(t))),
   revops_admin: new Set(ALL_TABS),
   finance_admin: new Set(["Dashboard", "RevOps Control Center", "Payouts", "Plans", "Reports", "AI Agent", "Data Quality"]),
   sales_manager: new Set(["Dashboard", "Forecast", "ARR Health", "Pipeline Health", "Reps", "Rep Scorecard", "Reports", "AI Agent"]),
@@ -3545,6 +3447,7 @@ export default function App() {
       {tab === "Model Monitoring" && <ModelMonitoringTab refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} />}
       {tab === "Enterprise Grade" && <EnterpriseGradeTab refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} />}
       {tab === "Org Hierarchy" && <OrgHierarchyPage refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} />}
+      {tab === "Ingestion" && <IngestionTab refreshKey={refreshKey} activeCompany={activeCompany} onCompanyLoaded={loadCompany} />}
 
       </div>
     </div>

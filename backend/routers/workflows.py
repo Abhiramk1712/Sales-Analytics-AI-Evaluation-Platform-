@@ -16,10 +16,15 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.auth.dependencies import require_permission
 from backend.database import get_db
 from backend.workflows import store as workflow_store
 
-router = APIRouter(prefix="/workflows", tags=["Workflows"])
+router = APIRouter(
+    prefix="/workflows",
+    tags=["Workflows"],
+    dependencies=[Depends(require_permission("run_agent_workflow"))],
+)
 
 # ── Lightweight in-memory job status store for demo mode ──────────────────
 # TODO: Replace with DB-backed JobStatus model or Celery/RQ in production.

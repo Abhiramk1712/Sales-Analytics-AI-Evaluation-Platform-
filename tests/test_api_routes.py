@@ -172,7 +172,10 @@ def test_ingestion_inspect_route(monkeypatch):
     monkeypatch.setattr(ingestion_router, "inspect_source_directory", fake_inspect)
 
     client = TestClient(app)
-    res = client.post("/ingestion/inspect", json={"source_dir": "/tmp/import", "company_name": "Acme", "reset_database": True})
+    res = client.post(
+        "/ingestion/inspect",
+        json={"source_dir": "companies/techo-solutions", "company_name": "Acme", "reset_database": True},
+    )
 
     assert res.status_code == 200
     assert res.json()["files"][0]["entity"] == "deals"
@@ -206,7 +209,14 @@ def test_ingestion_intelligent_load_route(monkeypatch):
     monkeypatch.setattr(ingestion_router, "intelligent_ingest", fake_ingest)
 
     client = TestClient(app)
-    res = client.post("/ingestion/intelligent-load", json={"source_dir": "/tmp/import", "company_name": "Acme", "reset_database": True})
+    res = client.post(
+        "/ingestion/intelligent-load",
+        headers={"X-User-Role": "revops_admin"},
+        # reset_database stays false: a destructive reset without
+        # ALLOW_DESTRUCTIVE_LOAD is correctly refused, and that is covered in
+        # test_destructive_load_guard. This test is the happy path.
+        json={"source_dir": "companies/techo-solutions", "company_name": "Acme", "reset_database": False},
+    )
 
     assert res.status_code == 200
     payload = res.json()
@@ -251,7 +261,8 @@ def test_ingestion_upload_intelligent_load_route(monkeypatch, tmp_path):
     client = TestClient(app)
     res = client.post(
         "/ingestion/upload-intelligent-load",
-        data={"company_name": "Acme", "reset_database": "true"},
+        headers={"X-User-Role": "revops_admin"},
+        data={"company_name": "Acme", "reset_database": "false"},
         files={"files": ("revenue.csv", "rep_id,period,amount\nabc,2026-04,1000\n", "text/csv")},
     )
 

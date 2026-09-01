@@ -49,6 +49,13 @@ def _get_company_dirs() -> list[Path]:
 
 _COMPANY_DIRS = _get_company_dirs()
 
+if not _COMPANY_DIRS:  # pragma: no cover - environment guard
+    raise RuntimeError(
+        "No company datasets found under companies/. Every test in this module "
+        "parametrizes over that list, so an empty list means the whole file "
+        "passes without checking anything. Run `make seed` first."
+    )
+
 # Companies with full generated schema (payouts.csv present) — strict CI gate
 _FULL_COMPANY_DIRS = [d for d in _COMPANY_DIRS if (d / "payouts.csv").exists()]
 
@@ -104,9 +111,14 @@ def test_payout_audit_plan_coverage(company_dir: Path) -> None:
     )
 
 
-@pytest.mark.parametrize("company_dir", _COMPANY_DIRS, ids=lambda d: d.name)
+@pytest.mark.parametrize("company_dir", _FULL_COMPANY_DIRS, ids=lambda d: d.name)
 def test_payout_audit_all_reps_have_revenue(company_dir: Path) -> None:
-    """All non-exempt reps must have > $0 quarterly revenue."""
+    """All non-exempt reps must have > $0 quarterly revenue.
+
+    Scoped to FULL companies, per this module's stated policy: a partial CRM
+    import legitimately lacks complete revenue coverage, and holding it to a
+    generated dataset's invariants tests the fixture, not the code.
+    """
     report: CompanyAuditReport = audit_company(company_dir)
 
     assert report.payout.reps_zero_revenue == 0, (
@@ -114,7 +126,7 @@ def test_payout_audit_all_reps_have_revenue(company_dir: Path) -> None:
     )
 
 
-@pytest.mark.parametrize("company_dir", _COMPANY_DIRS, ids=lambda d: d.name)
+@pytest.mark.parametrize("company_dir", _FULL_COMPANY_DIRS, ids=lambda d: d.name)
 def test_payout_audit_all_reps_have_closed_won(company_dir: Path) -> None:
     """All non-exempt reps must have at least one Closed Won deal."""
     report: CompanyAuditReport = audit_company(company_dir)

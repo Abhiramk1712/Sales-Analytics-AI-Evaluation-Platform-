@@ -98,6 +98,36 @@ class CreditPayoutResult:
 
 # ── Plan/Rule resolution helpers ─────────────────────────────────────────
 
+def allocate_pro_rata(total: float, weights: list[float]) -> list[float]:
+    """
+    Split `total` across `weights` proportionally, in whole cents, such that the
+    parts sum exactly to `round(total, 2)`.
+
+    Rounding each share independently would leave a residual of a cent or two
+    against the period total — which is precisely the drift the post-load
+    reconciliation currently absorbs with a $0.01 tolerance. Here the residual
+    is assigned to the largest share, so the allocation reconciles exactly.
+
+    A zero total weight (every credit worth nothing) puts the whole amount on
+    the first share rather than dividing by zero.
+    """
+    if not weights:
+        return []
+
+    target = round(total, 2)
+    total_weight = sum(weights)
+
+    if total_weight <= 0:
+        return [target] + [0.0] * (len(weights) - 1)
+
+    parts = [round(target * (w / total_weight), 2) for w in weights]
+    residual = round(target - sum(parts), 2)
+    if residual:
+        largest = max(range(len(parts)), key=lambda i: weights[i])
+        parts[largest] = round(parts[largest] + residual, 2)
+    return parts
+
+
 async def _count_closed_deals(
     db: AsyncSession,
     rep: Rep,
@@ -593,8 +623,16 @@ async def compute_credit_payouts(
         # ── 2. Try true SalesCredit path ────────────────────────────────
         credit_inputs = await get_credit_level_payout_inputs(db, rep, period)
         if credit_inputs:
-            # Invariant across every credit for this rep/period — query once,
-            # not once per credit row.
+            # ── Attainment is a period fact, not a per-credit one ─────────
+            # Every commission component is computed once, at the rep's total
+            # credited amount against their full period quota, and then
+            # allocated back across the individual credits.
+            #
+            # Evaluating tiers per credit — as this did — meant a rep closing
+            # eight $25k deals against a $200k quota registered ~12.5%
+            # attainment eight separate times and never crossed a threshold.
+            # Tiered rates, accelerators and attainment bonuses could not fire
+            # for anyone with more than one credit.
             rep_period_quota = float(
                 (await db.execute(
                     select(func.sum(Quota.amount))
@@ -602,61 +640,87 @@ async def compute_credit_payouts(
                     .where(Quota.period == period)
                 )).scalar() or 0
             )
-            for ci in credit_inputs:
-                trace: list[str] = [
+
+            weights = [float(ci["credit_amount"]) for ci in credit_inputs]
+            total_credited = sum(weights)
+            attainment = (total_credited / rep_period_quota * 100) if rep_period_quota > 0 else 0.0
+
+            period_trace: list[str] = [
+                f"period aggregate: {len(credit_inputs)} credit(s), "
+                f"total credited ${total_credited:,.2f} / quota ${rep_period_quota:,.2f}",
+                f"attainment: {attainment:.2f}% (period-cumulative)",
+            ]
+
+            if rules:
+                comp = _apply_commission_rules(total_credited, rep_period_quota, rules)
+                period_trace.extend(comp["rules_applied"])
+            else:
+                won, lost = await _count_closed_deals(db, rep, period)
+                eng_result = PayoutEngine(config=cfg).compute(
+                    total_credited, rep_period_quota, won, lost
+                )
+                comp = {
+                    "base_commission":    eng_result.get("base_commission", 0.0),
+                    "accelerator_amount": eng_result.get("accelerator", 0.0),
+                    "bonus_amount":       eng_result.get("bonus", 0.0),
+                    "rules_applied":      eng_result.get("rules_applied", []),
+                }
+                period_trace.extend(comp["rules_applied"])
+
+            acc_total = apply_accelerators(
+                total_credited, rep_period_quota, cfg, rules, period_trace
+            )
+            spiff_total = apply_spiffs(attainment, 0, 0.0, cfg, period_trace)
+            clawback_total = apply_clawbacks(
+                comp["base_commission"] + acc_total + spiff_total,
+                attainment, 0, 0.0, cfg, period_trace,
+            )
+            bonus_total = comp.get("bonus_amount", 0.0)
+
+            # Allocate each period-level component across the credits in
+            # proportion to what each contributed. Quota is allocated the same
+            # way, so a row's credited/quota ratio equals the period attainment
+            # and the rows still sum to the period totals.
+            quota_shares    = allocate_pro_rata(rep_period_quota, weights)
+            base_shares     = allocate_pro_rata(comp["base_commission"], weights)
+            acc_shares      = allocate_pro_rata(acc_total, weights)
+            spiff_shares    = allocate_pro_rata(spiff_total, weights)
+            bonus_shares    = allocate_pro_rata(bonus_total, weights)
+            clawback_shares = allocate_pro_rata(clawback_total, weights)
+
+            for idx, ci in enumerate(credit_inputs):
+                credited = ci["credit_amount"]
+                share = (credited / total_credited) if total_credited > 0 else 0.0
+                final_payout = round(
+                    base_shares[idx] + acc_shares[idx] + spiff_shares[idx]
+                    + bonus_shares[idx] - clawback_shares[idx],
+                    2,
+                )
+                trace = [
                     f"SalesCredit: credit_type={ci['credit_type']}, "
                     f"credit_percent={ci['credit_percent']:.0%}, "
-                    f"credited_amount=${ci['credit_amount']:,.2f}",
+                    f"credited_amount=${credited:,.2f}",
+                    *period_trace,
+                    f"allocation: {share:.2%} of the period total "
+                    f"(${credited:,.2f} of ${total_credited:,.2f})",
+                    f"final_payout: ${final_payout:,.2f} = base ${base_shares[idx]:,.2f}"
+                    f" + accel ${acc_shares[idx]:,.2f} + spiff ${spiff_shares[idx]:,.2f}"
+                    f" + bonus ${bonus_shares[idx]:,.2f} - clawback ${clawback_shares[idx]:,.2f}",
                 ]
-                credited = ci["credit_amount"]
-                credit_pct = ci["credit_percent"]
-                quota_val = rep_period_quota
-                # Scale quota by credit_percent so attainment is credit-proportional
-                effective_quota = quota_val * credit_pct if quota_val > 0 else 0.0
-                attainment = (credited / effective_quota * 100) if effective_quota > 0 else 0.0
-                trace.append(f"attainment: {attainment:.2f}% (credited ${credited:,.2f} / quota ${effective_quota:,.2f})")
-
-                if rules:
-                    comp = _apply_commission_rules(credited, effective_quota, rules)
-                    trace.extend(comp["rules_applied"])
-                else:
-                    won, lost = await _count_closed_deals(db, rep, period)
-                    eng_result = PayoutEngine(config=cfg).compute(credited, effective_quota, won, lost)
-                    comp = {
-                        "base_commission":    eng_result.get("base_commission", 0.0),
-                        "accelerator_amount": eng_result.get("accelerator", 0.0),
-                        "bonus_amount":       eng_result.get("bonus", 0.0),
-                        "rules_applied":      eng_result.get("rules_applied", []),
-                    }
-                    trace.extend(comp["rules_applied"])
-
-                acc = apply_accelerators(credited, effective_quota, cfg, rules, trace)
-                spiff = apply_spiffs(attainment, 0, 0.0, cfg, trace)
-                clawback = apply_clawbacks(
-                    comp["base_commission"] + acc + spiff, attainment, 0, 0.0, cfg, trace
-                )
-                final_payout = round(
-                    comp["base_commission"] + acc + spiff + comp.get("bonus_amount", 0.0) - clawback, 2
-                )
-                trace.append(
-                    f"final_payout: ${final_payout:,.2f} = base ${comp['base_commission']:,.2f}"
-                    f" + accel ${acc:,.2f} + spiff ${spiff:,.2f}"
-                    f" + bonus ${comp.get('bonus_amount', 0.0):,.2f} - clawback ${clawback:,.2f}"
-                )
                 results.append(CreditPayoutResult(
                     rep_id=str(rep.id),
                     period=period,
                     sales_credit_id=ci["credit_id"],
                     source_deal_id=ci["deal_id"],
                     credited_amount=credited,
-                    credit_percent=credit_pct,
-                    quota=effective_quota,
+                    credit_percent=ci["credit_percent"],
+                    quota=quota_shares[idx],
                     attainment=round(attainment, 2),
-                    base_commission=comp["base_commission"],
-                    accelerator_amount=acc,
-                    spiff_amount=spiff,
-                    bonus_amount=comp.get("bonus_amount", 0.0),
-                    clawback_amount=clawback,
+                    base_commission=base_shares[idx],
+                    accelerator_amount=acc_shares[idx],
+                    spiff_amount=spiff_shares[idx],
+                    bonus_amount=bonus_shares[idx],
+                    clawback_amount=clawback_shares[idx],
                     final_payout=final_payout,
                     rules_applied=comp.get("rules_applied", []),
                     formula_trace=trace,

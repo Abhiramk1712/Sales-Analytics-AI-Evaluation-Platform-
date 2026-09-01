@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { API } from "../utils/format";
+import { apiGet } from "../api/client";
 
 /**
  * useFetch — data fetching hook with role/company header support.
@@ -22,22 +22,7 @@ export function useFetch(url, opts = {}) {
     setData(null);
     setError(null);
 
-    const headers = { "Content-Type": "application/json" };
-    if (role) headers["X-User-Role"] = role;
-    if (company) headers["X-Company-Id"] = company;
-
-    fetch(API + url, { signal: controller.signal, headers })
-      .then(async (r) => {
-        const body = await r.json().catch(() => ({}));
-        if (!r.ok) {
-          const detail =
-            typeof body?.detail === "string"
-              ? body.detail
-              : `Request failed (${r.status})`;
-          throw new Error(detail);
-        }
-        return body;
-      })
+    apiGet(url, { role, company, signal: controller.signal })
       .then((d) => {
         if (!controller.signal.aborted) {
           setData(d);
