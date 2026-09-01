@@ -17,12 +17,19 @@ with a percentage), resolved against a `PlanAssignment` → versioned `Plan` →
 carrying tiers, rates, accelerators and bonuses, producing a `PayoutRecord` with a
 `formula_trace` recording the derivation. Everything else supports that chain.
 
-**Tenancy is mid-migration and this shapes everything.** Tenant separation was originally
-achieved by dropping every table and reloading one company's CSVs — so the server could
-hold exactly one tenant at a time. `company_id` now exists on 40 of 41 tables with an
-Alembic migration, and `backend/tenancy.py` carries the tenant in a `ContextVar`, but the
-query sites are not yet scoped. Read `apply_company_scope` in `backend/auth/tenant.py`
-before assuming a query is tenant-safe.
+**Tenancy is query-scoped, and enforced at the session — not the call site.**
+`backend/tenancy.py` carries the tenant in a `ContextVar` (bound per request by the
+middleware in `main.py`), and `backend/tenant_guard.py` uses it to add
+`WHERE company_id = ...` to every ORM select and to stamp `company_id` on every insert.
+`company_id` is on 40 of 41 tables. Do not add filters by hand; they are already applied.
+For deliberate cross-tenant work use `tenant_guard.unscoped()`, so a bypass is always a
+visible decision. Writing a tenant row with no tenant bound raises rather than silently
+creating a row no tenant can see.
+
+Tenancy was originally a whole-database swap: loading one company dropped every table, so
+the server held exactly one tenant at a time and a request naming another rebuilt the
+database to serve it. That is gone — `drop_all` appears nowhere, and
+`tests/test_tenancy_enforcement.py` holds two companies resident at once.
 
 ---
 
@@ -130,13 +137,24 @@ trying to produce.
 
 ### Destructive database operations
 
-`load_company_dataset` calls `Base.metadata.drop_all`. Any new code path reaching it must
-require the `ALLOW_DESTRUCTIVE_LOAD` flag and an authenticated caller.
+Loading a company replaces only that company's rows (`_delete_company_rows`). Nothing may
+reintroduce a whole-database drop, and any new bulk-delete path must be scoped by
+`company_id` and require the `ALLOW_DESTRUCTIVE_LOAD` flag.
 
-*Why:* the company-alignment middleware read the target company from an unauthenticated
-query parameter and reloaded it when it differed from the active one. `GET
-/analytics/kpis?company_id=other` dropped and rebuilt the entire database, with no auth,
-and the project's own `ALLOW_DESTRUCTIVE_LOAD` guard was never consulted on that path.
+*Why:* `load_company_dataset` used to call `Base.metadata.drop_all`, and the middleware
+invoked it whenever a request named a different company than the process-global active
+one. `GET /analytics/kpis?company_id=other` therefore dropped and rebuilt the entire
+database, unauthenticated, and the project's own `ALLOW_DESTRUCTIVE_LOAD` guard was never
+consulted on that path.
+
+### Uniqueness on natural keys must include company_id
+
+Two tenants legitimately share human-readable identifiers — every generated dataset
+numbers positions `POS-001` upward.
+
+*Why:* those columns carried global `UNIQUE` constraints, which was invisible while one
+company was resident at a time and became a hard failure the moment two could be: loading
+the second collided on the first's rows. UUID-keyed uniques are fine as they are.
 
 ### Verify commands before writing them down
 

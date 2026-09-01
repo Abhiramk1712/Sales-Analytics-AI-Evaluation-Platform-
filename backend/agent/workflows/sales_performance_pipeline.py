@@ -254,10 +254,10 @@ async def _step_cluster_reps(db: AsyncSession) -> dict[str, Any]:
                 select(func.sum(Quota.amount)).where(Quota.rep_id == rep.id)
             )).scalar() or 0)
             won = int((await db.execute(
-                select(func.count()).where(Deal.rep_id == rep.id, Deal.stage == "Closed Won")
+                select(func.count(Deal.id)).where(Deal.rep_id == rep.id, Deal.stage == "Closed Won")
             )).scalar() or 0)
             lost = int((await db.execute(
-                select(func.count()).where(Deal.rep_id == rep.id, Deal.stage == "Closed Lost")
+                select(func.count(Deal.id)).where(Deal.rep_id == rep.id, Deal.stage == "Closed Lost")
             )).scalar() or 0)
             rep_dicts.append({
                 "rep_id":        str(rep.id),

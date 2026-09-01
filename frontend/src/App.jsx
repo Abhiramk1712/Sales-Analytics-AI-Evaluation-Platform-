@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, ScatterChart, Scatter, Cell } from "recharts";
 import { PaginationControls } from "./components/shared";
+import { useFetch } from "./hooks/useFetch";
 
 // ── New page imports (Sprint 2) ───────────────────────────────────────────
 import PayoutsPage from "./pages/PayoutsPage";
@@ -43,48 +44,13 @@ const withRefresh = (url, refreshKey) => (url.includes("?") ? `${url}&_r=${refre
 let _globalRole = "executive";
 export function setGlobalRole(r) { _globalRole = r; }
 
-const useFetch = (url, opts = {}) => {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const role = opts.role || null;
-  useEffect(() => {
-    if (!url) return;
-    const controller = new AbortController();
-
-    setLoading(true);
-    setData(null);
-    setError(null);
-
-    const headers = { "Content-Type": "application/json" };
-    if (role) headers["X-User-Role"] = role;
-    fetch(API + url, { headers, signal: controller.signal })
-      .then(async (r) => {
-        const body = await r.json().catch(() => ({}));
-        if (!r.ok) {
-          const detail = typeof body?.detail === "string" ? body.detail : `Request failed (${r.status})`;
-          throw new Error(detail);
-        }
-        return body;
-      })
-      .then(d => {
-        if (!controller.signal.aborted) {
-          setData(d);
-          setLoading(false);
-        }
-      })
-      .catch(e => {
-        if (controller.signal.aborted) return;
-        setError(e.message);
-        setLoading(false);
-      });
-
-    return () => {
-      controller.abort();
-    };
-  }, [url, role]);
-  return { data, loading, error };
-};
+// App used to define its own useFetch here. It read opts.role but silently
+// ignored opts.company, so all 30 call sites passed a company that was never
+// sent. That was invisible while the database held one company at a time —
+// every request got the only tenant there was — and became a visible bug the
+// moment two could be resident: the dashboard showed the default tenant's
+// numbers while the selector said otherwise. The shared hook sends both
+// headers; there is now one implementation rather than two.
 
 // Helper: add period param to URL
 const withPeriod = (url, period) => {

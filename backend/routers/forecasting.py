@@ -1099,8 +1099,8 @@ async def cluster_reps(db: AsyncSession = Depends(get_db)):
     for rep in reps:
         rev = (await db.execute(select(func.sum(Revenue.amount)).where(Revenue.rep_id == rep.id))).scalar() or 0
         quota = (await db.execute(select(func.sum(Quota.amount)).where(Quota.rep_id == rep.id))).scalar() or 1
-        won = (await db.execute(select(func.count()).where(Deal.rep_id == rep.id, Deal.stage == "Closed Won"))).scalar() or 0
-        lost = (await db.execute(select(func.count()).where(Deal.rep_id == rep.id, Deal.stage == "Closed Lost"))).scalar() or 0
+        won = (await db.execute(select(func.count(Deal.id)).where(Deal.rep_id == rep.id, Deal.stage == "Closed Won"))).scalar() or 0
+        lost = (await db.execute(select(func.count(Deal.id)).where(Deal.rep_id == rep.id, Deal.stage == "Closed Lost"))).scalar() or 0
         pipeline = (
             await db.execute(select(func.sum(Deal.amount)).where(Deal.rep_id == rep.id, ~Deal.stage.in_(["Closed Won", "Closed Lost"])))
         ).scalar() or 0

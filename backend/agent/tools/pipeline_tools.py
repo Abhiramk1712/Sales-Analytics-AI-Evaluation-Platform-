@@ -32,7 +32,7 @@ async def check_model_readiness(db: AsyncSession) -> dict[str, Any]:
 
         # Deal scoring readiness: count closed deals
         closed_deals = (await db.execute(
-            select(func.count()).where(Deal.stage.in_(["Closed Won", "Closed Lost"]))
+            select(func.count(Deal.id)).where(Deal.stage.in_(["Closed Won", "Closed Lost"]))
         )).scalar() or 0
 
         # Rep clustering readiness: count reps with revenue

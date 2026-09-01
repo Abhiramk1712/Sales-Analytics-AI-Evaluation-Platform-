@@ -15,6 +15,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from faker import Faker
 from backend.database import get_session_factory, get_engine, Base
+from backend.tenancy import tenant_scope
 from backend.ingestion.ingestion_run import IngestionRun
 from backend.models import (
     Team,
@@ -2016,15 +2017,57 @@ def _validate_company_csv_integrity(company_dir: Path) -> list[str]:
     return errors
 
 
-async def _load_csvs_into_database(company_dir: Path) -> dict[str, int]:
-    """Drop-and-recreate all tables, then load rows from CSV files."""
+async def _delete_company_rows(company: str) -> int:
+    """
+    Remove every row belonging to `company`, leaving other tenants untouched.
+
+    Deletes in reverse dependency order so foreign keys are satisfied without
+    CASCADE. Runs unscoped on purpose: the statement already targets one company
+    by an explicit predicate, and the read filter would otherwise stack on top.
+    """
+    from sqlalchemy import delete as _sa_delete
+
+    from backend.tenant_guard import unscoped as _unscoped
+
+    removed = 0
+    session_factory = get_session_factory()
+    async with session_factory() as db, _unscoped():
+        for table in reversed(Base.metadata.sorted_tables):
+            if "company_id" not in table.c:
+                continue
+            result = await db.execute(_sa_delete(table).where(table.c.company_id == company))
+            removed += result.rowcount or 0
+        await db.commit()
+    return removed
+
+
+async def _load_csvs_into_database(company_dir: Path, company_id: str | None = None) -> dict[str, int]:
+    """
+    Replace one company's rows with the contents of its CSV folder.
+
+    This used to drop and recreate *every* table, which is what made tenancy a
+    whole-database swap: loading one company destroyed all the others, so the
+    server could hold exactly one at a time and a request naming a different
+    company rebuilt the database to satisfy it.
+
+    The scope of the operation now matches its meaning. Only this company's rows
+    are removed, inserts are stamped with its id by the tenant guard, and other
+    tenants are untouched — so companies can be resident together and no read can
+    trigger a rebuild.
+    """
+    company = (company_id or company_dir.name).strip()
+    if not company:
+        raise ValueError("A company id is required to load a dataset.")
+
+    # Creating absent tables is not tenant-scoped; dropping them was the bug.
     _engine = get_engine()
     async with _engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
 
+    await _delete_company_rows(company)
+
     _session_factory = get_session_factory()
-    async with _session_factory() as db:
+    async with _session_factory() as db, tenant_scope(company):
         counts: dict[str, int] = {}
 
         team_rows = _read_csv_rows(company_dir / "teams.csv")
@@ -3411,69 +3454,73 @@ async def seed(
     _stale_payouts_csv = company_dir / "payouts.csv"
     if _stale_payouts_csv.exists():
         _stale_payouts_csv.unlink()
-    counts = await _load_csvs_into_database(company_dir)
-    payout_count = await _seed_payout_records(company_dir=company_dir)  # B2
-    counts["payouts"] = payout_count
+    # One company is generated here, so the load, the payout recompute and the
+    # validation below all run under its tenant: inserts are stamped with it and
+    # every read sees only its rows.
+    with tenant_scope(company_name):
+        counts = await _load_csvs_into_database(company_dir, company_id=company_name)
+        payout_count = await _seed_payout_records(company_dir=company_dir)  # B2
+        counts["payouts"] = payout_count
 
-    payout_validation = await _validate_payout_math_consistency(payout_delta_tolerance=0.01)
-    counts["payout_math_expected_rows"] = int(payout_validation["expected_rows"])
-    counts["payout_math_rows_validated"] = int(payout_validation["validated_rows"])
-    counts["payout_math_reps_validated"] = int(payout_validation["reps_validated"])
-    counts["payout_math_periods_validated"] = int(payout_validation["periods_validated"])
-    counts["payout_math_missing_rows"] = int(payout_validation["missing_rows"])
-    counts["payout_math_mismatched_rows"] = int(payout_validation["mismatched_rows"])
-    counts["payout_math_duplicate_rows"] = int(payout_validation["duplicate_rows"])
-    counts["payout_math_extra_rows"] = int(payout_validation["extra_rows"])
-    counts["payout_math_max_abs_delta"] = float(payout_validation["max_abs_delta"])
+        payout_validation = await _validate_payout_math_consistency(payout_delta_tolerance=0.01)
+        counts["payout_math_expected_rows"] = int(payout_validation["expected_rows"])
+        counts["payout_math_rows_validated"] = int(payout_validation["validated_rows"])
+        counts["payout_math_reps_validated"] = int(payout_validation["reps_validated"])
+        counts["payout_math_periods_validated"] = int(payout_validation["periods_validated"])
+        counts["payout_math_missing_rows"] = int(payout_validation["missing_rows"])
+        counts["payout_math_mismatched_rows"] = int(payout_validation["mismatched_rows"])
+        counts["payout_math_duplicate_rows"] = int(payout_validation["duplicate_rows"])
+        counts["payout_math_extra_rows"] = int(payout_validation["extra_rows"])
+        counts["payout_math_max_abs_delta"] = float(payout_validation["max_abs_delta"])
 
-    if (
-        counts["payout_math_missing_rows"] > 0
-        or counts["payout_math_mismatched_rows"] > 0
-        or counts["payout_math_duplicate_rows"] > 0
-    ):
-        raise ValueError(
-            "Automated payout math validation failed for generated dataset: "
-            f"missing={counts['payout_math_missing_rows']}, "
-            f"mismatched={counts['payout_math_mismatched_rows']}, "
-            f"duplicates={counts['payout_math_duplicate_rows']}, "
-            f"max_delta=${counts['payout_math_max_abs_delta']:.4f}"
+        if (
+            counts["payout_math_missing_rows"] > 0
+            or counts["payout_math_mismatched_rows"] > 0
+            or counts["payout_math_duplicate_rows"] > 0
+        ):
+            raise ValueError(
+                "Automated payout math validation failed for generated dataset: "
+                f"missing={counts['payout_math_missing_rows']}, "
+                f"mismatched={counts['payout_math_mismatched_rows']}, "
+                f"duplicates={counts['payout_math_duplicate_rows']}, "
+                f"max_delta=${counts['payout_math_max_abs_delta']:.4f}"
+            )
+
+        audit_path = _write_ingestion_audit(
+            company_dir,
+            company_name=company_name,
+            db_counts=counts,
+            runs=ingestion_runs,
+            validation_summary=validation_summary,
+            reconciliation_snapshot=reconciliation_snapshot,
         )
 
-    audit_path = _write_ingestion_audit(
-        company_dir,
-        company_name=company_name,
-        db_counts=counts,
-        runs=ingestion_runs,
-        validation_summary=validation_summary,
-        reconciliation_snapshot=reconciliation_snapshot,
-    )
+        # ── Automated payout + ML forecast audit ────────────────────────────
+        from backend.audit.payout_audit import audit_company as _audit_company
+        _audit_report = _audit_company(company_dir)
+        _audit_status = "PASSED" if _audit_report.passed else f"FAILED ({'; '.join(_audit_report.errors)})"
 
-    # ── Automated payout + ML forecast audit ────────────────────────────
-    from backend.audit.payout_audit import audit_company as _audit_company
-    _audit_report = _audit_company(company_dir)
-    _audit_status = "PASSED" if _audit_report.passed else f"FAILED ({'; '.join(_audit_report.errors)})"
-
-    print(f"✓ Generated CSV dataset under: {company_dir}")
-    print(
-        "✓ Loaded to DB from CSVs: "
-        f"{counts.get('teams', 0)} teams, {counts.get('reps', 0)} reps, "
-        f"{counts.get('accounts', 0)} accounts, {counts.get('deals', 0)} deals"
-    )
-    print(f"✓ Extended SaaS tables generated: {', '.join(extension_files)}")
-    if target_total_revenue is not None:
-        total_generated_revenue = sum(float(r.get("amount", 0) or 0) for r in dataset.get("revenue", []))
-        print(f"✓ Revenue target: ${target_total_revenue:,.2f} (generated ${total_generated_revenue:,.2f})")
-    print(f"✓ Ingestion audit written: {audit_path}")
-    print(
-        "✓ Payout math validation: "
-        f"{counts['payout_math_rows_validated']}/{counts['payout_math_expected_rows']} rows validated, "
-        f"max delta ${counts['payout_math_max_abs_delta']:.4f}"
-    )
-    print(f"✓ Payout+forecast audit: {_audit_status} "
-          f"({_audit_report.payout.reps_ok} OK, "
-          f"{_audit_report.payout.reps_exempt} exempt, "
-          f"{_audit_report.payout.reps_with_bugs} bugs | "
-          f"forecast next-Q: ${_audit_report.forecast.company_forecast_next_q:,.0f})")
+        print(f"✓ Generated CSV dataset under: {company_dir}")
+        print(
+            "✓ Loaded to DB from CSVs: "
+            f"{counts.get('teams', 0)} teams, {counts.get('reps', 0)} reps, "
+            f"{counts.get('accounts', 0)} accounts, {counts.get('deals', 0)} deals"
+        )
+        print(f"✓ Extended SaaS tables generated: {', '.join(extension_files)}")
+        if target_total_revenue is not None:
+            total_generated_revenue = sum(float(r.get("amount", 0) or 0) for r in dataset.get("revenue", []))
+            print(f"✓ Revenue target: ${target_total_revenue:,.2f} (generated ${total_generated_revenue:,.2f})")
+        print(f"✓ Ingestion audit written: {audit_path}")
+        print(
+            "✓ Payout math validation: "
+            f"{counts['payout_math_rows_validated']}/{counts['payout_math_expected_rows']} rows validated, "
+            f"max delta ${counts['payout_math_max_abs_delta']:.4f}"
+        )
+        print(f"✓ Payout+forecast audit: {_audit_status} "
+              f"({_audit_report.payout.reps_ok} OK, "
+              f"{_audit_report.payout.reps_exempt} exempt, "
+              f"{_audit_report.payout.reps_with_bugs} bugs | "
+              f"forecast next-Q: ${_audit_report.forecast.company_forecast_next_q:,.0f})")
 
 
 # ── CRM Auto-Scaffold ──────────────────────────────────────────────────────
@@ -3575,47 +3622,54 @@ async def load_company_dataset(company_name: str, base_dir: str = "companies") -
     if integrity_errors:
         raise ValueError("; ".join(integrity_errors))
 
-    counts = await _load_csvs_into_database(company_dir)
-    if scaffolded:
-        counts["auto_scaffolded_tables"] = scaffolded
+    normalized_company = (company_name or "").strip()
 
-    # Recompute payout records using plan-aware engine so imported companies
-    # with their own Plan/Rule data get accurate commission calculations.
-    payout_count = await _seed_payout_records(company_dir=None)
-    if payout_count:
-        counts["payouts_recomputed"] = payout_count
+    # The load and everything after it belong to one company, so they share one
+    # tenant scope: inserts are stamped with it, and the payout recompute,
+    # validation and audit below see only what was just loaded rather than every
+    # tenant in the database.
+    with tenant_scope(normalized_company):
+        counts = await _load_csvs_into_database(company_dir, company_id=normalized_company)
+        if scaffolded:
+            counts["auto_scaffolded_tables"] = scaffolded
 
-    payout_validation = await _validate_payout_math_consistency(payout_delta_tolerance=0.01)
-    counts["payout_math_expected_rows"] = int(payout_validation["expected_rows"])
-    counts["payout_math_rows_validated"] = int(payout_validation["validated_rows"])
-    counts["payout_math_reps_validated"] = int(payout_validation["reps_validated"])
-    counts["payout_math_periods_validated"] = int(payout_validation["periods_validated"])
-    counts["payout_math_missing_rows"] = int(payout_validation["missing_rows"])
-    counts["payout_math_mismatched_rows"] = int(payout_validation["mismatched_rows"])
-    counts["payout_math_duplicate_rows"] = int(payout_validation["duplicate_rows"])
-    counts["payout_math_extra_rows"] = int(payout_validation["extra_rows"])
-    counts["payout_math_max_abs_delta"] = float(payout_validation["max_abs_delta"])
+        # Recompute payout records using plan-aware engine so imported companies
+        # with their own Plan/Rule data get accurate commission calculations.
+        payout_count = await _seed_payout_records(company_dir=None)
+        if payout_count:
+            counts["payouts_recomputed"] = payout_count
 
-    if (
-        counts["payout_math_missing_rows"] > 0
-        or counts["payout_math_mismatched_rows"] > 0
-        or counts["payout_math_duplicate_rows"] > 0
-    ):
-        raise ValueError(
-            "Automated payout math validation failed after company load: "
-            f"missing={counts['payout_math_missing_rows']}, "
-            f"mismatched={counts['payout_math_mismatched_rows']}, "
-            f"duplicates={counts['payout_math_duplicate_rows']}, "
-            f"max_delta=${counts['payout_math_max_abs_delta']:.4f}"
-        )
+        payout_validation = await _validate_payout_math_consistency(payout_delta_tolerance=0.01)
+        counts["payout_math_expected_rows"] = int(payout_validation["expected_rows"])
+        counts["payout_math_rows_validated"] = int(payout_validation["validated_rows"])
+        counts["payout_math_reps_validated"] = int(payout_validation["reps_validated"])
+        counts["payout_math_periods_validated"] = int(payout_validation["periods_validated"])
+        counts["payout_math_missing_rows"] = int(payout_validation["missing_rows"])
+        counts["payout_math_mismatched_rows"] = int(payout_validation["mismatched_rows"])
+        counts["payout_math_duplicate_rows"] = int(payout_validation["duplicate_rows"])
+        counts["payout_math_extra_rows"] = int(payout_validation["extra_rows"])
+        counts["payout_math_max_abs_delta"] = float(payout_validation["max_abs_delta"])
 
-    # ── Automated payout + ML forecast audit ────────────────────────────
-    from backend.audit.payout_audit import audit_company as _audit_company
-    _audit_report = _audit_company(Path(base_dir) / _safe_company_dir_name(company_name))
-    counts["audit_passed"] = int(_audit_report.passed)
-    counts["audit_reps_with_bugs"] = _audit_report.payout.reps_with_bugs
+        if (
+            counts["payout_math_missing_rows"] > 0
+            or counts["payout_math_mismatched_rows"] > 0
+            or counts["payout_math_duplicate_rows"] > 0
+        ):
+            raise ValueError(
+                "Automated payout math validation failed after company load: "
+                f"missing={counts['payout_math_missing_rows']}, "
+                f"mismatched={counts['payout_math_mismatched_rows']}, "
+                f"duplicates={counts['payout_math_duplicate_rows']}, "
+                f"max_delta=${counts['payout_math_max_abs_delta']:.4f}"
+            )
 
-    return counts
+        # ── Automated payout + ML forecast audit ────────────────────────────
+        from backend.audit.payout_audit import audit_company as _audit_company
+        _audit_report = _audit_company(Path(base_dir) / _safe_company_dir_name(company_name))
+        counts["audit_passed"] = int(_audit_report.passed)
+        counts["audit_reps_with_bugs"] = _audit_report.payout.reps_with_bugs
+
+        return counts
 
 
 def _parse_args() -> argparse.Namespace:

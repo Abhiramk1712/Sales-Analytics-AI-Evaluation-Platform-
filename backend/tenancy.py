@@ -19,9 +19,8 @@ instead of a quiet cross-tenant read.
 """
 from __future__ import annotations
 
-from contextlib import contextmanager
 from contextvars import ContextVar, Token
-from typing import Iterator, Optional
+from typing import Optional
 
 #: The tenant this request belongs to. Never read this directly from business
 #: logic — use require_current_tenant(), so a missing tenant is an error at the
@@ -71,19 +70,44 @@ def reset_current_tenant(token: Token) -> None:
     _current_tenant.reset(token)
 
 
-@contextmanager
-def tenant_scope(company_id: Optional[str]) -> Iterator[Optional[str]]:
+class _TenantScope:
     """
-    Bind a tenant for the duration of a block.
+    Binds a tenant for the duration of a block, in sync *or* async form.
 
-        with tenant_scope("acme"):
-            ...  # every query in here is acme's
+        with tenant_scope("acme"):              ...
+        async with session() as db, tenant_scope("acme"):  ...
+
+    Both protocols are supported because the natural place to bind a tenant is
+    alongside a session, and `async with a, b` requires every item to be an async
+    context manager. Supporting only the sync form would have forced the entire
+    body of the CSV loader to be re-indented just to satisfy the syntax.
 
     The binding is restored on exit even if the block raises, and it is visible
     only to this task — a concurrent request in another task keeps its own.
     """
-    token = set_current_tenant(company_id)
-    try:
-        yield get_current_tenant()
-    finally:
-        reset_current_tenant(token)
+
+    __slots__ = ("_company_id", "_token")
+
+    def __init__(self, company_id: Optional[str]) -> None:
+        self._company_id = company_id
+        self._token: Optional[Token] = None
+
+    def __enter__(self) -> Optional[str]:
+        self._token = set_current_tenant(self._company_id)
+        return get_current_tenant()
+
+    def __exit__(self, *exc: object) -> None:
+        if self._token is not None:
+            reset_current_tenant(self._token)
+            self._token = None
+
+    async def __aenter__(self) -> Optional[str]:
+        return self.__enter__()
+
+    async def __aexit__(self, *exc: object) -> None:
+        self.__exit__(*exc)
+
+
+def tenant_scope(company_id: Optional[str]) -> _TenantScope:
+    """Bind `company_id` as this task's tenant for the duration of a block."""
+    return _TenantScope(company_id)

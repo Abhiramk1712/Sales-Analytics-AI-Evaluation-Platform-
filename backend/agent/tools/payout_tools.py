@@ -868,8 +868,8 @@ async def get_payout_summary(db: AsyncSession, period_prefix: str | None = None)
             rep_revenue = float((await db.execute(revenue_q)).scalar() or 0.0)
             rep_quota = float((await db.execute(quota_q)).scalar() or 0.0)
 
-            won_q = select(func.count()).where(Deal.rep_id == rep.id, Deal.stage == "Closed Won")
-            lost_q = select(func.count()).where(Deal.rep_id == rep.id, Deal.stage == "Closed Lost")
+            won_q = select(func.count(Deal.id)).where(Deal.rep_id == rep.id, Deal.stage == "Closed Won")
+            lost_q = select(func.count(Deal.id)).where(Deal.rep_id == rep.id, Deal.stage == "Closed Lost")
             deals_won = int((await db.execute(won_q)).scalar() or 0)
             deals_lost = int((await db.execute(lost_q)).scalar() or 0)
 
