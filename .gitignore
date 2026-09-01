@@ -74,6 +74,10 @@ warehouse/silver/
 warehouse/gold/
 warehouse/
 
+# Ingestion upload scratch — caller-supplied files written at runtime.
+# The rest of companies/ is tracked: it is the demo data the app needs to run.
+companies/_uploads/
+
 # Packaging artifacts
 dist/
 dist/packages/

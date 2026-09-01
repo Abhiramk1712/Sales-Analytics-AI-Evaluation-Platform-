@@ -39,10 +39,17 @@ FORBIDDEN_DIRS = {
 }
 
 # Project-specific forbidden paths (relative to repo root).
+#
+# `companies/` is deliberately absent. It was listed here when the demo datasets
+# were treated as generated output, but the platform resolves
+# DEMO_DEFAULT_COMPANY against that folder at runtime — without it every
+# company-scoped route returns 404, so it is source, not a build artifact.
+# `companies/_uploads/` stays forbidden: that is where the ingestion endpoint
+# writes caller-supplied files, so it is both generated and arbitrary content.
 FORBIDDEN_RELATIVE_DIRS = {
     "backend/ml/saved",
     "frontend/dist",
-    "companies",
+    "companies/_uploads",
 }
 
 FORBIDDEN_EXTENSIONS = {
