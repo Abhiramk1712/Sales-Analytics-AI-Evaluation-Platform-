@@ -191,3 +191,54 @@ async def test_scope_is_restored_after_unscoped(two_tenants):
             pass
         assert get_current_tenant() == ALPHA
     assert await _count_teams(ALPHA) == 2
+
+
+# ── The filter needs an entity to attach to ──────────────────────────────────
+
+
+def test_no_bare_entity_less_counts_in_scoped_queries():
+    """
+    `select(func.count())` silently escapes tenant filtering.
+
+    `with_loader_criteria` attaches to mapped entities in a statement's columns
+    clause. A bare count has none — the entity appears only in the WHERE — so the
+    filter is never applied and the query counts every tenant's rows.
+
+    This was not hypothetical: `/analytics/kpis` reported `open_deal_count: 205`
+    for both companies, which is exactly techo-solutions' 101 plus insurex's 104.
+    Every other figure on the same response was correctly scoped, so nothing
+    looked wrong until two tenants were resident at once and the numbers were
+    compared.
+
+    Write `select(func.count(Model.id))` instead. Genuinely entity-less counts —
+    over a subquery, or an outer-join orphan check where a company predicate
+    would change the meaning — are listed here deliberately.
+    """
+    import re
+    from pathlib import Path
+
+    allowed = {
+        # Counts rows of a subquery, which carries no mapped entity. The
+        # subquery it wraps is itself scoped.
+        "backend/routers/analytics.py",
+        # Cross-entity checks: several are outer-join orphan probes where adding
+        # a company predicate to the outer side changes what "orphan" means.
+        # Tenant-scoping the data-quality surface is tracked separately.
+        "backend/routers/data_quality.py",
+        "backend/agent/tools/pipeline_tools.py",
+    }
+
+    backend = Path(__file__).resolve().parent.parent / "backend"
+    offenders: list[str] = []
+    for path in backend.rglob("*.py"):
+        rel = path.relative_to(backend.parent).as_posix()
+        if rel in allowed:
+            continue
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if re.search(r"select\(\s*func\.count\(\)\s*\)", line):
+                offenders.append(f"{rel}:{lineno}")
+
+    assert not offenders, (
+        "entity-less count() bypasses tenant filtering; use func.count(Model.id): "
+        + ", ".join(offenders)
+    )

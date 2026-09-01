@@ -97,7 +97,7 @@ async def get_kpis(period: str = Query(None, description="e.g. '2025-04'"), db: 
 
     metrics = get_metrics_service()
     kpis = await metrics.get_kpis(db, filters=filters)
-    open_deal_count = (await db.execute(select(func.count()).where(~Deal.stage.in_(["Closed Won", "Closed Lost"])))).scalar() or 0
+    open_deal_count = (await db.execute(select(func.count(Deal.id)).where(~Deal.stage.in_(["Closed Won", "Closed Lost"])))).scalar() or 0
 
     has_revenue = float(kpis.get("total_revenue", 0) or 0) > 0
     has_quota = float(kpis.get("total_quota", 0) or 0) > 0
@@ -374,8 +374,8 @@ async def payouts(period_prefix: str = Query(None, description="Optional period 
         rep_revenue = float((await db.execute(revenue_q)).scalar() or 0.0)
         rep_quota = float((await db.execute(quota_q)).scalar() or 0.0)
 
-        won_q = select(func.count()).where(Deal.rep_id == rep.id, Deal.stage == "Closed Won")
-        lost_q = select(func.count()).where(Deal.rep_id == rep.id, Deal.stage == "Closed Lost")
+        won_q = select(func.count(Deal.id)).where(Deal.rep_id == rep.id, Deal.stage == "Closed Won")
+        lost_q = select(func.count(Deal.id)).where(Deal.rep_id == rep.id, Deal.stage == "Closed Lost")
         deals_won = int((await db.execute(won_q)).scalar() or 0)
         deals_lost = int((await db.execute(lost_q)).scalar() or 0)
 
@@ -814,13 +814,13 @@ async def rep_profile(rep_id: str, db: AsyncSession = Depends(get_db)):
     attainment_pct = (100.0 * total_revenue / total_quota) if total_quota > 0 else 0.0
 
     deals_won = int((await db.execute(
-        select(func.count()).where(Deal.rep_id == rep.id, Deal.stage == "Closed Won")
+        select(func.count(Deal.id)).where(Deal.rep_id == rep.id, Deal.stage == "Closed Won")
     )).scalar() or 0)
     won_deal_value = float((await db.execute(
         select(func.sum(Deal.amount)).where(Deal.rep_id == rep.id, Deal.stage == "Closed Won")
     )).scalar() or 0.0)
     deals_lost = int((await db.execute(
-        select(func.count()).where(Deal.rep_id == rep.id, Deal.stage == "Closed Lost")
+        select(func.count(Deal.id)).where(Deal.rep_id == rep.id, Deal.stage == "Closed Lost")
     )).scalar() or 0)
     open_pipeline = float((await db.execute(
         select(func.sum(Deal.amount)).where(
@@ -851,7 +851,7 @@ async def rep_profile(rep_id: str, db: AsyncSession = Depends(get_db)):
         select(func.count()).select_from(rev_subq).where(rev_subq.c.rev > total_revenue)
     )).scalar() or 0)
     rank = higher_count + 1
-    total_reps = int((await db.execute(select(func.count()).select_from(Rep))).scalar() or 0)
+    total_reps = int((await db.execute(select(func.count(Rep.id)))).scalar() or 0)
 
     # Position / role from UserProfile + Position table (matched by email)
     position_title: str | None = None
