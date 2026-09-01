@@ -9,7 +9,7 @@ import {
 } from "recharts";
 import { useFetch } from "../hooks/useFetch";
 import { MetricCard, Skeleton, Card, SectionTitle, ErrorMessage, PaginationControls } from "../components/shared";
-import { fmt, pct, withRefresh } from "../utils/format";
+import { fmt, pct, withRefresh, toPayoutPeriod } from "../utils/format";
 
 const API = import.meta.env.VITE_API_URL || "";
 
@@ -227,7 +227,7 @@ function QuotaFairnessPane({ period, role, company }) {
   );
 }
 
-export default function PayoutsPage({ refreshKey, activeCompany, userRole }) {
+export default function PayoutsPage({ refreshKey, activeCompany, userRole, period: globalPeriod }) {
   const role = userRole || "executive";
   const company = activeCompany || "";
   // Build last 8 quarter labels for the period selector
@@ -243,13 +243,27 @@ export default function PayoutsPage({ refreshKey, activeCompany, userRole }) {
     }
     return opts;
   })();
+  // Follow the header's period rather than keeping an independent one. The two
+  // controls previously disagreed: setting the header to Q2 2026 left this tab
+  // on the current quarter, which for the demo data is empty, so Compensation
+  // opened showing $0 and read as broken.
+  const syncedPeriod = toPayoutPeriod(globalPeriod);
+  const defaultPeriod = syncedPeriod || QUARTER_OPTIONS[0];
+  const [period, setPeriod] = useState(defaultPeriod);
+  useEffect(() => {
+    if (syncedPeriod) setPeriod(syncedPeriod);
+  }, [syncedPeriod]);
+
   const PERIOD_OPTIONS = [
     { value: "ytd", label: "YTD" },
     { value: "all-time", label: "All time" },
     ...QUARTER_OPTIONS.map((q) => ({ value: q, label: q })),
   ];
-  const defaultPeriod = QUARTER_OPTIONS[0]; // current quarter
-  const [period, setPeriod] = useState(defaultPeriod);
+  // The header can select a quarter older than the eight listed here; keep it
+  // selectable rather than silently snapping back.
+  if (syncedPeriod && !PERIOD_OPTIONS.some((o) => o.value === syncedPeriod)) {
+    PERIOD_OPTIONS.push({ value: syncedPeriod, label: syncedPeriod });
+  }
   const [activeView, setActiveView] = useState("team"); // team | fairness
   const [repId, setRepId] = useState("");
   const [repName, setRepName] = useState("");

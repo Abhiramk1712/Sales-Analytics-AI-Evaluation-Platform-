@@ -3083,7 +3083,7 @@ const NAV_MODULES = [
 ];
 
 const ALL_TABS = NAV_MODULES.flatMap((module) => module.tabs);
-const PERIOD_AWARE_TABS = new Set(["Dashboard", "RevOps Control Center", "ARR Health", "Pipeline Health", "Forecast", "Reps", "Territories"]);
+const PERIOD_AWARE_TABS = new Set(["Dashboard", "RevOps Control Center", "ARR Health", "Pipeline Health", "Forecast", "Reps", "Territories", "Payouts"]);
 const ROLE_TAB_ACCESS = {
   executive: new Set(ALL_TABS.filter((t) => !["Data Quality", "Model Monitoring", "Enterprise Grade", "Ingestion"].includes(t))),
   revops_admin: new Set(ALL_TABS),
@@ -3408,7 +3408,7 @@ export default function App() {
       {tab === "Reps"      && <RepsTab refreshKey={refreshKey} period={period} userRole={userRole} activeCompany={activeCompany} />}
       {tab === "Rep Scorecard" && <RepScorecardPage refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} />}
       {tab === "AI Agent"  && <AgentPage activeCompany={activeCompany} userRole={userRole} />}
-      {tab === "Payouts"   && <PayoutsPage refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} />}
+      {tab === "Payouts"   && <PayoutsPage refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} period={period} />}
       {tab === "Plans"     && <PlansPage refreshKey={refreshKey} userRole={userRole} activeCompany={activeCompany} />}
       {tab === "Territories" && <TerritoriesPage refreshKey={refreshKey} period={period} activeCompany={activeCompany} userRole={userRole} />}
       {tab === "Reports" && <ReportsTab activeCompany={activeCompany} userRole={userRole} />}
