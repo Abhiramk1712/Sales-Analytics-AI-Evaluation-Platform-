@@ -229,3 +229,49 @@ def test_clawback_fires_only_when_win_rate_is_far_below_plan():
 
     assert poor["clawback_total"] > 0
     assert healthy["clawback_total"] == 0
+
+
+# ── Non-finite floats are not JSON either ────────────────────────────────────
+
+
+@pytest.mark.parametrize("value", [float("inf"), float("-inf"), float("nan")])
+def test_non_finite_floats_become_none(value):
+    """
+    /ml/forecast/churn-risk 500'd on `inf` after the numpy fix: a survival curve
+    that never drops below 0.5 has an infinite median tenure, and JSON cannot
+    express it.
+
+    None rather than 0 — "there is no median tenure" is genuinely absent, and 0
+    would read as "churns immediately", the opposite of what infinity means.
+    """
+    from backend.utils.json_safe import json_safe
+
+    assert json_safe(value) is None
+
+
+def test_json_safe_handles_mixed_nested_payloads():
+    """Both failure modes reached JSON from the same shape of code."""
+    import json
+
+    from backend.utils.json_safe import json_safe
+
+    payload = {
+        "median_tenure_months": float("inf"),
+        "flag": np.True_,
+        "curve": {"0": 1.0, "1": float("nan")},
+        "weights": [np.float64(0.5), float("-inf")],
+    }
+    out = json_safe(payload)
+    json.dumps(out)  # would raise before the fix
+
+    assert out["median_tenure_months"] is None
+    assert out["flag"] is True
+    assert out["curve"]["1"] is None
+    assert out["weights"] == [0.5, None]
+
+
+def test_json_safe_preserves_ordinary_finite_values():
+    from backend.utils.json_safe import json_safe
+
+    payload = {"a": 1, "b": 2.5, "c": "x", "d": None, "e": [True, 0.0]}
+    assert json_safe(payload) == payload

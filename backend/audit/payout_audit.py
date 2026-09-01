@@ -142,27 +142,19 @@ class ForecastAuditSummary:
     rep_rows: list[RepForecastAuditRow] = field(default_factory=list)
 
 
+from backend.utils.json_safe import json_safe
+
+
 def to_native(value: Any) -> Any:
     """
-    Convert numpy scalars and containers to plain Python types, recursively.
+    Backwards-compatible alias for json_safe.
 
-    The audit computes with pandas and numpy, so values like `mape_flagged`
-    arrive as `numpy.bool_` rather than `bool`. Pydantic cannot serialize those,
-    and `/payout/audit/{company}` returned 500 with
-    "Unable to serialize unknown type: <class 'numpy.bool'>".
-
-    Applied once at the serialization boundary rather than at each field, so a
-    numpy value added to the report later cannot reintroduce the failure.
+    Kept because callers and tests already import this name. The implementation
+    moved to backend/utils/json_safe.py once the same failure appeared in the
+    churn endpoint too — a numpy bool here, a non-finite float there, both
+    reaching JSON from code that computes with numpy.
     """
-    if isinstance(value, dict):
-        return {k: to_native(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [to_native(v) for v in value]
-    # numpy scalars expose .item(); guard on the attribute so numpy stays an
-    # optional import here.
-    if hasattr(value, "item") and hasattr(value, "dtype"):
-        return value.item()
-    return value
+    return json_safe(value)
 
 
 @dataclass
