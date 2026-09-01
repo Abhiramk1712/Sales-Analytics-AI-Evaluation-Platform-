@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from backend.database import get_db
+from backend.utils.json_safe import json_safe
 from backend.auth.dependencies import require_permission
 from backend.auth.models import UserContext
 from backend.auth.tenant import get_current_company_id, get_tenant_context
@@ -1869,7 +1870,11 @@ async def churn_risk_forecast(db: AsyncSession = Depends(get_db)):
 
     result = fit_survival_model(records)
     result["generated_at"] = datetime.now(timezone.utc).isoformat()
-    return result
+    # The survival model yields inf for a curve that never drops below 0.5 —
+    # an infinite median tenure — and JSON cannot express it. Sanitise at the
+    # boundary rather than per field; the field that broke was one nobody had
+    # considered.
+    return json_safe(result)
 
 
 # ── C5: Rep attainment forecast ───────────────────────────────────────────

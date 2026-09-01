@@ -7,6 +7,7 @@ Run:  python -m backend.data_generator
 import argparse
 import asyncio
 import csv
+from collections import defaultdict
 import json
 import random
 import re
@@ -1319,6 +1320,80 @@ def _build_revenue_rows_from_deals(
     return revenue_rows
 
 
+#: Minimum quarterly quota. Ramp factors applied to a small base produced quotas
+#: as low as $1.00, which turned attainment into a meaningless ratio — one rep
+#: showed 768%.
+MIN_QUARTERLY_QUOTA = 1_000.0
+
+#: Target attainment bands and the share of rep-quarters that should land in
+#: each. Chosen to exercise every tier of the generated comp plans (0-80, 80-100,
+#: 100-120, 120+) rather than parking almost everyone in the top one, and to look
+#: like a real sales organisation: most reps near plan, a minority short, a
+#: minority accelerating.
+ATTAINMENT_MIX: tuple[tuple[float, float, float], ...] = (
+    (0.55, 0.80, 0.15),
+    (0.80, 1.00, 0.25),
+    (1.00, 1.20, 0.35),
+    (1.20, 1.60, 0.25),
+)
+
+
+def _draw_target_attainment() -> float:
+    """Pick a target attainment from ATTAINMENT_MIX."""
+    roll = random.random()
+    cumulative = 0.0
+    for low, high, weight in ATTAINMENT_MIX:
+        cumulative += weight
+        if roll <= cumulative:
+            return random.uniform(low, high)
+    low, high, _ = ATTAINMENT_MIX[-1]
+    return random.uniform(low, high)
+
+
+def _calibrate_quotas_to_revenue(
+    quota_rows: list[dict],
+    revenue_rows: list[dict],
+) -> list[dict]:
+    """
+    Rescale quotas against the revenue this generator actually produced.
+
+    Quotas were built top-down from a constant annual figure and never referred
+    to revenue, so the two drifted apart badly: average attainment of 218%, with
+    individual rep-quarters at 452% and 768%. Beyond realism that defeats the
+    compensation demo — the plans define four attainment tiers, and if nearly
+    every rep lands in the top one the tiering is never exercised.
+
+    Each rep-quarter's quota becomes `revenue / target`, with the target drawn
+    from ATTAINMENT_MIX, so attainment lands where it was designed to. A
+    rep-quarter with no revenue keeps its top-down quota — there is nothing to
+    calibrate against — but is still floored.
+    """
+    revenue_by_rep_quarter: dict[tuple[str, str], float] = defaultdict(float)
+    for row in revenue_rows:
+        period = str(row.get("period", ""))
+        if len(period) < 7:
+            continue
+        try:
+            month = int(period[5:7])
+        except ValueError:
+            continue
+        quarter = f"{period[:4]}-Q{(month - 1) // 3 + 1}"
+        revenue_by_rep_quarter[(str(row.get("rep_id", "")), quarter)] += float(
+            row.get("amount", 0) or 0
+        )
+
+    calibrated: list[dict] = []
+    for row in quota_rows:
+        key = (str(row.get("rep_id", "")), str(row.get("period", "")))
+        revenue = revenue_by_rep_quarter.get(key, 0.0)
+        if revenue > 0:
+            amount = revenue / _draw_target_attainment()
+        else:
+            amount = float(row.get("amount", 0) or 0)
+        calibrated.append({**row, "amount": str(round(max(amount, MIN_QUARTERLY_QUOTA), 2))})
+    return calibrated
+
+
 def _build_quota_rows_top_down(
     reps: list[dict],
     rep_role_map: dict[str, str],
@@ -1358,7 +1433,7 @@ def _generate_dataset(
     n_reps: int = 12,
     n_accounts: int = 60,
     n_deals: int = 150,
-    months: int = 18,
+    months: int = 36,
     n_products: int = 5,
     target_total_revenue: float | None = None,
     archetype: str = "saas_enterprise",
@@ -1648,6 +1723,12 @@ def _generate_dataset(
         growth_factor=growth_factor,
         quarters=quarters,
         profile=profile,
+    )
+    # Revenue is built above, so quotas can be calibrated against what this
+    # generator actually produced rather than against a constant.
+    dataset["quotas"] = _calibrate_quotas_to_revenue(
+        quota_rows=dataset["quotas"],
+        revenue_rows=dataset.get("revenue", []),
     )
 
     _audit_generation_quality(dataset, profile, archetype)
@@ -3678,7 +3759,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--n-reps", type=int, default=12)
     parser.add_argument("--n-accounts", type=int, default=60)
     parser.add_argument("--n-deals", type=int, default=150)
-    parser.add_argument("--months", type=int, default=18)
+    parser.add_argument(
+        "--months", type=int, default=36,
+        help="Months of history. The forecasting ensemble needs 24+; below that\n"
+             "it falls back to a linear trend and drift monitoring reports\n"
+             "insufficient_history, so the ML features never actually run.",
+    )
     parser.add_argument("--n-products", type=int, default=5)
     parser.add_argument("--n-plans", type=int, default=4)
     parser.add_argument("--n-rules", type=int, default=4)

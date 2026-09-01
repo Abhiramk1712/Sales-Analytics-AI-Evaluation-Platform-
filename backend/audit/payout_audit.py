@@ -142,6 +142,21 @@ class ForecastAuditSummary:
     rep_rows: list[RepForecastAuditRow] = field(default_factory=list)
 
 
+from backend.utils.json_safe import json_safe
+
+
+def to_native(value: Any) -> Any:
+    """
+    Backwards-compatible alias for json_safe.
+
+    Kept because callers and tests already import this name. The implementation
+    moved to backend/utils/json_safe.py once the same failure appeared in the
+    churn endpoint too — a numpy bool here, a non-finite float there, both
+    reaching JSON from code that computes with numpy.
+    """
+    return json_safe(value)
+
+
 @dataclass
 class CompanyAuditReport:
     company: str
@@ -151,6 +166,9 @@ class CompanyAuditReport:
     errors: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
+        return to_native(self._raw_dict())
+
+    def _raw_dict(self) -> dict[str, Any]:
         return {
             "company": self.company,
             "passed": self.passed,

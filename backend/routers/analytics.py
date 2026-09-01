@@ -1304,29 +1304,36 @@ async def deal_cohort_analysis(
         raise HTTPException(status_code=400, detail=f"cohort_by must be one of {VALID_COHORT_BY}")
 
     if cohort_by == "close_month":
-        # Group by YYYY-MM of actual_close_date
+        # Build the expression once and reuse the object. Constructing
+        # func.to_char(...) separately in SELECT, GROUP BY and ORDER BY makes
+        # SQLAlchemy emit the format string as a *different* bind parameter each
+        # time, and PostgreSQL matches GROUP BY expressions syntactically — so
+        # `to_char(col, $1)` and `to_char(col, $4)` are not the same expression
+        # and the column reads as ungrouped. Every request 500'd with
+        # "must appear in the GROUP BY clause".
+        cohort_expr = func.to_char(Deal.actual_close_date, "YYYY-MM")
         won_rows = (
             await db.execute(
                 select(
-                    func.to_char(Deal.actual_close_date, "YYYY-MM").label("cohort"),
+                    cohort_expr.label("cohort"),
                     func.count(Deal.id).label("count"),
                     func.sum(Deal.amount).label("revenue"),
                 )
                 .where(Deal.stage == "Closed Won")
                 .where(Deal.actual_close_date.isnot(None))
-                .group_by(func.to_char(Deal.actual_close_date, "YYYY-MM"))
-                .order_by(func.to_char(Deal.actual_close_date, "YYYY-MM"))
+                .group_by(cohort_expr)
+                .order_by(cohort_expr)
             )
         ).all()
         lost_rows = (
             await db.execute(
                 select(
-                    func.to_char(Deal.actual_close_date, "YYYY-MM").label("cohort"),
+                    cohort_expr.label("cohort"),
                     func.count(Deal.id).label("count"),
                 )
                 .where(Deal.stage == "Closed Lost")
                 .where(Deal.actual_close_date.isnot(None))
-                .group_by(func.to_char(Deal.actual_close_date, "YYYY-MM"))
+                .group_by(cohort_expr)
             )
         ).all()
         lost_by_cohort = {r.cohort: int(r.count) for r in lost_rows}

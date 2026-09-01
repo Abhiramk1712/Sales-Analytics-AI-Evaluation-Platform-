@@ -1,5 +1,5 @@
 id,external_id,name,description,source_system,created_at,effective_start_date,effective_end_date
-53363578-c061-4401-a6de-1df874fc623c,PLAN-001,FY2023 Insurance Plan 1,Annual premium growth and new policy plan,generated,2026-07-01T20:00:17.351935+00:00,2023-01-01,2023-12-31
-532bbd0b-fda6-4ff0-817c-67eae0f9a004,PLAN-002,FY2024 Insurance Plan 2,Renewal retention and cross-sell plan,generated,2026-07-01T20:00:17.351941+00:00,2024-01-01,2024-12-31
-df0cd80c-4dc5-4ec4-b1e4-29fba552f471,PLAN-003,FY2025 Insurance Plan 3,Commercial lines expansion plan,generated,2026-07-01T20:00:17.351946+00:00,2025-01-01,2025-12-31
-5ce05abe-57be-436b-ba5f-1e4b4c14f656,PLAN-004,FY2026 Insurance Plan 4,Territory penetration and new agency plan,generated,2026-07-01T20:00:17.351950+00:00,2026-01-01,
+46f12c67-ba9d-47c6-8945-a3e9debd4db5,PLAN-001,FY2023 Insurance Plan 1,Annual premium growth and new policy plan,generated,2026-09-01T16:48:37.891104+00:00,2023-01-01,2023-12-31
+ad26f875-6c81-435c-9404-12dbf619b1d2,PLAN-002,FY2024 Insurance Plan 2,Renewal retention and cross-sell plan,generated,2026-09-01T16:48:37.891109+00:00,2024-01-01,2024-12-31
+246d617c-0187-4da0-a4b8-6de204849df6,PLAN-003,FY2025 Insurance Plan 3,Commercial lines expansion plan,generated,2026-09-01T16:48:37.891113+00:00,2025-01-01,2025-12-31
+7b60d58f-689f-4fd8-a061-e29225a66337,PLAN-004,FY2026 Insurance Plan 4,Territory penetration and new agency plan,generated,2026-09-01T16:48:37.891117+00:00,2026-01-01,

@@ -1,13 +1,11 @@
 id,team_id,name,email,region,hire_date
-a33f5b72-3754-4c7d-a770-fb8205f226e0,98f38051-ee46-4786-9d83-10c37fdb500c,Benjamin Macdonald,benjamin.macdonald@insurex.com,West,2022-04-24
-c260e256-cef6-40a3-a3af-1cc136e02508,309a4d56-1e00-40b5-be35-5523961b8c80,George King,george.king@insurex.com,EMEA,2021-05-09
-23971210-c45e-4043-886c-f69c92eedf22,e71b168a-50e5-43bb-986d-fd93f2cc1afa,John Powell,john.powell@insurex.com,Central,2020-07-23
-4df4bb58-afd1-40e1-9459-9fd2f38c9cd8,bfd16f1c-9571-4397-9b8d-0ee9193db5d3,Deborah Decker,deborah.decker@insurex.com,APAC,2022-01-03
-49ee0e04-55bc-4d24-89d5-288672473cb1,309a4d56-1e00-40b5-be35-5523961b8c80,Alexander Byrd,alexander.byrd@insurex.com,Central,2019-06-13
-c78e9bd7-0760-4595-a848-a494101a4147,a6f68188-2275-478c-8b81-d111cf28311d,Justin Robinson,justin.robinson@insurex.com,West,2022-06-01
-40713600-da14-4eda-a084-05bb58930679,98f38051-ee46-4786-9d83-10c37fdb500c,Jennifer Reese,jennifer.reese@insurex.com,East,2022-11-03
-db5de4a8-68d7-40ac-931b-56ee0158fb6e,98f38051-ee46-4786-9d83-10c37fdb500c,Ashley Hill,ashley.hill@insurex.com,Central,2020-03-11
-7c28f429-6319-4ce8-b38a-5d0b486b407b,309a4d56-1e00-40b5-be35-5523961b8c80,Willie Chang,willie.chang@insurex.com,EMEA,2022-01-08
-d6c5c187-0f44-4678-8f06-e8c1b894687b,309a4d56-1e00-40b5-be35-5523961b8c80,Shawn Jones,shawn.jones@insurex.com,EMEA,2021-10-07
-11c59b73-1c6f-4521-8df0-fa6552bd4feb,e71b168a-50e5-43bb-986d-fd93f2cc1afa,Kyle Wise,kyle.wise@insurex.com,EMEA,2021-08-16
-a41c24be-a766-481d-958b-f5f7864ccaa1,a6f68188-2275-478c-8b81-d111cf28311d,Justin Sanchez,justin.sanchez@insurex.com,Central,2019-08-17
+8f6622df-c77a-4e88-a19d-4c4bc1661772,d0e20e81-7ff9-435c-a85c-7dade57a9313,Donald Tapia,donald.tapia@insurex.com,West,2022-04-24
+60a6708d-6583-4a02-821f-0753fd73ab00,79edbf37-2f41-4fd2-b48d-79747639cf95,Heather Boyd,heather.boyd@insurex.com,EMEA,2021-05-09
+8caaa8ca-69fa-4924-906d-642d1b98e019,b0831e80-2ffa-4783-a819-1e361ad595c0,Sarah Norman,sarah.norman@insurex.com,Central,2020-07-23
+9454ed17-4a77-4280-93f1-080b65699d5a,d898160d-bd10-4e24-84df-a1deff9970c4,Douglas Lopez,douglas.lopez@insurex.com,APAC,2022-01-03
+3e7e796c-a084-440e-97d5-135b721f3e2f,79edbf37-2f41-4fd2-b48d-79747639cf95,Carlos Coleman,carlos.coleman@insurex.com,Central,2019-06-13
+f4040e67-58f6-4870-a447-f5df54bd90ed,d205b243-34bc-49c4-9122-6ef4d780887c,Jordan Simmons,jordan.simmons@insurex.com,West,2022-06-01
+15b4ba21-a596-4e13-a1e1-c68f2602f414,d0e20e81-7ff9-435c-a85c-7dade57a9313,Christopher Gallagher,christopher.gallagher@insurex.com,East,2022-11-03
+a7be73f0-3ccf-46aa-b3a1-a7edd9b3e944,d0e20e81-7ff9-435c-a85c-7dade57a9313,Jason Stanley,jason.stanley@insurex.com,Central,2020-03-11
+6e73bb15-6226-4fe0-ba64-22e193e22b81,79edbf37-2f41-4fd2-b48d-79747639cf95,Charles Lane,charles.lane@insurex.com,EMEA,2022-01-08
+37c91720-936f-438f-91eb-d7375b79b897,79edbf37-2f41-4fd2-b48d-79747639cf95,Molly Branch,molly.branch@insurex.com,EMEA,2021-10-07

@@ -1,6 +1,6 @@
 id,external_id,product_sku,name,category,source_system,created_at
-f0a87628-d945-406e-835c-b737bd6f4852,PROD-001,INS-SKU-001,Term Life Policy,Insurance,generated,2026-07-01T20:00:17.351533+00:00
-97df1880-a2f2-4557-8ee3-792c46448326,PROD-002,INS-SKU-002,Whole Life Policy,Insurance,generated,2026-07-01T20:00:17.351556+00:00
-d114b590-f804-44c6-bbf1-1bce07c65c32,PROD-003,INS-SKU-003,Group Health Plan,Insurance,generated,2026-07-01T20:00:17.351562+00:00
-d04cb973-ab6f-4497-a82d-4b5d33b1c352,PROD-004,INS-SKU-004,Property & Casualty,Insurance,generated,2026-07-01T20:00:17.351567+00:00
-a3c10282-3a76-4672-82d1-63698743c53e,PROD-005,INS-SKU-005,Commercial Lines,Insurance,generated,2026-07-01T20:00:17.351571+00:00
+43617724-3d77-4494-a504-af0524d07836,PROD-001,INS-SKU-001,Term Life Policy,Insurance,generated,2026-09-01T16:48:37.890781+00:00
+e0e5d4f3-881e-41c7-b394-446c7ba1485c,PROD-002,INS-SKU-002,Whole Life Policy,Insurance,generated,2026-09-01T16:48:37.890791+00:00
+3efa9eec-e35e-4e40-85ae-3e4482e659cc,PROD-003,INS-SKU-003,Group Health Plan,Insurance,generated,2026-09-01T16:48:37.890796+00:00
+995020ca-480b-468c-82f0-29e970ecb742,PROD-004,INS-SKU-004,Property & Casualty,Insurance,generated,2026-09-01T16:48:37.890801+00:00
+d6e3fb54-b00e-4095-83b8-2b50842bf3b1,PROD-005,INS-SKU-005,Commercial Lines,Insurance,generated,2026-09-01T16:48:37.890806+00:00

@@ -1,13 +1,13 @@
 rep_id,manager_rep_id,role,level,effective_start_date,effective_end_date,source_system
-2e84bd52-7df5-459d-ab52-be0a4951d0d7,,Chief Revenue Officer,L0,2024-05-24,,generated
-f2c0b9d2-c44d-4ae1-9353-3b3f3fc2a1c2,2e84bd52-7df5-459d-ab52-be0a4951d0d7,Sales Manager,L4,2024-05-24,,generated
-bd4bb10e-e400-49c5-b578-c2be546c1562,2e84bd52-7df5-459d-ab52-be0a4951d0d7,Sales Manager,L4,2024-05-24,,generated
-7526c649-bbdb-4001-a38d-9586cce08af3,2e84bd52-7df5-459d-ab52-be0a4951d0d7,Sales Manager,L4,2024-05-24,,generated
-87471b18-bfc0-4214-98fc-51cac106e539,f2c0b9d2-c44d-4ae1-9353-3b3f3fc2a1c2,Sales Development Representative,L5,2024-05-24,,generated
-d2c384c1-e51b-4c7e-aede-5f23b2e471f8,bd4bb10e-e400-49c5-b578-c2be546c1562,Account Executive,L5,2024-05-24,,generated
-7f3ae53d-7a26-4c3f-b716-aaed6f37379f,7526c649-bbdb-4001-a38d-9586cce08af3,Sales Development Representative,L5,2024-05-24,,generated
-ed7d7474-e7ef-44b6-aab3-0ba018420e1c,f2c0b9d2-c44d-4ae1-9353-3b3f3fc2a1c2,Account Executive,L5,2024-05-24,,generated
-2e0048a5-6ab0-4ac9-8e17-12c74e31ba4f,bd4bb10e-e400-49c5-b578-c2be546c1562,Sales Development Representative,L5,2024-05-24,,generated
-a5754b11-ecdc-438a-afd5-4f23892cc5d5,7526c649-bbdb-4001-a38d-9586cce08af3,Senior Account Executive,L5,2024-05-24,,generated
-2f1fc9c6-62e9-4db7-beba-707ee6a1d81a,f2c0b9d2-c44d-4ae1-9353-3b3f3fc2a1c2,Sales Development Representative,L5,2024-05-24,,generated
-70828046-099d-4fe1-a262-4b11ec73efde,bd4bb10e-e400-49c5-b578-c2be546c1562,Senior Account Executive,L5,2024-05-24,,generated
+ea172f7a-cf34-4511-9266-ac5337da8eca,,Chief Revenue Officer,L0,2024-09-01,,generated
+d0647f7b-44e8-41e5-bb3d-da23e8514926,ea172f7a-cf34-4511-9266-ac5337da8eca,Sales Manager,L4,2024-09-01,,generated
+8906aa9f-e3b8-439f-9b84-76d039c6237c,ea172f7a-cf34-4511-9266-ac5337da8eca,Sales Manager,L4,2024-09-01,,generated
+7cec2f3c-b444-44c0-9ae8-a4ac974fb246,ea172f7a-cf34-4511-9266-ac5337da8eca,Sales Manager,L4,2024-09-01,,generated
+2ef1a5a5-e662-457f-b06c-641c9ea02b4e,d0647f7b-44e8-41e5-bb3d-da23e8514926,Account Executive,L5,2024-09-01,,generated
+691d7a7e-dc5d-4799-acec-318674686077,8906aa9f-e3b8-439f-9b84-76d039c6237c,Senior Account Executive,L5,2024-09-01,,generated
+d56b8f16-8cfa-459a-98df-8226524c1bc8,7cec2f3c-b444-44c0-9ae8-a4ac974fb246,Account Executive,L5,2024-09-01,,generated
+2ef77b76-accf-428a-a6d8-0f70d4338ea6,d0647f7b-44e8-41e5-bb3d-da23e8514926,Senior Account Executive,L5,2024-09-01,,generated
+4325df50-f5bb-40f9-b7ce-c49797433601,8906aa9f-e3b8-439f-9b84-76d039c6237c,Senior Account Executive,L5,2024-09-01,,generated
+8547e13f-6396-4225-8628-1615c19b0085,7cec2f3c-b444-44c0-9ae8-a4ac974fb246,Account Executive,L5,2024-09-01,,generated
+fb4b68c4-c49f-4542-97c5-75f5cdae7f13,d0647f7b-44e8-41e5-bb3d-da23e8514926,Account Executive,L5,2024-09-01,,generated
+400374e7-23b6-4c6a-93df-19307aefe5a1,8906aa9f-e3b8-439f-9b84-76d039c6237c,Account Executive,L5,2024-09-01,,generated

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { apiGet } from "../api/client";
+import { apiGet, resolveContext } from "../api/client";
 
 /**
  * useFetch — data fetching hook with role/company header support.
@@ -11,8 +11,9 @@ export function useFetch(url, opts = {}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const role = opts?.role || "";
-  const company = opts?.company || "";
+  // Resolved during render, not inside the effect, so both values stay in the
+  // dependency array below — a company switch still retriggers the fetch.
+  const { role, company } = resolveContext(opts);
 
   useEffect(() => {
     if (!url) return;

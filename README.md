@@ -468,7 +468,7 @@ That wraps the generator directly, if you want different volumes:
 ```bash
 python -m backend.data_generator \
   --company-name techo-solutions \
-  --n-reps 12 --n-accounts 60 --n-deals 150 --months 18 \
+  --n-reps 12 --n-accounts 60 --n-deals 150 --months 36 \
   --include-org-hierarchy
 ```
 
