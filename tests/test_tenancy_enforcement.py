@@ -31,7 +31,7 @@ BETA = f"test-beta-{uuid.uuid4().hex[:8]}"
 
 
 @pytest.fixture(autouse=True)
-async def fresh_engine():
+async def fresh_engine(db_schema):
     """
     Give each test its own engine.
 
