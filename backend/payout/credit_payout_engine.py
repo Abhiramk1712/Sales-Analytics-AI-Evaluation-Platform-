@@ -28,13 +28,16 @@ PAYOUT OUTPUT FIELDS
 """
 from __future__ import annotations
 
+import math
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Optional
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.utils.date_ranges import parse_period_to_range
 
 from backend.models import (
     Rep, Revenue, Quota, Plan, Rule, PlanAssignment,
@@ -94,6 +97,43 @@ class CreditPayoutResult:
 
 
 # ── Plan/Rule resolution helpers ─────────────────────────────────────────
+
+async def _count_closed_deals(
+    db: AsyncSession,
+    rep: Rep,
+    period: str,
+) -> tuple[int, int]:
+    """
+    Return (won, lost) deal counts for a rep, bounded to `period`.
+
+    The period bound matters: these counts feed a payout for one specific
+    period, so counting a rep's whole history would make the same quarter pay
+    differently depending on how long the rep has been employed. Deals are
+    bounded on actual_close_date, the semantically correct field for closed
+    deals (see utils.period_filters.build_closed_deal_period_filter).
+    """
+    from backend.models import Deal
+
+    try:
+        bounds = parse_period_to_range(period)
+    except ValueError:
+        bounds = None
+
+    def _count(stage: str):
+        q = select(func.count(Deal.id)).where(Deal.rep_id == rep.id).where(Deal.stage == stage)
+        if bounds is not None:
+            q = q.where(Deal.actual_close_date >= _date_from_iso(bounds.start_date))
+            q = q.where(Deal.actual_close_date <= _date_from_iso(bounds.end_date))
+        return q
+
+    won = int((await db.execute(_count("Closed Won"))).scalar() or 0)
+    lost = int((await db.execute(_count("Closed Lost"))).scalar() or 0)
+    return won, lost
+
+
+def _date_from_iso(value: str) -> date:
+    return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
+
 
 async def _get_user_id_for_rep(db: AsyncSession, rep: Rep) -> Optional[uuid.UUID]:
     """Resolve the UserProfile.id for a Rep by matching on email."""
@@ -245,6 +285,11 @@ def _apply_commission_rules(
 
     Returns dict with: base_commission, accelerator_amount, bonus_amount,
     rules_applied, rate_applied.
+
+    Threshold convention — the same for every rule type: a band is inclusive at
+    its lower bound and exclusive at its upper (`min <= attainment < max`), so a
+    rep landing exactly on a threshold is paid at the higher band and no
+    attainment value falls into two adjacent bands.
     """
     attainment = (credited_amount / quota * 100) if quota > 0 else 0.0
     base = 0.0
@@ -253,10 +298,12 @@ def _apply_commission_rules(
     rules_applied: list[str] = []
 
     for rule in rules:
-        rate = float(rule.rate or 0)
-        min_t = float(rule.threshold_min or 0)
-        max_t = float(rule.threshold_max or 9999)
-        bonus_a = float(rule.bonus_amount or 0)
+        # `or`-defaulting would turn a legitimate 0 (a zero rate, a zero upper
+        # bound) into the fallback, so test for None explicitly.
+        rate = float(rule.rate) if rule.rate is not None else 0.0
+        min_t = float(rule.threshold_min) if rule.threshold_min is not None else 0.0
+        max_t = float(rule.threshold_max) if rule.threshold_max is not None else math.inf
+        bonus_a = float(rule.bonus_amount) if rule.bonus_amount is not None else 0.0
 
         if rule.metric_name == "attainment_pct":
             if min_t <= attainment < max_t:
@@ -264,13 +311,13 @@ def _apply_commission_rules(
                 base += commission
                 rules_applied.append(f"rule '{rule.name}': attainment={attainment:.1f}%, rate={rate:.0%}, commission=${commission:,.2f}")
         elif rule.metric_name == "accelerator":
-            if attainment > min_t:
+            if min_t <= attainment < max_t:
                 overage = max(0.0, credited_amount - quota)
                 acc = overage * rate
                 accelerator += acc
                 rules_applied.append(f"accelerator '{rule.name}': ${acc:,.2f}")
         elif rule.metric_name == "bonus" and bonus_a > 0:
-            if attainment >= min_t:
+            if min_t <= attainment < max_t:
                 bonus += bonus_a
                 rules_applied.append(f"bonus '{rule.name}': ${bonus_a:,.2f}")
 
@@ -335,21 +382,8 @@ async def _rep_level_fallback(
         )
     ).scalar() or 0.0
 
-    # Deals won / lost
-    won = (
-        await db.execute(
-            select(func.count(Deal.id))
-            .where(Deal.rep_id == rep.id)
-            .where(Deal.stage == "Closed Won")
-        )
-    ).scalar() or 0
-    lost = (
-        await db.execute(
-            select(func.count(Deal.id))
-            .where(Deal.rep_id == rep.id)
-            .where(Deal.stage == "Closed Lost")
-        )
-    ).scalar() or 0
+    # Deals won / lost, bounded to the period being paid
+    won, lost = await _count_closed_deals(db, rep, period)
 
     engine = PayoutEngine(config=config)
     result = engine.compute(float(rev), float(quota), int(won), int(lost))
@@ -559,6 +593,15 @@ async def compute_credit_payouts(
         # ── 2. Try true SalesCredit path ────────────────────────────────
         credit_inputs = await get_credit_level_payout_inputs(db, rep, period)
         if credit_inputs:
+            # Invariant across every credit for this rep/period — query once,
+            # not once per credit row.
+            rep_period_quota = float(
+                (await db.execute(
+                    select(func.sum(Quota.amount))
+                    .where(Quota.rep_id == rep.id)
+                    .where(Quota.period == period)
+                )).scalar() or 0
+            )
             for ci in credit_inputs:
                 trace: list[str] = [
                     f"SalesCredit: credit_type={ci['credit_type']}, "
@@ -567,13 +610,7 @@ async def compute_credit_payouts(
                 ]
                 credited = ci["credit_amount"]
                 credit_pct = ci["credit_percent"]
-                quota_val = float(
-                    (await db.execute(
-                        select(func.sum(Quota.amount))
-                        .where(Quota.rep_id == rep.id)
-                        .where(Quota.period == period)
-                    )).scalar() or 0
-                )
+                quota_val = rep_period_quota
                 # Scale quota by credit_percent so attainment is credit-proportional
                 effective_quota = quota_val * credit_pct if quota_val > 0 else 0.0
                 attainment = (credited / effective_quota * 100) if effective_quota > 0 else 0.0
@@ -583,13 +620,7 @@ async def compute_credit_payouts(
                     comp = _apply_commission_rules(credited, effective_quota, rules)
                     trace.extend(comp["rules_applied"])
                 else:
-                    from backend.models import Deal
-                    won = int((await db.execute(
-                        select(func.count(Deal.id)).where(Deal.rep_id == rep.id).where(Deal.stage == "Closed Won")
-                    )).scalar() or 0)
-                    lost = int((await db.execute(
-                        select(func.count(Deal.id)).where(Deal.rep_id == rep.id).where(Deal.stage == "Closed Lost")
-                    )).scalar() or 0)
+                    won, lost = await _count_closed_deals(db, rep, period)
                     eng_result = PayoutEngine(config=cfg).compute(credited, effective_quota, won, lost)
                     comp = {
                         "base_commission":    eng_result.get("base_commission", 0.0),
@@ -672,13 +703,7 @@ async def compute_credit_payouts(
             comp = _apply_commission_rules(credited, quota_val, rules)
             trace.extend(comp["rules_applied"])
         else:
-            from backend.models import Deal
-            won = int((await db.execute(
-                select(func.count(Deal.id)).where(Deal.rep_id == rep.id).where(Deal.stage == "Closed Won")
-            )).scalar() or 0)
-            lost = int((await db.execute(
-                select(func.count(Deal.id)).where(Deal.rep_id == rep.id).where(Deal.stage == "Closed Lost")
-            )).scalar() or 0)
+            won, lost = await _count_closed_deals(db, rep, period)
             eng_result = PayoutEngine(config=cfg).compute(credited, quota_val, won, lost)
             comp = {
                 "base_commission":    eng_result.get("base_commission", 0.0),

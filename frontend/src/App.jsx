@@ -142,19 +142,20 @@ function Skeleton({ h = 200 }) {
 }
 
 // ── Dashboard Tab ─────────────────────────────────────────────────────────
-function DashboardTab({ refreshKey, period, userRole }) {
+function DashboardTab({ refreshKey, period, userRole, activeCompany }) {
   const role = userRole || "executive";
+  const company = activeCompany || "";
   const kpisUrl = withPeriod(withRefresh("/analytics/kpis", refreshKey), period);
-  const { data: kpis, loading: kLoading }   = useFetch(kpisUrl, { role });
+  const { data: kpis, loading: kLoading }   = useFetch(kpisUrl, { role, company });
   // D1: wire period to revenue/monthly chart
   const monthlyUrl = withPeriod(withRefresh("/analytics/revenue/monthly?months=12", refreshKey), period);
-  const { data: monthly, loading: mLoading } = useFetch(monthlyUrl, { role });
+  const { data: monthly, loading: mLoading } = useFetch(monthlyUrl, { role, company });
   const repsUrl = withPeriod(withRefresh("/analytics/reps/performance", refreshKey), period);
-  const { data: stages, loading: sLoading }  = useFetch(withRefresh("/analytics/pipeline/stages", refreshKey), { role });
-  const { data: reps, loading: rLoading }    = useFetch(repsUrl, { role });
+  const { data: stages, loading: sLoading }  = useFetch(withRefresh("/analytics/pipeline/stages", refreshKey), { role, company });
+  const { data: reps, loading: rLoading }    = useFetch(repsUrl, { role, company });
   // D10: Drivers panel
   const driversUrl = withPeriod(withRefresh("/analytics/drivers", refreshKey), period);
-  const { data: drivers } = useFetch(driversUrl, { role });
+  const { data: drivers } = useFetch(driversUrl, { role, company });
 
   const topPerformers = reps ? [...reps].sort((a, b) => b.attainment_pct - a.attainment_pct).slice(0, 5) : [];
 
@@ -302,11 +303,12 @@ function forecastContext(metric, value) {
 
 function ForecastTab({ refreshKey, activeCompany, period, userRole }) {
   const role = userRole || "executive";
+  const company = activeCompany || "";
   const companyParam = activeCompany ? `&company=${encodeURIComponent(activeCompany)}` : "";
-  const { data, loading, error } = useFetch(withRefresh(`/ml/forecast/revenue?horizon=6${companyParam}`, refreshKey), { role });
+  const { data, loading, error } = useFetch(withRefresh(`/ml/forecast/revenue?horizon=6${companyParam}`, refreshKey), { role, company });
   const { data: labData, loading: labLoading, error: labError } = useFetch(
     withRefresh(`/ml/forecast/lab?forecast_type=revenue&horizon=6&include_multi_scenario=true${companyParam}`, refreshKey),
-    { role }
+    { role, company }
   );
   const historical = data?.historical || {};
   const forecastPeriods = data?.forecast_periods || [];
@@ -1085,13 +1087,14 @@ function LeadershipRollupPanel({ leadership }) {
 }
 
 // ── Rep Performance Tab ───────────────────────────────────────────────────
-function RepsTab({ refreshKey, period, userRole }) {
+function RepsTab({ refreshKey, period, userRole, activeCompany }) {
   const role = userRole || "executive";
+  const company = activeCompany || "";
   const repsUrl = withPeriod(withRefresh("/analytics/reps/performance", refreshKey), period);
   const leadershipUrl = withPeriod(withRefresh("/analytics/reps/leadership", refreshKey), period);
-  const { data: reps, loading: rLoading, error: repsError } = useFetch(repsUrl, { role });
-  const { data: leadershipData, loading: lLoading } = useFetch(leadershipUrl, { role });
-  const { data: clusters, loading: cLoading, error: clusterError } = useFetch(withRefresh("/ml/cluster/reps", refreshKey), { role });
+  const { data: reps, loading: rLoading, error: repsError } = useFetch(repsUrl, { role, company });
+  const { data: leadershipData, loading: lLoading } = useFetch(leadershipUrl, { role, company });
+  const { data: clusters, loading: cLoading, error: clusterError } = useFetch(withRefresh("/ml/cluster/reps", refreshKey), { role, company });
   const [activeRepId, setActiveRepId] = useState(null);
   const [winRateView, setWinRateView] = useState("rep");
   const [clusterView, setClusterView] = useState("rep");
@@ -1525,9 +1528,11 @@ function AgentTab() {
   );
 }
 
-function DataQualityTab({ refreshKey }) {
-  const { data: summaryData, loading: sLoading, error: sError } = useFetch(withRefresh("/data-quality/summary", refreshKey));
-  const { data: checksData, loading: cLoading, error: cError } = useFetch(withRefresh("/data-quality/checks", refreshKey));
+function DataQualityTab({ refreshKey, activeCompany, userRole }) {
+  const role = userRole || "executive";
+  const company = activeCompany || "";
+  const { data: summaryData, loading: sLoading, error: sError } = useFetch(withRefresh("/data-quality/summary", refreshKey), { role, company });
+  const { data: checksData, loading: cLoading, error: cError } = useFetch(withRefresh("/data-quality/checks", refreshKey), { role, company });
   const [statusFilter, setStatusFilter] = useState("all");
 
   const checks = checksData?.checks || summaryData?.checks || [];
@@ -1622,11 +1627,13 @@ function DataQualityTab({ refreshKey }) {
   );
 }
 
-function ModelMonitoringTab({ refreshKey }) {
-  const { data: runsData, loading: runsLoading, error: runsError } = useFetch(withRefresh("/ml/model-runs", refreshKey));
-  const { data: summaryData, loading: summaryLoading, error: summaryError } = useFetch(withRefresh("/ml/predictions/summary", refreshKey));
-  const { data: accuracyData, loading: accuracyLoading, error: accuracyError } = useFetch(withRefresh("/ml/forecast/accuracy", refreshKey));
-  const { data: driftData, loading: driftLoading, error: driftError } = useFetch(withRefresh("/ml/drift", refreshKey));
+function ModelMonitoringTab({ refreshKey, activeCompany, userRole }) {
+  const role = userRole || "executive";
+  const company = activeCompany || "";
+  const { data: runsData, loading: runsLoading, error: runsError } = useFetch(withRefresh("/ml/model-runs", refreshKey), { role, company });
+  const { data: summaryData, loading: summaryLoading, error: summaryError } = useFetch(withRefresh("/ml/predictions/summary", refreshKey), { role, company });
+  const { data: accuracyData, loading: accuracyLoading, error: accuracyError } = useFetch(withRefresh("/ml/forecast/accuracy", refreshKey), { role, company });
+  const { data: driftData, loading: driftLoading, error: driftError } = useFetch(withRefresh("/ml/drift", refreshKey), { role, company });
 
   const loading = runsLoading || summaryLoading || accuracyLoading || driftLoading;
   if (loading) return <Skeleton h={320} />;
@@ -1731,8 +1738,10 @@ function ModelMonitoringTab({ refreshKey }) {
   );
 }
 
-function EnterpriseGradeTab({ refreshKey }) {
-  const { data, loading, error } = useFetch(withRefresh("/grading/enterprise-readiness", refreshKey));
+function EnterpriseGradeTab({ refreshKey, activeCompany, userRole }) {
+  const role = userRole || "executive";
+  const company = activeCompany || "";
+  const { data, loading, error } = useFetch(withRefresh("/grading/enterprise-readiness", refreshKey), { role, company });
   if (loading) return <Skeleton h={320} />;
   if (error) return <div style={{ color: "#D85A30", padding: 14 }}>Enterprise grade report unavailable: {error}</div>;
 
@@ -2311,10 +2320,11 @@ function IngestionTab({ refreshKey, activeCompany, onCompanyLoaded }) {
 
 // ── Root App ──────────────────────────────────────────────────────────────
 // ── ARR Health Tab ────────────────────────────────────────────────────────
-function ArrHealthTab({ refreshKey, period, userRole }) {
+function ArrHealthTab({ refreshKey, period, userRole, activeCompany }) {
   const role = userRole || "executive";
-  const { data, loading, error } = useFetch(withRefresh("/analytics/revops-kpis", refreshKey), { role });
-  const { data: waterfall, loading: wLoading } = useFetch(withRefresh("/ml/forecast/arr-waterfall", refreshKey), { role });
+  const company = activeCompany || "";
+  const { data, loading, error } = useFetch(withRefresh("/analytics/revops-kpis", refreshKey), { role, company });
+  const { data: waterfall, loading: wLoading } = useFetch(withRefresh("/ml/forecast/arr-waterfall", refreshKey), { role, company });
 
   if (loading) return <Skeleton h={300} />;
   if (error) return <div style={{ color: "#D85A30", padding: 16 }}>RevOps KPIs unavailable: {error}</div>;
@@ -2493,12 +2503,13 @@ function ArrHealthTab({ refreshKey, period, userRole }) {
 }
 
 // ── Pipeline Health Tab ───────────────────────────────────────────────────
-function PipelineHealthTab({ refreshKey, period, userRole }) {
+function PipelineHealthTab({ refreshKey, period, userRole, activeCompany }) {
   const role = userRole || "executive";
+  const company = activeCompany || "";
   const kpisUrl = withPeriod(withRefresh("/analytics/kpis", refreshKey), period);
-  const { data: revops, loading } = useFetch(withRefresh("/analytics/revops-kpis", refreshKey), { role });
-  const { data: kpis, loading: kLoading } = useFetch(kpisUrl, { role });
-  const { data: slipData, loading: sLoading } = useFetch(withRefresh("/ml/score/deal-slip", refreshKey), { role });
+  const { data: revops, loading } = useFetch(withRefresh("/analytics/revops-kpis", refreshKey), { role, company });
+  const { data: kpis, loading: kLoading } = useFetch(kpisUrl, { role, company });
+  const { data: slipData, loading: sLoading } = useFetch(withRefresh("/ml/score/deal-slip", refreshKey), { role, company });
 
   if (loading || kLoading) return <Skeleton h={300} />;
 
@@ -2565,22 +2576,23 @@ function PipelineHealthTab({ refreshKey, period, userRole }) {
 
 function RevOpsControlCenterTab({ refreshKey, activeCompany, period, userRole }) {
   const role = userRole || "executive";
+  const company = activeCompany || "";
   const kpisUrl = withPeriod(withRefresh("/analytics/kpis", refreshKey), period);
   const revopsUrl = withPeriod(withRefresh("/analytics/revops-kpis", refreshKey), period);
   const payoutsUrl = withPeriod(withRefresh("/analytics/payouts", refreshKey), period);
   const orgUrl = withPeriod(withRefresh("/analytics/org-structure", refreshKey), period);
   const clustersUrl = withPeriod(withRefresh("/ml/cluster/reps", refreshKey), period);
-  const { data: kpis, loading: kLoading, error: kError } = useFetch(kpisUrl, { role });
-  const { data: revops, loading: rLoading, error: rError } = useFetch(revopsUrl, { role });
-  const { data: payouts, loading: pLoading, error: pError } = useFetch(payoutsUrl, { role });
-  const { data: quality, loading: qLoading } = useFetch(withRefresh("/data-quality/summary", refreshKey), { role });
-  const { data: orgData, loading: oLoading } = useFetch(orgUrl, { role });
-  const { data: plansGovernance, loading: gLoading, error: gError } = useFetch(withRefresh("/analytics/plans-governance", refreshKey), { role });
-  const { data: clusters, loading: cLoading } = useFetch(clustersUrl, { role });
+  const { data: kpis, loading: kLoading, error: kError } = useFetch(kpisUrl, { role, company });
+  const { data: revops, loading: rLoading, error: rError } = useFetch(revopsUrl, { role, company });
+  const { data: payouts, loading: pLoading, error: pError } = useFetch(payoutsUrl, { role, company });
+  const { data: quality, loading: qLoading } = useFetch(withRefresh("/data-quality/summary", refreshKey), { role, company });
+  const { data: orgData, loading: oLoading } = useFetch(orgUrl, { role, company });
+  const { data: plansGovernance, loading: gLoading, error: gError } = useFetch(withRefresh("/analytics/plans-governance", refreshKey), { role, company });
+  const { data: clusters, loading: cLoading } = useFetch(clustersUrl, { role, company });
   const leadershipScopedUrl = withPeriod(withRefresh("/analytics/reps/leadership", refreshKey), period);
   const leadershipBaseUrl = withRefresh("/analytics/reps/leadership", refreshKey);
-  const { data: leadershipScopedRaw, loading: lScopedLoading } = useFetch(leadershipScopedUrl, { role });
-  const { data: leadershipBaseRaw, loading: lBaseLoading } = useFetch(leadershipBaseUrl, { role });
+  const { data: leadershipScopedRaw, loading: lScopedLoading } = useFetch(leadershipScopedUrl, { role, company });
+  const { data: leadershipBaseRaw, loading: lBaseLoading } = useFetch(leadershipBaseUrl, { role, company });
   const scopedLeadership = Array.isArray(leadershipScopedRaw) ? leadershipScopedRaw : (leadershipScopedRaw?.leaders || []);
   const baseLeadership = Array.isArray(leadershipBaseRaw) ? leadershipBaseRaw : (leadershipBaseRaw?.leaders || []);
   const leadership = scopedLeadership.length > 0 ? scopedLeadership : baseLeadership;
@@ -3267,7 +3279,10 @@ export default function App() {
     try {
       const res = await fetch(`${API}/ingestion/load-company`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(userRole ? { "X-User-Role": userRole } : {}),
+        },
         body: JSON.stringify({ company_name: companyName }),
       });
       const body = await res.json().catch(() => ({}));
@@ -3285,7 +3300,7 @@ export default function App() {
     } finally {
       setSwitchingCompany(false);
     }
-  }, []);
+  }, [userRole]);
 
   useEffect(() => {
     const companies = companyData?.companies || [];
@@ -3512,24 +3527,24 @@ export default function App() {
 
       {/* ── Page content with fade-in ─────────────────────────────────────── */}
       <div key={tab} className="fade-in">
-      {tab === "Dashboard" && <DashboardTab refreshKey={refreshKey} period={period} userRole={userRole} />}
+      {tab === "Dashboard" && <DashboardTab refreshKey={refreshKey} period={period} userRole={userRole} activeCompany={activeCompany} />}
       {tab === "RevOps Control Center" && <RevOpsControlCenterTab refreshKey={refreshKey} activeCompany={activeCompany} period={period} userRole={userRole} />}
-      {tab === "ARR Health" && <ArrHealthTab refreshKey={refreshKey} period={period} userRole={userRole} />}
-      {tab === "ARR Waterfall" && <ARRWaterfallPage refreshKey={refreshKey} />}
-      {tab === "Pipeline Health" && <PipelineHealthTab refreshKey={refreshKey} period={period} userRole={userRole} />}
+      {tab === "ARR Health" && <ArrHealthTab refreshKey={refreshKey} period={period} userRole={userRole} activeCompany={activeCompany} />}
+      {tab === "ARR Waterfall" && <ARRWaterfallPage refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} />}
+      {tab === "Pipeline Health" && <PipelineHealthTab refreshKey={refreshKey} period={period} userRole={userRole} activeCompany={activeCompany} />}
       {tab === "Forecast"  && <ForecastTab refreshKey={refreshKey} activeCompany={activeCompany} period={period} userRole={userRole} />}
-      {tab === "ML Insights" && <MLInsightsPage refreshKey={refreshKey} />}
-      {tab === "Reps"      && <RepsTab refreshKey={refreshKey} period={period} userRole={userRole} />}
-      {tab === "Rep Scorecard" && <RepScorecardPage refreshKey={refreshKey} />}
-      {tab === "AI Agent"  && <AgentPage />}
-      {tab === "Payouts"   && <PayoutsPage refreshKey={refreshKey} />}
+      {tab === "ML Insights" && <MLInsightsPage refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} />}
+      {tab === "Reps"      && <RepsTab refreshKey={refreshKey} period={period} userRole={userRole} activeCompany={activeCompany} />}
+      {tab === "Rep Scorecard" && <RepScorecardPage refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} />}
+      {tab === "AI Agent"  && <AgentPage activeCompany={activeCompany} userRole={userRole} />}
+      {tab === "Payouts"   && <PayoutsPage refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} />}
       {tab === "Plans"     && <PlansPage refreshKey={refreshKey} userRole={userRole} activeCompany={activeCompany} />}
-      {tab === "Territories" && <TerritoriesPage refreshKey={refreshKey} period={period} activeCompany={activeCompany} />}
-      {tab === "Reports" && <ReportsTab />}
-      {tab === "Data Quality" && <DataQualityTab refreshKey={refreshKey} />}
-      {tab === "Model Monitoring" && <ModelMonitoringTab refreshKey={refreshKey} />}
-      {tab === "Enterprise Grade" && <EnterpriseGradeTab refreshKey={refreshKey} />}
-      {tab === "Org Hierarchy" && <OrgHierarchyPage refreshKey={refreshKey} />}
+      {tab === "Territories" && <TerritoriesPage refreshKey={refreshKey} period={period} activeCompany={activeCompany} userRole={userRole} />}
+      {tab === "Reports" && <ReportsTab activeCompany={activeCompany} userRole={userRole} />}
+      {tab === "Data Quality" && <DataQualityTab refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} />}
+      {tab === "Model Monitoring" && <ModelMonitoringTab refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} />}
+      {tab === "Enterprise Grade" && <EnterpriseGradeTab refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} />}
+      {tab === "Org Hierarchy" && <OrgHierarchyPage refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} />}
 
       </div>
     </div>

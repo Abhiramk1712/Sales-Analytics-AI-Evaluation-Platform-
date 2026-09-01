@@ -4,13 +4,21 @@ PYTHON ?= python3
 VENV ?= .venv
 VENV_BIN := $(VENV)/bin
 
-.PHONY: setup backend frontend test lint package clean
+.PHONY: setup seed backend frontend test lint package clean
+
+COMPANY ?= techo-solutions
 
 setup:
 	@if [[ ! -d "$(VENV)" ]]; then $(PYTHON) -m venv "$(VENV)"; fi
 	"$(VENV_BIN)/python" -m pip install --upgrade pip
 	"$(VENV_BIN)/python" -m pip install -r requirements.txt
 	cd frontend && npm install
+
+seed:
+	"$(VENV_BIN)/python" -m backend.data_generator \
+		--company-name "$(COMPANY)" \
+		--n-reps 12 --n-accounts 60 --n-deals 150 --months 18 \
+		--include-org-hierarchy
 
 backend:
 	"$(VENV_BIN)/uvicorn" backend.main:app --reload --port 8000

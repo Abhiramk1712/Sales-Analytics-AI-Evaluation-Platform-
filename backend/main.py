@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from backend.auth.tenant import extract_company_hint
 from backend.company_context import ensure_company_loaded, get_active_company, wait_for_company_load_completion
-from backend.database import engine, Base
+from backend.database import get_engine, Base
 from backend.config import settings
 from backend.routers import analytics, forecasting, agent, reports, grading, ingestion, data_quality, payout, etl
 from backend.routers import workflows as workflows_router
@@ -33,9 +33,11 @@ SCOPED_ROUTE_PREFIXES = (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create tables on startup (idempotent)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Create tables on startup when AUTO_CREATE_TABLES is enabled (default: demo/dev mode)
+    if settings.AUTO_CREATE_TABLES:
+        engine = get_engine()
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
     yield
 
 
@@ -79,19 +81,40 @@ async def company_alignment_middleware(request: Request, call_next):
             # before resolving implicit company context from process state.
             await wait_for_company_load_completion()
 
+        active = get_active_company()
         company = (
             request_company
-            or get_active_company()
+            or active
             or (settings.DEMO_DEFAULT_COMPANY if settings.DEMO_MODE else None)
         )
-        if company:
+
+        # Loading a company is destructive — it drops and recreates every table
+        # (data_generator._load_csvs_into_database). A read request must never be
+        # able to trigger that, and `company` here can come straight from an
+        # unauthenticated header or query parameter. So the only implicit load
+        # permitted is the one-time cold-start bootstrap of the *configured*
+        # demo default; switching companies is an explicit, deliberate call to
+        # POST /ingestion/load-company.
+        if company and company != active:
+            if active is not None or company != settings.DEMO_DEFAULT_COMPANY:
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "detail": (
+                            f"Company '{company}' is not the active dataset"
+                            + (f" (active: '{active}')." if active else ".")
+                            + " Load it explicitly via POST /ingestion/load-company —"
+                            " this rebuilds the database and is never done implicitly."
+                        )
+                    },
+                )
             try:
                 await ensure_company_loaded(company)
             except FileNotFoundError as exc:
                 return JSONResponse(status_code=404, content={"detail": str(exc)})
             except Exception as exc:
                 logger.exception("Company alignment failed for '%s': %s", company, exc)
-                return JSONResponse(status_code=500, content={"detail": f"Failed to align company context: {exc}"})
+                return JSONResponse(status_code=500, content={"detail": "Failed to align company context"})
 
     return await call_next(request)
 
@@ -114,13 +137,13 @@ async def request_timing_middleware(request: Request, call_next):
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    correlation_id = request.headers.get("X-Correlation-ID", "unknown")
+    correlation_id = request.headers.get("X-Correlation-ID", str(uuid.uuid4()))
     logger.exception("Unhandled error [%s]: %s", correlation_id, exc)
+    # Never expose raw exception details to the client
     return JSONResponse(
         status_code=500,
         content={
-            "detail": str(exc),
-            "type": type(exc).__name__,
+            "detail": "Internal server error",
             "correlation_id": correlation_id,
         },
     )
