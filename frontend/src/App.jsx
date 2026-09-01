@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, ScatterChart, Scatter, Cell } from "recharts";
 import { PaginationControls } from "./components/shared";
 import { useFetch } from "./hooks/useFetch";
+import { setRequestContext } from "./api/client";
 
 // ── New page imports (Sprint 2) ───────────────────────────────────────────
 import PayoutsPage from "./pages/PayoutsPage";
@@ -40,9 +41,6 @@ const DEMO_MODE = (import.meta.env.VITE_DEMO_MODE || "true") !== "false";
 const fmt  = (n) => n >= 1e6 ? `$${(n/1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n/1e3).toFixed(0)}K` : `$${n}`;
 const pct  = (n) => `${Number(n).toFixed(1)}%`;
 const withRefresh = (url, refreshKey) => (url.includes("?") ? `${url}&_r=${refreshKey}` : `${url}?_r=${refreshKey}`);
-// ── Global fetch state (role + period) ────────────────────────────────────
-let _globalRole = "executive";
-export function setGlobalRole(r) { _globalRole = r; }
 
 // App used to define its own useFetch here. It read opts.role but silently
 // ignored opts.company, so all 30 call sites passed a company that was never
@@ -3106,6 +3104,11 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [userRole, setUserRole] = useState("executive");
   const [period, setPeriod] = useState("this quarter");
+
+  // Published during render rather than in an effect: React renders the parent
+  // before its children, so every tab's first fetch already carries the current
+  // company and role instead of missing them on the initial pass.
+  setRequestContext({ role: userRole, company: activeCompany });
 
   const allowedTabs = ROLE_TAB_ACCESS[userRole] || new Set(ALL_TABS);
   const visibleTabs = ALL_TABS.filter((tabName) => allowedTabs.has(tabName));
