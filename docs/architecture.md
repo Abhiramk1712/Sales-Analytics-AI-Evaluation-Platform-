@@ -18,7 +18,7 @@
 │ │  LLM Abstraction Layer                                       ││
 │ │  ├─ BaseLLMProvider                                          ││
 │ │  ├─ OpenAIProvider (active)                                  ││
-│ │  └─ AnthropicProvider (optional scaffold)                    ││
+│ │  └─ AnthropicProvider (active)                               ││
 │ ├──────────────────────────────────────────────────────────────┤│
 │ │  Agent Workflow                                              ││
 │ │  ├─ Planner (intent classification)                          ││
@@ -35,7 +35,7 @@
 │ │  Data Layers                                                  ││
 │ │  ├─ Ingestion (CSV loaders, source registry)                 ││
 │ │  ├─ Validation (quality checks, rule engine)                 ││
-│ │  ├─ Transformations (TBD)                                     ││
+│ │  ├─ Transformations (canonical field mapping, registry)         ││
 │ │  ├─ Metrics (definitions, registry)                          ││
 │ │  ├─ Statistics (analysis, anomaly detection)                 ││
 │ │  └─ ML (models, evaluation, safety)                          ││
@@ -54,7 +54,7 @@ Ingestion → CSVLoader, SourceRegistry
     ↓
 Validation → DataQualityValidator, QualityReport
     ↓
-Transformations → Feature engineering, canonicalization (placeholder)
+Transformations → Feature engineering, canonicalization (canonical_mapping.py)
     ↓
 Metrics Registry → Governed definitions, formulas
     ↓
@@ -84,7 +84,8 @@ Agent/Reports/ML ← Consume refined data
 ## Key Design Decisions
 
 ### 1. LLM Provider Abstraction
-- Supports multiple providers (OpenAI default, Anthropic optional scaffold, custom)
+- Supports multiple providers (OpenAI default, Anthropic, custom); both ship as real
+  implementations, selected by `LLM_PROVIDER`, not one active provider and one stub
 - Configuration via `LLM_PROVIDER` env var
 - Clean separation of LLM logic from routing
 

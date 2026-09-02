@@ -4,7 +4,7 @@ PYTHON ?= python3
 VENV ?= .venv
 VENV_BIN := $(VENV)/bin
 
-.PHONY: setup seed backend frontend test lint package clean
+.PHONY: setup seed backend frontend test coverage lint package clean
 
 COMPANY ?= techo-solutions
 
@@ -28,6 +28,9 @@ frontend:
 
 test:
 	"$(VENV_BIN)/pytest" -q
+
+coverage:
+	"$(VENV_BIN)/pytest" -q --cov=backend --cov-report=term-missing
 
 lint:
 	"$(VENV_BIN)/python" -m compileall backend

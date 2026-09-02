@@ -36,5 +36,8 @@
 
 ## Docker Option
 
+Not verified on the primary dev machine (Docker isn't installed there); the Makefile
+quickstart above is the confirmed path.
+
 - cp .env.example .env
 - docker compose up --build

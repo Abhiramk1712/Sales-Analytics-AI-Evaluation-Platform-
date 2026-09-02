@@ -56,4 +56,9 @@ Tenant helpers:
 - get_current_company_id()
 - apply_company_scope(query, model, company_id)
 
-Note: apply_company_scope no-ops for models without company_id so existing schema remains backward compatible while tenant migration is staged.
+Note: apply_company_scope no-ops for models without company_id, which matters for the
+one table (of 41) that still lacks it. The primary enforcement path is session-level now
+(backend/tenant_guard.py — every ORM select gets `WHERE company_id = ...` automatically);
+apply_company_scope/get_current_company_id are the earlier per-call-site helpers, kept
+where a route narrows scope explicitly. See CLAUDE.md's tenancy section for the current
+model.

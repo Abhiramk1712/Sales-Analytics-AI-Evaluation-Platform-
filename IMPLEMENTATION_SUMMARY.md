@@ -414,3 +414,55 @@ Result:
 
 - Clean packaging path remains green via `scripts/package_clean.sh`.
 - Workspace-root hygiene checks are expected to fail in active dev environments containing local artifacts (`.venv`, `node_modules`, `.env`, cache folders), while packaged output excludes these artifacts.
+
+---
+
+# TENANCY MIGRATION, MONEY EXACTNESS, AND LLM PROVIDER COMPLETION (September 2, 2026)
+
+## Scope Completed
+
+- **ARCH-1**: replaced whole-database-swap tenancy with query-scoped tenancy.
+  `backend/tenancy.py` carries the tenant in a `ContextVar`; `backend/tenant_guard.py`
+  applies `WHERE company_id = ...` to every ORM select and stamps every insert via
+  SQLAlchemy's `do_orm_execute`/`before_flush` events, so two companies can now be
+  resident and queried concurrently. `Base.metadata.drop_all` no longer runs on a request
+  naming a different company than whatever was last loaded — that was the actual bug: an
+  unauthenticated `GET` could rebuild the entire database mid-request.
+- **Payout arithmetic made exact**: `backend/payout/money.py` converts every rate,
+  threshold, and allocation through `Decimal(str(value))` rather than binary float, so
+  reconciliation no longer depends on a $0.01 tolerance absorbing drift. Verified against
+  all 564 existing payout rows across every company before/after — worst delta
+  `$0.0000000000`.
+- **AnthropicProvider implemented for real**: `.env.example` had documented
+  `LLM_PROVIDER=anthropic` as a supported option since Phase 2 of the original upgrade,
+  but the provider unconditionally raised `NotImplementedError` — it shipped as a
+  placeholder and was never finished. Both `chat_completion` and `stream_complete` now
+  call the real Anthropic Messages API.
+- **Tenant-scoping fixes in data_quality.py**: 10 of 28 count queries had the target
+  entity only in `.where()`, which SQLAlchemy's session-level tenant filter doesn't
+  reach — `select_from()`/subquery/outer-join forms were already scoped correctly. Found
+  by measurement (inserted a real orphan row and confirmed it leaked), not by assumption.
+- **Documentation reconciled with the code above**: `docs/tenant_and_lineage_design.md`
+  and `docs/rbac_design.md` still described the pre-ARCH-1 model and a role vocabulary
+  (`vp_sales`/`director`/`manager`/`rep`/`revops`) that was never actually built — the
+  real 7 roles live in `backend/auth/roles.py`. Both rewritten against the code rather
+  than left as historical design intent presented as current state.
+
+## Last Validation Run (Exact Command)
+
+```bash
+/Users/abhiramkattunga/Desktop/sales-analytics-ai/.venv/bin/python -m pytest -q
+```
+
+Result:
+
+- Exit code: `0`
+- Summary: `726 passed, 32 warnings in ~27s`
+
+## Operational Notes
+
+- `scripts/check_claude_md.py` (no `--skip-slow`) drift-checks CLAUDE.md's own claims —
+  including this test count — against the repo at session start; it flagged the stale
+  `677` this delta corrects.
+- Docker Compose exists but is unverified on the primary dev machine (Docker isn't
+  installed there); `make setup` plus a locally running PostgreSQL is the confirmed path.
