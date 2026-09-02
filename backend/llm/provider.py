@@ -142,16 +142,28 @@ class OpenAIProvider(BaseLLMProvider):
 
 
 class AnthropicProvider(BaseLLMProvider):
-    """
-    Anthropic API provider (placeholder).
-    
-    Full implementation can be added when Anthropic support is required.
-    """
+    """Anthropic API provider using the official client."""
+
+    #: Kept as a module-level default rather than a config field, matching
+    #: how OpenAIProvider pins its model inline below.
+    DEFAULT_MODEL = "claude-sonnet-5"
 
     def __init__(self, api_key: str):
-        """Initialize Anthropic provider (stub)."""
+        """
+        Initialize Anthropic provider.
+
+        Args:
+            api_key: Anthropic API key
+        """
         self.api_key = api_key
         self.validate_config()
+
+        # Lazy import to avoid dependency if not using Anthropic
+        try:
+            import anthropic
+            self.client = anthropic.AsyncAnthropic(api_key=self.api_key)
+        except ImportError:
+            raise ImportError("anthropic package required for Anthropic provider. Install with: pip install anthropic")
 
     def validate_config(self) -> None:
         """Ensure API key is configured."""
@@ -168,11 +180,15 @@ class AnthropicProvider(BaseLLMProvider):
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
     ) -> str:
-        """Anthropic implementation (stub — not yet implemented)."""
-        raise NotImplementedError(
-            "Anthropic provider is not yet fully implemented. "
-            "Contact the development team or use LLM_PROVIDER=openai."
+        """Execute Anthropic chat completion."""
+        response = await self.client.messages.create(
+            model=self.DEFAULT_MODEL,
+            max_tokens=max_tokens or 1024,
+            system=system_prompt or "",
+            messages=messages,
+            temperature=temperature,
         )
+        return "".join(block.text for block in response.content if block.type == "text")
 
     async def stream_complete(
         self,
@@ -181,9 +197,16 @@ class AnthropicProvider(BaseLLMProvider):
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
     ) -> AsyncGenerator[str, None]:
-        """Anthropic streaming (stub — not yet implemented)."""
-        raise NotImplementedError("Anthropic streaming not yet implemented.")
-        yield  # async generator sentinel
+        """Stream tokens from an Anthropic chat completion."""
+        async with self.client.messages.stream(
+            model=self.DEFAULT_MODEL,
+            max_tokens=max_tokens or 1024,
+            system=system_prompt or "",
+            messages=messages,
+            temperature=temperature,
+        ) as stream:
+            async for text in stream.text_stream:
+                yield text
 
 
 def get_llm_provider(
