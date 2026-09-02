@@ -185,3 +185,68 @@ def test_no_infinite_sentinel_leaks_into_a_payout():
     assert math.isfinite(comp["base_commission"])
     assert math.isfinite(comp["accelerator_amount"])
     assert math.isfinite(comp["bonus_amount"])
+
+
+# ── #19: the arithmetic is exact, not rounded-at-the-end ─────────────────────
+
+
+def test_money_conversion_goes_through_str_not_the_float_value():
+    """
+    Decimal(0.1) is 0.1000000000000000055511151231257827 — the float's real
+    value. Decimal("0.1") is exactly one tenth. Converting via the repr is what
+    makes a value read from a float mean what it appears to mean.
+    """
+    from decimal import Decimal
+
+    from backend.payout.money import D
+
+    assert D(0.1) == Decimal("0.1")
+    assert D(0.1) + D(0.2) == D(0.3)
+    assert D(None) == Decimal("0")
+    assert D("not a number") == Decimal("0")
+
+
+def test_allocation_is_exact_where_float_arithmetic_drifts():
+    """
+    A three-way split of a value floats cannot represent. Under float each share
+    carries error and the parts do not sum to the total without the residual
+    correction; under Decimal the arithmetic itself is exact.
+    """
+    from decimal import Decimal
+
+    from backend.payout.credit_payout_engine import allocate_pro_rata
+
+    parts = allocate_pro_rata(0.30, [1.0, 1.0, 1.0])
+    assert sum(Decimal(str(p)) for p in parts) == Decimal("0.30")
+
+
+@pytest.mark.parametrize(
+    "total,weights",
+    [
+        (1_000_000.01, [1.0] * 7),
+        (0.07, [1.0, 1.0, 1.0]),
+        (33.33, [2.0, 3.0, 5.0, 7.0]),
+        (12_345.67, [1.1, 2.2, 3.3]),
+    ],
+)
+def test_allocation_reconciles_exactly_in_decimal(total, weights):
+    from decimal import Decimal
+
+    from backend.payout.credit_payout_engine import allocate_pro_rata
+
+    parts = allocate_pro_rata(total, weights)
+    assert sum(Decimal(str(p)) for p in parts) == Decimal(str(total)).quantize(Decimal("0.01"))
+
+
+def test_commission_rate_multiplication_is_exact():
+    """
+    A rate is one operand of a multiplication whose result is money. Leaving it
+    a float puts the error back even when the amount is Decimal.
+    """
+    from decimal import Decimal
+
+    rules = [_rule("attainment_pct", name="tier", rate=0.07, tmin=0, tmax=None)]
+    comp = _apply_commission_rules(1_000_000.10, 500_000.0, rules)
+
+    # 7% of 1,000,000.10 is exactly 70,000.007, which rounds to 70,000.01.
+    assert Decimal(str(comp["base_commission"])) == Decimal("70000.01")

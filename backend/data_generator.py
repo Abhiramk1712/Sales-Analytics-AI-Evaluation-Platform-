@@ -3176,7 +3176,7 @@ async def _build_expected_payout_rows(db) -> list[dict[str, object]]:
     return expected_rows
 
 
-async def _validate_payout_math_consistency(payout_delta_tolerance: float = 0.01) -> dict[str, float | int]:
+async def _validate_payout_math_consistency(payout_delta_tolerance: float = 0.0) -> dict[str, float | int]:
     """Validate stored payouts against engine-derived expected payouts for all reps."""
     from backend.models import PayoutRecord
     from sqlalchemy import select as _sel
@@ -3543,7 +3543,7 @@ async def seed(
         payout_count = await _seed_payout_records(company_dir=company_dir)  # B2
         counts["payouts"] = payout_count
 
-        payout_validation = await _validate_payout_math_consistency(payout_delta_tolerance=0.01)
+        payout_validation = await _validate_payout_math_consistency()
         counts["payout_math_expected_rows"] = int(payout_validation["expected_rows"])
         counts["payout_math_rows_validated"] = int(payout_validation["validated_rows"])
         counts["payout_math_reps_validated"] = int(payout_validation["reps_validated"])
@@ -3720,7 +3720,7 @@ async def load_company_dataset(company_name: str, base_dir: str = "companies") -
         if payout_count:
             counts["payouts_recomputed"] = payout_count
 
-        payout_validation = await _validate_payout_math_consistency(payout_delta_tolerance=0.01)
+        payout_validation = await _validate_payout_math_consistency()
         counts["payout_math_expected_rows"] = int(payout_validation["expected_rows"])
         counts["payout_math_rows_validated"] = int(payout_validation["validated_rows"])
         counts["payout_math_reps_validated"] = int(payout_validation["reps_validated"])

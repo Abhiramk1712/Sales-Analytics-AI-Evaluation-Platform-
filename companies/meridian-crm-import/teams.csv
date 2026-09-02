@@ -1,5 +1,6 @@
 id,name,region
-5b2c52aa-cfb0-4902-a976-1c7e43f5b891,Enterprise West,West
-e11abe9d-9138-4de6-a32d-8f1a0fe8a3fd,Enterprise East,East
-ba9b47b3-9c35-4fa6-ae1a-0aa8b96c5b6f,Mid-Market,Central
-550e99c3-98c4-45e5-9b09-a71e64aef60c,SDR Team,Central
+927ccace-6dc9-4804-bc22-8f14b04b5df9,West Sales Team,West
+d364dfa2-823a-489c-a0ae-867f044171d7,East Sales Team,East
+d980a1af-aa11-4742-96da-5c985f6c74f9,Central Sales Team,Central
+b280414f-4d7b-4972-b99b-ec7549260de1,APAC Sales Team,APAC
+f45d45ae-3e2b-4594-95d6-3c3c4043f923,EMEA Sales Team,EMEA

@@ -1,46 +1,46 @@
 {
-  "run_id": "26279230-c0bf-4d2d-a1e0-b493cf199271",
-  "company_name": "techo-solutions",
-  "company_directory": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions",
-  "generated_at": "2026-09-02T17:50:25.763081+00:00",
+  "run_id": "f831247c-e40a-4305-9d5e-7b15a330c0a4",
+  "company_name": "meridian-crm-import",
+  "company_directory": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import",
+  "generated_at": "2026-09-02T17:47:12.946000+00:00",
   "status": "success",
-  "total_csv_rows": 3705,
+  "total_csv_rows": 3658,
   "db_rows_loaded": {
     "teams": 5,
-    "reps": 12,
-    "quotas": 132,
-    "accounts": 60,
-    "deals": 198,
-    "activities": 739,
-    "revenue": 950,
+    "reps": 11,
+    "quotas": 120,
+    "accounts": 70,
+    "deals": 204,
+    "activities": 791,
+    "revenue": 911,
     "positions": 9,
-    "users": 12,
-    "managers": 12,
+    "users": 11,
+    "managers": 11,
     "plans": 4,
     "rules": 16,
     "territories": 20,
-    "plan_assignments": 11,
+    "plan_assignments": 10,
     "products": 5,
-    "rep_product_assignments": 43,
-    "user_territory_assignments": 12,
-    "attainment_snapshots": 411,
-    "rep_ramp": 144,
-    "leads": 49,
-    "opportunities": 198,
-    "arr_waterfall": 384,
-    "bookings": 81,
-    "churn_events": 6,
-    "sales_units": 81,
+    "rep_product_assignments": 40,
+    "user_territory_assignments": 11,
+    "attainment_snapshots": 385,
+    "rep_ramp": 132,
+    "leads": 76,
+    "opportunities": 204,
+    "arr_waterfall": 374,
+    "bookings": 77,
+    "churn_events": 7,
+    "sales_units": 77,
     "sales_unit_line_items": 0,
-    "sales_credits": 99,
-    "payouts": 144,
+    "sales_credits": 66,
+    "payouts": 132,
     "auto_repair_quota_rows": 12,
     "auto_repair_sales_units": 0,
     "auto_repair_sales_credits": 0,
     "plan_cascade_rules": 1,
-    "payout_math_expected_rows": 144,
-    "payout_math_rows_validated": 144,
-    "payout_math_reps_validated": 12,
+    "payout_math_expected_rows": 132,
+    "payout_math_rows_validated": 132,
+    "payout_math_reps_validated": 11,
     "payout_math_periods_validated": 12,
     "payout_math_missing_rows": 0,
     "payout_math_mismatched_rows": 0,
@@ -65,25 +65,25 @@
     ]
   },
   "revops_reconciliation": {
-    "closed_won_total": 14462983.99,
-    "bookings_total": 14462983.99,
-    "revenue_total": 6526775.27,
-    "quota_total": 7875024.98,
-    "quota_to_revenue_ratio": 1.2066,
+    "closed_won_total": 7192230.54,
+    "bookings_total": 7192230.54,
+    "revenue_total": 4233073.41,
+    "quota_total": 4944534.81,
+    "quota_to_revenue_ratio": 1.1681,
     "booking_to_closed_won_ratio": 1.0,
-    "closed_won_count": 81,
-    "bookings_count": 81,
+    "closed_won_count": 77,
+    "bookings_count": 77,
     "rep_ratio_outlier_threshold": 5.0,
     "rep_ratio_outliers": 0,
     "rep_ratio_outliers_gt5x": 0,
-    "team_ratio_avg": 1.2854,
-    "team_ratio_max": 1.6248,
+    "team_ratio_avg": 1.2255,
+    "team_ratio_max": 1.4068,
     "team_count_with_ratio": 5
   },
   "sources": [
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/teams.csv",
-      "loaded_at": "2026-09-02T17:50:25.252138+00:00",
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/teams.csv",
+      "loaded_at": "2026-09-02T17:47:12.465577+00:00",
       "row_count": 5,
       "column_count": 3,
       "columns": [
@@ -98,9 +98,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/reps.csv",
-      "loaded_at": "2026-09-02T17:50:25.252232+00:00",
-      "row_count": 12,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/reps.csv",
+      "loaded_at": "2026-09-02T17:47:12.465686+00:00",
+      "row_count": 11,
       "column_count": 6,
       "columns": [
         "id",
@@ -117,9 +117,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/quotas.csv",
-      "loaded_at": "2026-09-02T17:50:25.252378+00:00",
-      "row_count": 132,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/quotas.csv",
+      "loaded_at": "2026-09-02T17:47:12.465848+00:00",
+      "row_count": 120,
       "column_count": 3,
       "columns": [
         "rep_id",
@@ -133,9 +133,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/accounts.csv",
-      "loaded_at": "2026-09-02T17:50:25.252492+00:00",
-      "row_count": 60,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/accounts.csv",
+      "loaded_at": "2026-09-02T17:47:12.465993+00:00",
+      "row_count": 70,
       "column_count": 5,
       "columns": [
         "id",
@@ -151,9 +151,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/deals.csv",
-      "loaded_at": "2026-09-02T17:50:25.252914+00:00",
-      "row_count": 198,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/deals.csv",
+      "loaded_at": "2026-09-02T17:47:12.466494+00:00",
+      "row_count": 204,
       "column_count": 11,
       "columns": [
         "id",
@@ -175,9 +175,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/activities.csv",
-      "loaded_at": "2026-09-02T17:50:25.254308+00:00",
-      "row_count": 739,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/activities.csv",
+      "loaded_at": "2026-09-02T17:47:12.468135+00:00",
+      "row_count": 791,
       "column_count": 7,
       "columns": [
         "id",
@@ -195,9 +195,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/revenue.csv",
-      "loaded_at": "2026-09-02T17:50:25.255826+00:00",
-      "row_count": 950,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/revenue.csv",
+      "loaded_at": "2026-09-02T17:47:12.469487+00:00",
+      "row_count": 911,
       "column_count": 8,
       "columns": [
         "rep_id",
@@ -216,9 +216,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/arr_waterfall.csv",
-      "loaded_at": "2026-09-02T17:50:25.256380+00:00",
-      "row_count": 384,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/arr_waterfall.csv",
+      "loaded_at": "2026-09-02T17:47:12.470069+00:00",
+      "row_count": 374,
       "column_count": 10,
       "columns": [
         "rep_id",
@@ -239,9 +239,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/attainment_snapshots.csv",
-      "loaded_at": "2026-09-02T17:50:25.256961+00:00",
-      "row_count": 411,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/attainment_snapshots.csv",
+      "loaded_at": "2026-09-02T17:47:12.470660+00:00",
+      "row_count": 385,
       "column_count": 8,
       "columns": [
         "id",
@@ -260,9 +260,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/bookings.csv",
-      "loaded_at": "2026-09-02T17:50:25.257182+00:00",
-      "row_count": 81,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/bookings.csv",
+      "loaded_at": "2026-09-02T17:47:12.470900+00:00",
+      "row_count": 77,
       "column_count": 12,
       "columns": [
         "booking_id",
@@ -285,9 +285,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/churn_events.csv",
-      "loaded_at": "2026-09-02T17:50:25.257247+00:00",
-      "row_count": 6,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/churn_events.csv",
+      "loaded_at": "2026-09-02T17:47:12.470969+00:00",
+      "row_count": 7,
       "column_count": 7,
       "columns": [
         "event_id",
@@ -305,9 +305,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/leads.csv",
-      "loaded_at": "2026-09-02T17:50:25.257374+00:00",
-      "row_count": 49,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/leads.csv",
+      "loaded_at": "2026-09-02T17:47:12.471149+00:00",
+      "row_count": 76,
       "column_count": 9,
       "columns": [
         "id",
@@ -327,9 +327,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/managers.csv",
-      "loaded_at": "2026-09-02T17:50:25.257440+00:00",
-      "row_count": 12,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/managers.csv",
+      "loaded_at": "2026-09-02T17:47:12.471222+00:00",
+      "row_count": 11,
       "column_count": 5,
       "columns": [
         "id",
@@ -345,9 +345,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/opportunities.csv",
-      "loaded_at": "2026-09-02T17:50:25.257832+00:00",
-      "row_count": 198,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/opportunities.csv",
+      "loaded_at": "2026-09-02T17:47:12.471665+00:00",
+      "row_count": 204,
       "column_count": 10,
       "columns": [
         "id",
@@ -368,9 +368,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/plan_assignments.csv",
-      "loaded_at": "2026-09-02T17:50:25.257906+00:00",
-      "row_count": 11,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/plan_assignments.csv",
+      "loaded_at": "2026-09-02T17:47:12.471750+00:00",
+      "row_count": 10,
       "column_count": 9,
       "columns": [
         "id",
@@ -390,8 +390,8 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/plans.csv",
-      "loaded_at": "2026-09-02T17:50:25.257968+00:00",
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/plans.csv",
+      "loaded_at": "2026-09-02T17:47:12.471811+00:00",
       "row_count": 4,
       "column_count": 8,
       "columns": [
@@ -411,8 +411,8 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/positions.csv",
-      "loaded_at": "2026-09-02T17:50:25.258039+00:00",
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/positions.csv",
+      "loaded_at": "2026-09-02T17:47:12.471877+00:00",
       "row_count": 9,
       "column_count": 10,
       "columns": [
@@ -434,8 +434,8 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/products.csv",
-      "loaded_at": "2026-09-02T17:50:25.258095+00:00",
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/products.csv",
+      "loaded_at": "2026-09-02T17:47:12.471937+00:00",
       "row_count": 5,
       "column_count": 7,
       "columns": [
@@ -454,9 +454,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/rep_hierarchy.csv",
-      "loaded_at": "2026-09-02T17:50:25.258167+00:00",
-      "row_count": 12,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/rep_hierarchy.csv",
+      "loaded_at": "2026-09-02T17:47:12.472004+00:00",
+      "row_count": 11,
       "column_count": 7,
       "columns": [
         "rep_id",
@@ -474,9 +474,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/rep_product_assignments.csv",
-      "loaded_at": "2026-09-02T17:50:25.258301+00:00",
-      "row_count": 43,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/rep_product_assignments.csv",
+      "loaded_at": "2026-09-02T17:47:12.472140+00:00",
+      "row_count": 40,
       "column_count": 11,
       "columns": [
         "id",
@@ -498,9 +498,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/rep_ramp.csv",
-      "loaded_at": "2026-09-02T17:50:25.258491+00:00",
-      "row_count": 144,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/rep_ramp.csv",
+      "loaded_at": "2026-09-02T17:47:12.472329+00:00",
+      "row_count": 132,
       "column_count": 7,
       "columns": [
         "rep_id",
@@ -518,8 +518,8 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/rules.csv",
-      "loaded_at": "2026-09-02T17:50:25.258577+00:00",
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/rules.csv",
+      "loaded_at": "2026-09-02T17:47:12.472424+00:00",
       "row_count": 16,
       "column_count": 15,
       "columns": [
@@ -546,9 +546,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/sales_credits.csv",
-      "loaded_at": "2026-09-02T17:50:25.258780+00:00",
-      "row_count": 99,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/sales_credits.csv",
+      "loaded_at": "2026-09-02T17:47:12.472583+00:00",
+      "row_count": 66,
       "column_count": 8,
       "columns": [
         "id",
@@ -567,9 +567,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/sales_units.csv",
-      "loaded_at": "2026-09-02T17:50:25.258967+00:00",
-      "row_count": 81,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/sales_units.csv",
+      "loaded_at": "2026-09-02T17:47:12.472776+00:00",
+      "row_count": 77,
       "column_count": 10,
       "columns": [
         "id",
@@ -590,8 +590,8 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/territories.csv",
-      "loaded_at": "2026-09-02T17:50:25.259055+00:00",
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/territories.csv",
+      "loaded_at": "2026-09-02T17:47:12.472866+00:00",
       "row_count": 20,
       "column_count": 11,
       "columns": [
@@ -614,9 +614,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/user_territory_assignments.csv",
-      "loaded_at": "2026-09-02T17:50:25.259124+00:00",
-      "row_count": 12,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/user_territory_assignments.csv",
+      "loaded_at": "2026-09-02T17:47:12.472944+00:00",
+      "row_count": 11,
       "column_count": 10,
       "columns": [
         "id",
@@ -637,9 +637,9 @@
       "warnings": []
     },
     {
-      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/users.csv",
-      "loaded_at": "2026-09-02T17:50:25.259194+00:00",
-      "row_count": 12,
+      "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/meridian-crm-import/users.csv",
+      "loaded_at": "2026-09-02T17:47:12.473023+00:00",
+      "row_count": 11,
       "column_count": 14,
       "columns": [
         "id",

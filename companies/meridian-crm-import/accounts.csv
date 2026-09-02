@@ -1,13 +1,71 @@
 id,name,industry,employee_count,annual_revenue
-f8a07533-0c10-4002-a578-da365ec10a2e,Acme Corp,Healthcare,200,375016612.57
-5fc8ac41-9f92-47cf-a0f3-57d990474d6f,TechVentures,Retail,5000,462799249.86
-c6022de6-06ef-4bfc-acca-d002cdc6c3c7,GlobalHealth,Healthcare,5000,331848328.05
-d0fa42a1-ec1f-4db9-8088-1c43dc058546,DataDriven Inc,Technology,50,16535403.43
-03672a6e-d626-49ca-a819-d2bf1ed52bff,CloudFirst,Retail,1000,45174274.25
-0c0d89aa-3174-4039-8268-b1e515324640,SecureNet,Retail,50,75741220.07
-4f173eba-e9e2-4f15-b455-44331bb59091,SmartRetail,Energy,50,193625448.3
-2ba51413-6070-4b0d-a4ed-47ad179a26b0,BioTech Labs,Healthcare,5000,205638495.72
-a5ad31a2-2ca4-4c4c-9004-a3e16a8ee48f,FinanceFlow,Technology,200,224271523.0
-b837ab56-c625-42dd-bd92-320371dff321,LogiChain,Energy,1000,413441237.76
-e6be8dc8-49f2-4ddd-89a8-212098cb01c5,EduPlatform,Healthcare,500,470969461.31
-3b60e2a0-48cd-4577-bded-8c0f91ed8bf8,GreenEnergy,Retail,50,69808836.47
+8f7d0c5e-3513-497d-b6ec-c549bbd8a013,Gordon-Thomas,Manufacturing,250,485568110.43
+d7cdfccf-5c25-4497-8c43-f2beb5af3c58,"Carter, Duncan and Page",Logistics,50,340461421.72
+dcef92cb-15fc-4bd8-b62b-d3a2037d4497,Booker-Miranda,SaaS,5000,442509436.61
+47c742f7-7b92-405c-a137-e46b92102cf8,Clay LLC,Logistics,250,384530767.6
+03766900-10ee-44e0-bbf7-5b46917656a8,"Cooley, Herman and Ortiz",Finance,50,147456564.2
+d020153d-1698-4c4c-bb37-c2bd00ee2160,"Flores, Martinez and Romero",Healthcare,500,2619412.73
+cc17b34d-6e3f-419c-9851-0f9ebd7d92e9,Green Ltd,Media,5000,132431136.32
+658dd6a4-8c9b-4330-8546-b08055f982dd,Solomon Inc,Manufacturing,10000,90147288.38
+6aaf7690-b378-4760-b672-7e8fa7aab337,Bailey-Baker,SaaS,10000,313024796.59
+c66c05f6-db70-40ec-9775-dd3900b0ce8b,"Patel, Mcclain and Mejia",Logistics,5000,254323778.11
+30eb762c-f7a9-4453-ad0b-25a535e8793e,"Allen, Tran and Byrd",Healthcare,100,187583012.44
+834cacf7-6d0f-4612-b5f3-b1c18272bcfe,"Elliott, Gross and Anderson",Healthcare,1000,476796374.08
+ba7c4072-d1fc-489a-858a-edac82250645,"Miles, Nguyen and Flores",Manufacturing,50,299873347.65
+59bcadb5-6ab3-4f0d-b96f-0a2d189bfdc3,Shaffer-Ruiz,Retail,50,56821994.94
+46b30740-c5fe-494e-bd08-918953a9d410,Mcpherson-Ellison,Finance,10000,403580627.59
+0f587a8c-094a-4c10-aadb-c4630c19a0c8,"Nicholson, Smith and Cook",Healthcare,50,121194924.63
+b9026f38-9090-4b83-844c-2a492bae0515,Smith LLC,Manufacturing,50,43741072.58
+72f5a442-a330-41d9-9ab0-d1cc24e05568,Nicholson Ltd,Retail,10000,35537046.72
+c7606c21-6987-4082-99d0-8830d717d687,Palmer Group,Logistics,1000,383151380.22
+f35f9a19-cc28-4138-88d4-55a3dea17411,Schmidt Ltd,Healthcare,5000,238165906.67
+a3df3aa9-9e62-44b8-adc4-3b5d771079f5,Kelly-Walker,Manufacturing,100,133263257.84
+e7fae673-2593-4753-8d68-edac9bbb6172,"Carey, Perez and Hernandez",Logistics,1000,212145832.16
+50fdcf0f-efe5-46f7-8715-dbf4143535ba,"Cole, Caldwell and Savage",Healthcare,1000,377877333.12
+61128e24-0d9b-4889-9d21-7ca97f309b22,Thomas-Tucker,Media,100,356761537.44
+91a562ed-874f-4371-ae4d-25b69dbb3e2b,"Oneill, Coleman and Fuller",Retail,5000,325289150.76
+e00b0f83-bf8a-4492-8807-6b4c31d429fe,"Salinas, Hardy and Parrish",Retail,1000,226291584.55
+14e32f3b-9dba-4bee-9ced-d44da03ea9a3,"Dean, Long and Cain",Healthcare,100,32948922.27
+3969a37e-a0e7-4a14-b31b-728698d2d434,Mays-Duarte,SaaS,1000,277406839.69
+802cbefb-48cc-450d-bb22-ea15b620af89,"Marshall, Jones and Ryan",Manufacturing,100,4588228.65
+e0220320-7a72-4f75-836c-d521221a3e77,Burns Ltd,Media,5000,30378009.67
+6dc977d1-26f3-45ad-bd65-79fe14eec458,Payne Group,SaaS,50,429958064.73
+d69a473a-3e25-4066-8f01-90e6c5995fdd,Smith-James,SaaS,1000,119764312.55
+c25faa15-16a7-4cbd-8306-0a2f43de5c7a,"Lawson, Welch and Reese",Media,500,107904166.88
+4e8b6031-344e-4356-a903-91dc89356daa,"Crane, Harris and Conley",Healthcare,5000,467821606.05
+cab0f672-178b-4d4a-965f-b85510138cb3,"Armstrong, Washington and Bush",Manufacturing,1000,236862842.13
+91db0335-1b9f-4aff-b639-9d9c4464565e,Jimenez-Garcia,Logistics,500,403941001.89
+fc19103f-5dfc-4b8c-82b7-b00b1c87c9d3,"Mora, Morgan and Nelson",Healthcare,50,49368476.3
+5d22a924-50b7-4eb3-9b81-c66dee72ddf1,"Butler, Diaz and Benjamin",Retail,250,212365732.89
+d30b4e49-efbf-4fd7-927e-34b2b0ad3f97,Tate PLC,Retail,10000,364808848.88
+695954f7-213f-42ea-9857-80ba2b528bb4,"Warren, Smith and Faulkner",Media,5000,492098440.47
+3acf070e-4a96-4cb3-8bb0-e1e9e2b9edf7,"Ferguson, Holmes and Swanson",SaaS,50,201908019.77
+ca7273e7-179a-43af-9d51-9d1bcc2eb80f,Doyle Ltd,Finance,10000,430974595.64
+54d079ec-de1c-4569-8ec9-bc60d15a9ada,Wilson PLC,Healthcare,100,95914245.31
+ab146f5e-d230-4ca3-9142-3d0451dfe7f4,Best-Walker,Retail,100,211518938.28
+a5d618ec-d02e-4997-98ab-fb72b19278bb,"Nichols, Harvey and Smith",Finance,500,125653417.49
+69012580-74c6-497c-aa17-497e40eef739,"Hall, Martin and Campbell",SaaS,500,404203100.12
+c637537f-3e50-46ec-8035-aaae16159bc4,Harvey Group,Logistics,1000,49856455.37
+f4121299-68b3-4bba-97ea-c780ffaa2ac7,Wright-Carey,Media,1000,418177764.95
+3970c3f2-1ff7-447b-963b-b745bde8ae32,Lee-Baker,SaaS,10000,424499171.47
+7f598352-14dd-41df-8bbc-bcfede1374bb,Harris Ltd,Healthcare,500,243334921.6
+138d8d09-8baf-4292-bcaf-452b3d0f594c,"Lane, Miller and Cook",Healthcare,10000,201119105.98
+35960480-113a-4941-899d-d8f906425099,Thomas and Sons,SaaS,100,190107586.37
+c3d107a3-6a6c-40ab-a150-89bbc44c23ea,West Group,Retail,250,463332518.71
+d888d4cd-1d94-4497-ab6b-bc366bb90cfd,"Johnston, Newton and Thomas",Logistics,500,143339365.24
+f4a21699-f69d-461a-bed3-da2ee32e4e46,Marks PLC,Media,5000,497715922.06
+4e29bc8a-3038-476e-85ec-1e599c7c75f4,Perez Ltd,Manufacturing,5000,359485729.37
+6a1423fd-85e0-4101-a411-03cbd9556605,Cabrera PLC,Healthcare,100,149057204.92
+f92d7f7e-5264-4510-b80b-2d43c69106dc,"Hanson, Soto and Smith",SaaS,1000,368132852.22
+d6de0898-6526-463b-9489-d16568e7cfcf,"Jackson, Garner and Kramer",SaaS,5000,157488800.08
+f1c81569-6205-4101-a4a1-b32d24cf98c0,Rios-Townsend,SaaS,1000,238917470.04
+8d1a1c33-6983-4b1a-ac9d-eeb235875368,Rivera-Davis,Logistics,1000,79558931.24
+01423115-30e4-4d54-b1f9-e2357300843a,Petersen and Sons,Manufacturing,50,425819930.13
+1af66f33-5128-45db-a795-9f8c9b910043,"Collins, Tran and Choi",SaaS,1000,34912470.82
+47170763-2153-434d-bfc5-21f49c4c500f,Sullivan Ltd,Logistics,100,202484000.11
+ee7a8393-f251-4771-97b7-477d034ee7c5,"Garza, Jones and Chambers",Manufacturing,100,289880609.7
+e70f3db7-2ffa-4f91-b85a-b273c7108625,Davis Group,SaaS,1000,41909719.34
+29ca244e-cf4a-4bc0-877b-8142c019fccb,Garza-Martin,Media,1000,283048235.0
+935e3eac-a224-49d7-a8c4-79687556bbd9,"Kelly, Taylor and Dyer",Finance,250,102925340.51
+79edb43b-b891-4ea7-8ed0-827c532a46e1,"Mcbride, Brown and Smith",Media,250,120104290.36
+b20046ef-b335-4ece-acf3-0ffe1883360a,Clark-Moreno,Retail,100,336173421.26

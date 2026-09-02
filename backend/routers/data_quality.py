@@ -145,7 +145,7 @@ async def _build_checks(db: AsyncSession) -> list[dict[str, Any]]:
         )
 
     # Missing required fields
-    missing_rep_name = int((await db.execute(select(func.count()).where((Rep.name.is_(None)) | (Rep.name == "")))).scalar() or 0)
+    missing_rep_name = int((await db.execute(select(func.count(Rep.id)).where((Rep.name.is_(None)) | (Rep.name == "")))).scalar() or 0)
     checks.append({
         "name": "missing_required_rep_name",
         "status": _status_from_count(missing_rep_name, fail=True),
@@ -165,7 +165,7 @@ async def _build_checks(db: AsyncSession) -> list[dict[str, Any]]:
     })
 
     # Null FKs and orphans
-    null_deal_rep = int((await db.execute(select(func.count()).where(Deal.rep_id.is_(None)))).scalar() or 0)
+    null_deal_rep = int((await db.execute(select(func.count(Deal.id)).where(Deal.rep_id.is_(None)))).scalar() or 0)
     checks.append({
         "name": "null_foreign_key_deal_rep",
         "status": _status_from_count(null_deal_rep),
@@ -196,9 +196,9 @@ async def _build_checks(db: AsyncSession) -> list[dict[str, Any]]:
     # Revenue sanity
     # Negative rows are valid for churn/contraction adjustments; fail only unexpected negatives.
     allowed_negative_types = ("churn", "contraction")
-    negative_revenue_total = int((await db.execute(select(func.count()).where(Revenue.amount < 0))).scalar() or 0)
+    negative_revenue_total = int((await db.execute(select(func.count(Revenue.id)).where(Revenue.amount < 0))).scalar() or 0)
     negative_revenue_unexpected = int((await db.execute(
-        select(func.count()).where(
+        select(func.count(Revenue.id)).where(
             Revenue.amount < 0,
             (Revenue.revenue_type.is_(None)) | (~Revenue.revenue_type.in_(allowed_negative_types)),
         )
@@ -226,7 +226,7 @@ async def _build_checks(db: AsyncSession) -> list[dict[str, Any]]:
 
     # Date validity
     invalid_deal_dates = int((await db.execute(
-        select(func.count()).where(Deal.actual_close_date.isnot(None), Deal.actual_close_date < Deal.created_at)
+        select(func.count(Deal.id)).where(Deal.actual_close_date.isnot(None), Deal.actual_close_date < Deal.created_at)
     )).scalar() or 0)
     checks.append({
         "name": "invalid_deal_dates",
@@ -236,7 +236,7 @@ async def _build_checks(db: AsyncSession) -> list[dict[str, Any]]:
     })
 
     # Unmapped reps/teams and missing quota
-    unmapped_reps = int((await db.execute(select(func.count()).where(Rep.team_id.is_(None)))).scalar() or 0)
+    unmapped_reps = int((await db.execute(select(func.count(Rep.id)).where(Rep.team_id.is_(None)))).scalar() or 0)
     checks.append({
         "name": "unmapped_reps",
         "status": _status_from_count(unmapped_reps),
@@ -244,7 +244,7 @@ async def _build_checks(db: AsyncSession) -> list[dict[str, Any]]:
         "affected_rows": unmapped_reps,
     })
 
-    unmapped_teams = int((await db.execute(select(func.count()).where(Team.region.is_(None)))).scalar() or 0)
+    unmapped_teams = int((await db.execute(select(func.count(Team.id)).where(Team.region.is_(None)))).scalar() or 0)
     checks.append({
         "name": "unmapped_teams",
         "status": _status_from_count(unmapped_teams),
@@ -361,7 +361,7 @@ async def _build_checks(db: AsyncSession) -> list[dict[str, Any]]:
     # Revenue type coverage — fraction of revenue rows with revenue_type set
     rev_total = int((await db.execute(select(func.count()).select_from(Revenue))).scalar() or 0)
     rev_typed = int((await db.execute(
-        select(func.count()).where(Revenue.revenue_type.isnot(None))
+        select(func.count(Revenue.id)).where(Revenue.revenue_type.isnot(None))
     )).scalar() or 0)
     if rev_total > 0:
         type_pct = round(rev_typed / rev_total * 100, 1)
@@ -378,7 +378,7 @@ async def _build_checks(db: AsyncSession) -> list[dict[str, Any]]:
 
     # Booking coverage — closed-won deals that have a corresponding booking row
     closed_won_count = int((await db.execute(
-        select(func.count()).where(Deal.stage == "Closed Won")
+        select(func.count(Deal.id)).where(Deal.stage == "Closed Won")
     )).scalar() or 0)
     booking_count = int((await db.execute(select(func.count()).select_from(Booking))).scalar() or 0)
     if closed_won_count > 0 and booking_count == 0:
