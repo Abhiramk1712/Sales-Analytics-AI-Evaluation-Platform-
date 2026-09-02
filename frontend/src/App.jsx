@@ -4,6 +4,7 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContai
 import { PaginationControls } from "./components/shared";
 import { useFetch } from "./hooks/useFetch";
 import { setRequestContext } from "./api/client";
+import { useUrlState } from "./hooks/useUrlState";
 
 // ── New page imports (Sprint 2) ───────────────────────────────────────────
 import PayoutsPage from "./pages/PayoutsPage";
@@ -3095,15 +3096,28 @@ const ROLE_TAB_ACCESS = {
 };
 
 export default function App() {
-  const [tab, setTab] = useState("Dashboard");
+  // Tab, period and role live in the URL so a view can be linked, shared and
+  // restored on reload, and so the back button undoes a navigation instead of
+  // leaving the app. Company is deliberately not among them: switching company
+  // triggers a load, so it is driven by the selector and its own effect below.
+  const [view, setView] = useUrlState({
+    tab: "Dashboard",
+    period: "this quarter",
+    role: "executive",
+  });
+  const tab = view.tab;
+  const setTab = useCallback((next) => setView({ tab: next }), [setView]);
+  const period = view.period;
+  const setPeriod = useCallback((next) => setView({ period: next }), [setView]);
+  const userRole = view.role;
+  const setUserRole = useCallback((next) => setView({ role: next }), [setView]);
+
   const [activeCompany, setActiveCompany] = useState("");
   const [selectedCompany, setSelectedCompany] = useState("");
   const [companyLoadMsg, setCompanyLoadMsg] = useState("");
   const [companyLoadError, setCompanyLoadError] = useState("");
   const [switchingCompany, setSwitchingCompany] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [userRole, setUserRole] = useState("executive");
-  const [period, setPeriod] = useState("this quarter");
 
   // Published during render rather than in an effect: React renders the parent
   // before its children, so every tab's first fetch already carries the current

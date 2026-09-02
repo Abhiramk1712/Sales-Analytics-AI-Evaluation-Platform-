@@ -263,7 +263,13 @@ async def get_plan_performance(
             if q_source != "direct":
                 quota_warnings.append(f"rep={rep_id}: quota_source={q_source}")
             quota_warnings.extend(q_warnings)
-    elif all_time_requested and rep_ids:
+    elif rep_ids:
+        # No period given: sum every quota row for these reps, which is exactly
+        # what the revenue query above does when `months` is empty. Previously
+        # this branch required all_time to be asked for explicitly, so a request
+        # with no period returned revenue over all time divided by a quota of
+        # zero — the Plans tab showed $2.9M revenue at 0.0% attainment.
+        # Both sides of the ratio must share a grain or the ratio is meaningless.
         quota_rows = (
             await db.execute(
                 select(Quota.rep_id, func.coalesce(func.sum(Quota.amount), 0.0).label("quota"))

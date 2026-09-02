@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PaginationControls } from "../components/shared";
+import { useFetch } from "../hooks/useFetch";
 
 const API = import.meta.env.VITE_API_URL || "";
 const fmt = (n) => n >= 1e6 ? `$${(n/1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n/1e3).toFixed(0)}K` : `$${Number(n||0).toFixed(0)}`;
@@ -65,26 +66,10 @@ function initials(name) {
 }
 
 // ── Data fetching ─────────────────────────────────────────────────────────────
-function useFetch(url) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  useEffect(() => {
-    if (!url) { setData(null); setLoading(false); return; }
-    const controller = new AbortController();
-    setLoading(true); setError(null);
-    fetch(API + url, { signal: controller.signal })
-      .then(async (r) => {
-        const body = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(body?.detail || `Request failed (${r.status})`);
-        return body;
-      })
-      .then(d => { if (!controller.signal.aborted) { setData(d); setLoading(false); } })
-      .catch(e => { if (!controller.signal.aborted) { setError(e.message); setLoading(false); } });
-    return () => controller.abort();
-  }, [url]);
-  return { data, loading, error };
-}
+// useFetch is imported from ../hooks/useFetch. This file used to define its
+// own, taking only a url and therefore sending neither X-User-Role nor
+// X-Company-Id — so every request here fell back to DEMO_DEFAULT_COMPANY and
+// showed the default tenant whatever the selector said.
 
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 function Skeleton({ h = 120, r = 12 }) {

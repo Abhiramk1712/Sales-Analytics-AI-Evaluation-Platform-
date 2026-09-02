@@ -9,6 +9,7 @@ import {
 import { useFetch } from "../hooks/useFetch";
 import { MetricCard, Skeleton, Card, SectionTitle, ErrorMessage, PaginationControls } from "../components/shared";
 import { fmt, pct, withRefresh } from "../utils/format";
+import { useUrlState } from "../hooks/useUrlState";
 
 const STAGE_COLORS = {
   Prospecting: "#B5D4F4", Qualification: "#85B7EB", Proposal: "#378ADD",
@@ -31,7 +32,11 @@ export default function RepScorecardPage({ refreshKey, activeCompany, userRole }
   const role = userRole || "executive";
   const company = activeCompany || "";
   const [selectedRepId, setSelectedRepId] = useState(null);
-  const [activeTab, setActiveTab] = useState("overview"); // overview | deals | activities | quota
+  // A scorecard is the most link-worthy view in the app; the selected rep and
+  // pane both belong in the URL.
+  const [subview, setSubview] = useUrlState({ scorecard: "overview" });
+  const activeTab = subview.scorecard;
+  const setActiveTab = (next) => setSubview({ scorecard: next });
   const [dealsPage, setDealsPage] = useState(1);
   const [dealsPageSize, setDealsPageSize] = useState(10);
   const [activitiesPage, setActivitiesPage] = useState(1);
