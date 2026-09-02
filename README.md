@@ -170,7 +170,7 @@ React Dashboard and API Consumers
 | Frontend | React, Vite, Recharts |
 | Analytics Engineering | dbt staging, intermediate, and mart models |
 | Machine Learning | pandas, NumPy, scikit-learn, statsmodels, SciPy |
-| AI / Agent Layer | LLM provider abstraction, OpenAI-compatible provider, RAG scaffold |
+| AI / Agent Layer | LLM provider abstraction (OpenAI and Anthropic, both live), RAG scaffold |
 | Testing | pytest, pytest-asyncio |
 | DevOps | Docker, docker-compose, GitHub Actions CI, Makefile |
 | Documentation | Markdown architecture docs, model governance docs, data model docs |
@@ -448,9 +448,14 @@ make setup
 
 ### 4. Start Database
 
+The verified path is a locally running PostgreSQL reachable at `localhost:5432`, not
+Docker (see the Docker Setup note below) — Postgres.app, Homebrew, or your OS's package
+manager all work equally; use whichever you already have.
+
 ```bash
-docker compose up -d db
-# Wait for healthy check, then run migrations:
+createdb sales_analytics
+
+# Then run migrations:
 alembic upgrade head
 ```
 
@@ -492,17 +497,22 @@ Open a second terminal:
 make frontend
 ```
 
-Frontend runs at the Vite local development URL, usually:
+Frontend runs at:
 
 ```text
-http://localhost:5173
+http://localhost:3000
 ```
+
+Not Vite's usual default (`5173`) — `vite.config.js` pins the port to `3000` so it lines
+up with the API proxy config.
 
 ---
 
 ## Docker Setup
 
-You can also run the project with Docker Compose:
+Not verified on the primary development machine — Docker isn't installed there, so
+`make setup` plus a local PostgreSQL (the Local Setup steps above) is the path that's
+actually been run. If Docker is available on yours:
 
 ```bash
 docker compose up --build
@@ -675,7 +685,7 @@ A strong demo flow for interviews or GitHub reviewers:
 This project is a portfolio-grade demonstration platform. Important caveats for reviewers:
 
 - **Header-based RBAC is demo-only.** When `DEMO_MODE=true`, the app trusts `X-User-Role` and `X-Company-Id` headers for persona switching. Production would require JWT-based authentication and token validation.
-- **Company switching reloads data.** Switching companies in the demo UI triggers a full dataset reload. Production would use proper multi-tenant isolation with `company_id` scoping on all tables.
+- **Tenancy is query-scoped, not a UI convention.** `company_id` lives on 40 of 41 tables and is enforced automatically at the SQLAlchemy session level (`backend/tenant_guard.py`) — every ORM select gets a `WHERE company_id = ...` and every insert is stamped, without each call site adding its own filter. Two companies can be resident and queried concurrently; switching companies in the UI narrows which tenant the next request reads, it doesn't reload a shared dataset.
 - **`ALLOW_DESTRUCTIVE_LOAD` guards database resets.** By default, the ingestion API will not drop/recreate all tables. Set `ALLOW_DESTRUCTIVE_LOAD=true` only for local demo use.
 - **ML models are demo-oriented.** The forecasting, scoring, and clustering models are trained on synthetic data. Production use would require retraining on real data with proper model monitoring.
 - **In-memory caching** is used for demo mode dashboard performance. Production should use Redis.
@@ -701,8 +711,10 @@ Planned improvements that would make the platform even closer to production qual
 
 - Add deployed demo links for backend and frontend.
 - Add screenshots or GIFs under a GitHub `assets/` folder.
-- Add JWT-based production authentication flow.
-- Add stricter tenant isolation for production mode.
+- Move production auth from a static HS256 secret to a real OIDC provider, with refresh
+  and revocation.
+- Add row-level hierarchical scoping (a manager seeing only their subtree) — today's
+  RBAC is role-level permissions, not per-row filtering by org position.
 - Add dbt execution into CI with a seeded test database.
 - Add model artifact versioning with a real model registry backend.
 - Add pgvector or another vector database for improved RAG retrieval.

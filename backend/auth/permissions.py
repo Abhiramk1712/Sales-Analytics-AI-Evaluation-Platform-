@@ -28,10 +28,9 @@ PERM_VIEW_OWN_PAYOUT = "view_own_payout"
 PERM_VIEW_OWN_METRICS = "view_own_metrics"
 
 # Choosing which company you are looking at. Deliberately *not* run_ingestion:
-# under a query-scoped tenancy model this is a read-scope change, not an
-# operator action. It only rebuilds the database today because tenancy is
-# implemented as a whole-database swap — that is the bug, not a reason to make
-# viewing privileged.
+# under query-scoped tenancy (backend/tenant_guard.py) this is a read-scope
+# change — it narrows the ContextVar a request's queries are filtered by — not
+# an operator action, so it stays cheap to grant.
 PERM_SWITCH_COMPANY = "switch_company"
 
 ALL_PERMISSIONS: set[str] = {

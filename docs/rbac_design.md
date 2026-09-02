@@ -2,90 +2,112 @@
 
 ## Overview
 
-This document describes the intended Role-Based Access Control (RBAC) model for the
-Sales Analytics AI platform. The current implementation uses a single-tenant model with
-in-memory role concepts; this design targets a future multi-tenant production deployment.
+This document describes the RBAC model as implemented. It previously described an
+earlier design — a five-role hierarchy (`vp_sales`, `director`, `manager`, `rep`,
+`revops`) with row-level org-subtree scoping — that was superseded before it was built;
+none of those role names exist in the code. The roles, permissions, and enforcement
+below are generated from `backend/auth/permissions.py` and `backend/auth/roles.py`
+directly, not transcribed by hand, so this stays accurate as those files change.
+
+For tenant scoping (as opposed to role permissions), see
+[RBAC_AND_TENANCY.md](RBAC_AND_TENANCY.md) and CLAUDE.md's tenancy section.
 
 ---
 
 ## Roles
 
-| Role | Label | rank (position) | Description |
-|---|---|---|---|
-| `executive` | Executive / CRO | 1 | Full read access to all companies, all reports, all agent queries, grading scorecard |
-| `vp_sales` | VP of Sales | 2 | Read access to own team hierarchy; can trigger workflow pipeline |
-| `director` | Director | 3 | Read access to managers and ICs under them; can view forecasts and payouts |
-| `manager` | Sales Manager | 4 | Read access to their direct reports only; can view payout statements for their team |
-| `rep` | Sales Rep / IC | 5 | Read-only access to own deal pipeline, own payout statement, own performance report |
-| `finance_admin` | Finance / Admin | — | Full access to payout engine, payout statements, plan assignments, clawbacks |
-| `revops` | RevOps | — | Full access to data quality, grading, ingestion, metrics registry |
+Seven roles, defined in `backend/auth/roles.py` (`ALL_ROLES`):
+
+| Role | Display name |
+|---|---|
+| `executive` | Executive |
+| `revops_admin` | RevOps Admin |
+| `finance_admin` | Finance Admin |
+| `sales_manager` | Sales Manager |
+| `sales_rep` | Sales Rep |
+| `data_scientist` | Data Scientist |
+| `auditor` | Auditor |
+
+In demo mode (`DEMO_MODE=true`) a role is asserted via the `X-User-Role` header — that's
+the point of the persona switcher. In production mode it comes from a verified JWT's
+claims and the header is ignored entirely; see `backend/auth/dependencies.py`'s module
+docstring for why accepting the header in production would be a complete authorization
+bypass.
 
 ---
 
-## Access Matrix
+## Permission Matrix
 
-| Resource | executive | vp_sales | director | manager | rep | finance_admin | revops |
+Generated from `ROLE_PERMISSIONS` in `backend/auth/permissions.py`:
+
+| Permission | Executive | RevOps Admin | Finance Admin | Sales Manager | Sales Rep | Data Scientist | Auditor |
 |---|---|---|---|---|---|---|---|
-| Dashboard metrics | ✅ all | ✅ team | ✅ team | ✅ team | ✅ own | ✅ | ✅ |
-| Forecasting | ✅ | ✅ | ✅ | ✅ view | ❌ | ✅ view | ✅ |
-| AI Agent chat | ✅ | ✅ | ✅ | ✅ | ✅ own data | ✅ limited | ✅ |
-| Reports: executive_weekly | ✅ | ✅ | ✅ view | ❌ | ❌ | ✅ view | ✅ |
-| Reports: payout_statement | ✅ | ✅ | ✅ own team | ✅ own team | ✅ own only | ✅ | ✅ |
-| Reports: forecast_summary | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
-| Payout engine triggers | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Plan assignments | ✅ | ✅ create | ✅ view | ✅ view | ✅ view own | ✅ | ✅ |
-| Cascade rules | ✅ | ✅ create | ✅ view | ❌ | ❌ | ✅ | ✅ |
-| Enterprise grader | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Data quality | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Ingestion | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Org hierarchy | ✅ | ✅ | ✅ | ✅ own subtree | ❌ | ❌ | ✅ |
+| `admin` |  | ✅ |  |  |  |  |  |
+| `approve_payouts` |  | ✅ | ✅ |  |  |  |  |
+| `edit_plans` |  | ✅ |  |  |  |  |  |
+| `generate_reports` | ✅ | ✅ | ✅ | ✅ |  | ✅ | ✅ |
+| `manage_plans` |  | ✅ |  |  |  |  |  |
+| `manage_rules` |  | ✅ |  |  |  |  |  |
+| `manage_tenant_data` |  | ✅ |  |  |  |  |  |
+| `run_agent_workflow` | ✅ | ✅ |  |  |  |  |  |
+| `run_ingestion` |  | ✅ |  |  |  |  |  |
+| `run_model_training` |  | ✅ |  |  |  | ✅ |  |
+| `switch_company` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `view_all_payouts` | ✅ | ✅ | ✅ |  |  |  |  |
+| `view_all_reps` | ✅ | ✅ |  |  |  |  |  |
+| `view_audit_logs` | ✅ | ✅ | ✅ | ✅ |  | ✅ | ✅ |
+| `view_company_metrics` | ✅ | ✅ |  |  |  |  |  |
+| `view_dashboard` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `view_data_quality` | ✅ | ✅ |  |  |  | ✅ | ✅ |
+| `view_forecasts` | ✅ | ✅ |  | ✅ | ✅ | ✅ |  |
+| `view_model_monitoring` | ✅ | ✅ |  |  |  | ✅ | ✅ |
+| `view_own_metrics` | ✅ | ✅ |  | ✅ | ✅ |  |  |
+| `view_own_payout` | ✅ | ✅ | ✅ | ✅ | ✅ |  |  |
+| `view_payouts` | ✅ | ✅ | ✅ | ✅ |  |  | ✅ |
+| `view_plans` | ✅ | ✅ |  |  |  |  |  |
+
+`revops_admin` and `executive` are the two broad roles; every other role is scoped to
+one functional area (finance to payouts, data_scientist to ML, auditor to read-only
+oversight, sales_manager/sales_rep to their own numbers).
 
 ---
 
-## Data Scoping Rules
+## Enforcement
 
-### Hierarchical data scoping
-- Managers see data only for users where `Manager.manager_id` traces back to their own `user_id`.
-- Directors see their full subtree (managers + their reps).
-- Executives see all data for their company tenant.
+Real, not aspirational — every one of the 12 backend routers gates at least one route
+with `Depends(require_permission(...))` or `Depends(require_role(...))`
+(`backend/auth/dependencies.py`):
 
-### Plan cascade scope
-- `cascade_scope = "all_reports"`: applies to all users in the reporter's hierarchy.
-- `cascade_scope = "direct_reports"`: applies only to the user's immediate reports.
-- `cascade_scope = "global"`: applies to everyone in the company (executive-level only).
+- Missing/invalid bearer token in production mode → `401`.
+- Valid identity, wrong role or missing permission → `403`.
+- `has_permission(role, permission)` is a flat lookup against `ROLE_PERMISSIONS` — no
+  caching, no implicit inheritance between roles.
 
-### Payout access
-- `finance_admin` and `executive` can trigger `compute_credit_payouts()` for any rep.
-- A `manager` can view payout breakdowns for their direct reports only.
-- A `rep` can view their own `payout_statement` report but cannot modify plan assignments.
-
----
-
-## Implementation Notes
-
-### Current state
-- The backend does not yet enforce RBAC middleware; all endpoints are open within a
-  single-tenant deployment.
-- `Position.rank` (1–5) is available on all user records and can be used to derive
-  role membership without a separate roles table.
-
-### Recommended implementation path
-1. Add `role` column to `UserProfile` (or derive from `position.rank`).
-2. Implement a `RBACMiddleware` or FastAPI dependency (`Depends(require_role(...))`).
-3. Add `company_id` (tenant scope) to all resource queries.
-4. Gate `/grading/enterprise-readiness` to `revops` role only.
-5. Gate payout engine triggers to `finance_admin` or `executive`.
-6. Scope `/analytics/*` queries to the requesting user's hierarchy subtree.
+**What this does not do:** row-level scoping. A `sales_manager` with `view_payouts`
+can see the same payout rows an `executive` can within their tenant — there is no
+query-level filter restricting them to their own reports' rows. Confirmed by grep: no
+router filters a payout, deal, or analytics query by the caller's `manager_id` or
+org-hierarchy subtree. The permission model answers "can this role see payouts at all,"
+not "whose payouts." If per-manager row scoping is wanted, it needs a real filter added
+at the query layer — it is not a config flag away.
 
 ---
 
-## Position Rank Reference
+## Position Rank → Role (Auto-Detection)
 
-| rank | label | Role equivalent |
+`Position.rank` (an org-hierarchy field, 1–5, used for org-chart display and leadership
+detection — e.g. `data_quality.py` treats `rank <= 3` as leadership) is a different
+concept from the RBAC role above, but `RANK_TO_ROLE` in `backend/auth/roles.py` maps one
+onto the other for auto-detecting a plausible starting role from org position:
+
+| rank | Position label | Auto-detected role |
 |---|---|---|
-| 1 | Executive | executive / CRO |
-| 2 | VP | vp_sales |
-| 3 | Director | director |
-| 4 | Manager | manager |
-| 5 | IC | rep |
-| 99 | Unknown | rep (safe default) |
+| 1 | Executive | `executive` |
+| 2 | VP | `executive` |
+| 3 | Director | `sales_manager` |
+| 4 | Manager | `sales_manager` |
+| 5 | IC | `sales_rep` |
+
+This is a convenience mapping (e.g. for seeding a sensible default persona), not a
+runtime authorization check — the role actually enforced per-request is the one in the
+JWT claim or, in demo mode, the `X-User-Role` header.
