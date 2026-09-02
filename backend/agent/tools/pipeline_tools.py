@@ -42,7 +42,7 @@ async def check_model_readiness(db: AsyncSession) -> dict[str, Any]:
 
         # Check if predictions already exist
         has_predictions = (await db.execute(
-            select(func.count()).where(
+            select(func.count(MLPrediction.id)).where(
                 (func.lower(MLPrediction.model_name).like("%deal%")) |
                 (func.lower(MLPrediction.entity_type) == "deal")
             )

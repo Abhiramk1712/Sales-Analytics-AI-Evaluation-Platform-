@@ -1,3 +1,5 @@
 id,external_id,name,description,source_system,created_at,effective_start_date,effective_end_date
-0f610403-96d2-4e6b-bcb7-7816b83e0f59,PLAN-001,FY2025 Sales Plan 1,New logo + expansion blended plan,generated,2026-07-01T20:34:22.619122+00:00,2025-01-01,2025-12-31
-127eed16-1a4c-4b0d-a2cc-6600078f5163,PLAN-002,FY2026 Sales Plan 2,Enterprise annual contract value plan,generated,2026-07-01T20:34:22.619131+00:00,2026-01-01,
+7ea1c0ae-2a3d-47d2-8388-898cd2d1d27e,PLAN-001,FY2023 Sales Plan 1,New logo + expansion blended plan,generated,2026-09-02T17:47:12.445843+00:00,2023-01-01,2023-12-31
+e66ec886-b4f4-4ff4-96cc-72af8ba5ba43,PLAN-002,FY2024 Sales Plan 2,Enterprise annual contract value plan,generated,2026-09-02T17:47:12.445848+00:00,2024-01-01,2024-12-31
+056ffa8e-8160-46d8-9fe0-18a060792d2d,PLAN-003,FY2025 Sales Plan 3,Mid-market growth and retention plan,generated,2026-09-02T17:47:12.445853+00:00,2025-01-01,2025-12-31
+74260764-d2c1-466f-9b3c-37478200d35e,PLAN-004,FY2026 Sales Plan 4,Overlay specialist accelerator plan,generated,2026-09-02T17:47:12.445857+00:00,2026-01-01,
