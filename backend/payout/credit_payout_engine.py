@@ -28,7 +28,6 @@ PAYOUT OUTPUT FIELDS
 """
 from __future__ import annotations
 
-import math
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -46,6 +45,7 @@ from backend.models import (
     SalesCredit, SalesUnit,
 )
 from backend.payout.engine import PayoutConfig, PayoutEngine, DEFAULT_PAYOUT_CONFIG
+from backend.payout.money import D, ZERO, money, to_float
 
 
 # ── Output dataclass ──────────────────────────────────────────────────────
@@ -114,18 +114,19 @@ def allocate_pro_rata(total: float, weights: list[float]) -> list[float]:
     if not weights:
         return []
 
-    target = round(total, 2)
-    total_weight = sum(weights)
+    target = money(total)
+    decimal_weights = [D(w) for w in weights]
+    total_weight = sum(decimal_weights)
 
     if total_weight <= 0:
-        return [target] + [0.0] * (len(weights) - 1)
+        return [to_float(target)] + [0.0] * (len(weights) - 1)
 
-    parts = [round(target * (w / total_weight), 2) for w in weights]
-    residual = round(target - sum(parts), 2)
+    parts = [money(target * (w / total_weight)) for w in decimal_weights]
+    residual = target - sum(parts)
     if residual:
-        largest = max(range(len(parts)), key=lambda i: weights[i])
-        parts[largest] = round(parts[largest] + residual, 2)
-    return parts
+        largest = max(range(len(parts)), key=lambda i: decimal_weights[i])
+        parts[largest] = money(parts[largest] + residual)
+    return [to_float(p) for p in parts]
 
 
 async def _count_closed_deals(
@@ -321,41 +322,47 @@ def _apply_commission_rules(
     rep landing exactly on a threshold is paid at the higher band and no
     attainment value falls into two adjacent bands.
     """
-    attainment = (credited_amount / quota * 100) if quota > 0 else 0.0
-    base = 0.0
-    accelerator = 0.0
-    bonus = 0.0
+    credited = D(credited_amount)
+    quota_d = D(quota)
+    attainment_d = (credited / quota_d * 100) if quota_d > 0 else ZERO
+    attainment = float(attainment_d)
+    base = ZERO
+    accelerator = ZERO
+    bonus = ZERO
     rules_applied: list[str] = []
 
     for rule in rules:
         # `or`-defaulting would turn a legitimate 0 (a zero rate, a zero upper
         # bound) into the fallback, so test for None explicitly.
-        rate = float(rule.rate) if rule.rate is not None else 0.0
-        min_t = float(rule.threshold_min) if rule.threshold_min is not None else 0.0
-        max_t = float(rule.threshold_max) if rule.threshold_max is not None else math.inf
-        bonus_a = float(rule.bonus_amount) if rule.bonus_amount is not None else 0.0
+        rate = D(rule.rate) if rule.rate is not None else ZERO
+        min_t = D(rule.threshold_min) if rule.threshold_min is not None else ZERO
+        max_t = D(rule.threshold_max) if rule.threshold_max is not None else None
+        bonus_a = D(rule.bonus_amount) if rule.bonus_amount is not None else ZERO
+        # An absent upper bound is open-ended; Decimal has no infinity that
+        # compares safely, so the check is expressed as "no bound".
+        in_band = min_t <= attainment_d and (max_t is None or attainment_d < max_t)
 
         if rule.metric_name == "attainment_pct":
-            if min_t <= attainment < max_t:
-                commission = credited_amount * rate
+            if in_band:
+                commission = credited * rate
                 base += commission
                 rules_applied.append(f"rule '{rule.name}': attainment={attainment:.1f}%, rate={rate:.0%}, commission=${commission:,.2f}")
         elif rule.metric_name == "accelerator":
-            if min_t <= attainment < max_t:
-                overage = max(0.0, credited_amount - quota)
+            if in_band:
+                overage = max(ZERO, credited - quota_d)
                 acc = overage * rate
                 accelerator += acc
                 rules_applied.append(f"accelerator '{rule.name}': ${acc:,.2f}")
         elif rule.metric_name == "bonus" and bonus_a > 0:
-            if min_t <= attainment < max_t:
+            if in_band:
                 bonus += bonus_a
                 rules_applied.append(f"bonus '{rule.name}': ${bonus_a:,.2f}")
 
     return {
-        "base_commission":    round(base, 2),
-        "accelerator_amount": round(accelerator, 2),
-        "bonus_amount":       round(bonus, 2),
-        "rate_applied":       base / credited_amount if credited_amount > 0 else 0.0,
+        "base_commission":    to_float(base),
+        "accelerator_amount": to_float(accelerator),
+        "bonus_amount":       to_float(bonus),
+        "rate_applied":       float(base / credited) if credited > 0 else 0.0,
         "rules_applied":      rules_applied,
     }
 
