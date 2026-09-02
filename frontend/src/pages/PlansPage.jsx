@@ -1,6 +1,8 @@
 import { useMemo, useState, useEffect } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PaginationControls } from "../components/shared";
+import { useFetch } from "../hooks/useFetch";
+import { pickDefaultPlan } from "../utils/format";
 
 const API = import.meta.env.VITE_API_URL || "";
 const fmt = (n) => n >= 1e6 ? `$${(n/1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n/1e3).toFixed(0)}K` : `$${Number(n||0).toFixed(0)}`;
@@ -10,38 +12,10 @@ function Skeleton({ h = 120 }) {
   return <div style={{ background: "var(--color-background-secondary)", borderRadius: 8, height: h, animation: "pulse 1.5s infinite" }} />;
 }
 
-function useFetch(url) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  useEffect(() => {
-    if (!url) return;
-    const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-    fetch(API + url, { signal: controller.signal })
-      .then(async (r) => {
-        const body = await r.json().catch(() => ({}));
-        if (!r.ok) {
-          throw new Error(body?.detail || `Request failed (${r.status})`);
-        }
-        return body;
-      })
-      .then(d => {
-        if (controller.signal.aborted) return;
-        setData(d);
-        setLoading(false);
-      })
-      .catch(e => {
-        if (controller.signal.aborted) return;
-        setError(e.message);
-        setLoading(false);
-      });
-
-    return () => controller.abort();
-  }, [url]);
-  return { data, loading, error };
-}
+// useFetch is imported from ../hooks/useFetch. This file used to define its
+// own, taking only a url and therefore sending neither X-User-Role nor
+// X-Company-Id — so every request here fell back to DEMO_DEFAULT_COMPANY and
+// showed the default tenant whatever the selector said.
 
 function StatCard({ label, value, sub, accent = "#378ADD" }) {
   return (
@@ -103,7 +77,7 @@ export default function PlansPage({ refreshKey, userRole, activeCompany }) {
     if (selectedPlan && planRows.some((p) => p.id === selectedPlan)) {
       return selectedPlan;
     }
-    return planRows[0]?.id || null;
+    return pickDefaultPlan(planRows)?.id || null;
   }, [selectedPlan, planRows]);
 
   const { data: planDetail, loading: detailLoading, error: detailError } = useFetch(activePlanId ? `/plans/${activePlanId}?${planFetchMarker}` : null);

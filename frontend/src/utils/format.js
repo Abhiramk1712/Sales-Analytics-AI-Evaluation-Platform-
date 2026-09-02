@@ -106,3 +106,42 @@ export function toPayoutPeriod(label) {
 
   return null;
 }
+
+
+/**
+ * Choose which comp plan a page should open on.
+ *
+ * Plans arrive oldest-first, so falling back to the first row selected the
+ * oldest one — expired, and in every demo company carrying zero assignments.
+ * The Plans tab therefore opened on $0 revenue, $0 quota and 0 assigned reps
+ * while the plan actually in force held all of them, which reads as a failure
+ * rather than as a stale selection.
+ *
+ * Preference order: the plan in force today, then the most recently started
+ * plan, then whatever is first. Returns null for an empty list so the caller
+ * can say "no plans" rather than render zeros.
+ */
+export function pickDefaultPlan(planRows, today = new Date()) {
+  if (!Array.isArray(planRows) || planRows.length === 0) return null;
+
+  const day = today.toISOString().slice(0, 10);
+  const started = (p) => !p.effective_start_date || p.effective_start_date <= day;
+  const notEnded = (p) => !p.effective_end_date || p.effective_end_date >= day;
+
+  const inForce = planRows.filter((p) => started(p) && notEnded(p));
+  if (inForce.length > 0) {
+    // Most recently started, if several overlap.
+    return inForce.reduce((best, p) =>
+      (p.effective_start_date || "") > (best.effective_start_date || "") ? p : best
+    );
+  }
+
+  const past = planRows.filter(started);
+  if (past.length > 0) {
+    return past.reduce((best, p) =>
+      (p.effective_start_date || "") > (best.effective_start_date || "") ? p : best
+    );
+  }
+
+  return planRows[0];
+}

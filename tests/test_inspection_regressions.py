@@ -275,3 +275,30 @@ def test_json_safe_preserves_ordinary_finite_values():
 
     payload = {"a": 1, "b": 2.5, "c": "x", "d": None, "e": [True, 0.0]}
     assert json_safe(payload) == payload
+
+
+# ── #14: the Plans tab must open on a plan that is actually in force ─────────
+
+
+def test_plan_performance_sums_quota_when_no_period_is_given():
+    """
+    The revenue query sums every period when none is requested; the quota query
+    required an explicit period or an explicit all-time flag. A request with
+    neither returned revenue over all time divided by a quota of zero, so the
+    Plans tab showed $2.9M revenue at 0.0% attainment.
+
+    Both sides of a ratio must share a grain, or the ratio means nothing. This
+    guards the condition rather than the arithmetic.
+    """
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parent.parent
+              / "backend" / "routers" / "plans.py").read_text(encoding="utf-8")
+    start = source.index("Canonical quota semantics")
+    block = source[start:start + 1600]
+
+    assert "elif all_time_requested and rep_ids:" not in block, (
+        "quota falls back only when all-time is explicitly requested; a request "
+        "with no period will divide revenue by a zero quota"
+    )
+    assert "elif rep_ids:" in block
