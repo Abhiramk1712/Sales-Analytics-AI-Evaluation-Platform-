@@ -8,6 +8,7 @@ import {
   LineChart, Line, Legend,
 } from "recharts";
 import { useFetch } from "../hooks/useFetch";
+import { useUrlState } from "../hooks/useUrlState";
 import { MetricCard, Skeleton, Card, SectionTitle, ErrorMessage, PaginationControls } from "../components/shared";
 import { fmt, pct, withRefresh, toPayoutPeriod } from "../utils/format";
 
@@ -264,7 +265,11 @@ export default function PayoutsPage({ refreshKey, activeCompany, userRole, perio
   if (syncedPeriod && !PERIOD_OPTIONS.some((o) => o.value === syncedPeriod)) {
     PERIOD_OPTIONS.push({ value: syncedPeriod, label: syncedPeriod });
   }
-  const [activeView, setActiveView] = useState("team"); // team | fairness
+  // Which pane is open belongs in the URL: "send me the quota fairness view"
+  // was not a link anyone could send.
+  const [subview, setSubview] = useUrlState({ view: "team" });
+  const activeView = subview.view;
+  const setActiveView = (next) => setSubview({ view: next });
   const [repId, setRepId] = useState("");
   const [repName, setRepName] = useState("");
   const [stmtPeriods, setStmtPeriods] = useState(6);
