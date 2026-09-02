@@ -652,17 +652,24 @@ async def compute_credit_payouts(
             total_credited = sum(weights)
             attainment = (total_credited / rep_period_quota * 100) if rep_period_quota > 0 else 0.0
 
+            # won/win_rate feed the SPIFF and clawback checks below (in
+            # addition to the no-rules PayoutEngine fallback) — computed once
+            # here, at the same per-rep-per-period grain _count_closed_deals
+            # already operates at, rather than per branch.
+            won, lost = await _count_closed_deals(db, rep, period)
+            win_rate = (won / (won + lost)) if (won + lost) > 0 else 0.0
+
             period_trace: list[str] = [
                 f"period aggregate: {len(credit_inputs)} credit(s), "
                 f"total credited ${total_credited:,.2f} / quota ${rep_period_quota:,.2f}",
                 f"attainment: {attainment:.2f}% (period-cumulative)",
+                f"deals: {won} won, {lost} lost, win_rate={win_rate:.0%}",
             ]
 
             if rules:
                 comp = _apply_commission_rules(total_credited, rep_period_quota, rules)
                 period_trace.extend(comp["rules_applied"])
             else:
-                won, lost = await _count_closed_deals(db, rep, period)
                 eng_result = PayoutEngine(config=cfg).compute(
                     total_credited, rep_period_quota, won, lost
                 )
@@ -677,10 +684,10 @@ async def compute_credit_payouts(
             acc_total = apply_accelerators(
                 total_credited, rep_period_quota, cfg, rules, period_trace
             )
-            spiff_total = apply_spiffs(attainment, 0, 0.0, cfg, period_trace)
+            spiff_total = apply_spiffs(attainment, won, win_rate, cfg, period_trace)
             clawback_total = apply_clawbacks(
                 comp["base_commission"] + acc_total + spiff_total,
-                attainment, 0, 0.0, cfg, period_trace,
+                attainment, won, win_rate, cfg, period_trace,
             )
             bonus_total = comp.get("bonus_amount", 0.0)
 
@@ -767,14 +774,16 @@ async def compute_credit_payouts(
             )).scalar() or 0
         )
         attainment = (credited / quota_val * 100) if quota_val > 0 else 0.0
+        won, lost = await _count_closed_deals(db, rep, period)
+        win_rate = (won / (won + lost)) if (won + lost) > 0 else 0.0
         trace = [
-            f"[revenue-aggregate fallback] credited=${credited:,.2f}, quota=${quota_val:,.2f}, attainment={attainment:.2f}%"
+            f"[revenue-aggregate fallback] credited=${credited:,.2f}, quota=${quota_val:,.2f}, attainment={attainment:.2f}%",
+            f"deals: {won} won, {lost} lost, win_rate={win_rate:.0%}",
         ]
         if rules:
             comp = _apply_commission_rules(credited, quota_val, rules)
             trace.extend(comp["rules_applied"])
         else:
-            won, lost = await _count_closed_deals(db, rep, period)
             eng_result = PayoutEngine(config=cfg).compute(credited, quota_val, won, lost)
             comp = {
                 "base_commission":    eng_result.get("base_commission", 0.0),
@@ -785,8 +794,8 @@ async def compute_credit_payouts(
             trace.extend(comp["rules_applied"])
 
         acc = apply_accelerators(credited, quota_val, cfg, rules, trace)
-        spiff = apply_spiffs(attainment, 0, 0.0, cfg, trace)
-        clawback = apply_clawbacks(comp["base_commission"] + acc + spiff, attainment, 0, 0.0, cfg, trace)
+        spiff = apply_spiffs(attainment, won, win_rate, cfg, trace)
+        clawback = apply_clawbacks(comp["base_commission"] + acc + spiff, attainment, won, win_rate, cfg, trace)
         final_payout = round(comp["base_commission"] + acc + spiff + comp.get("bonus_amount", 0.0) - clawback, 2)
         trace.append(
             f"final_payout: ${final_payout:,.2f} = base ${comp['base_commission']:,.2f}"
