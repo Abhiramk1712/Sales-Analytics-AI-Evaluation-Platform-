@@ -145,17 +145,19 @@ class TestRevenueForecast:
         ensemble) rather than the whole forecast failing. Proven, not just
         read: force the fit to raise and confirm the ensemble still produces
         a real result with SARIMAX weighted out."""
-        import backend.ml.forecasting as forecasting_module
+        import statsmodels.tsa.statespace.sarimax as sarimax_module
         from backend.ml.forecasting import run_revenue_forecast
 
         class _BoomSARIMAX:
             def __init__(self, *args, **kwargs):
                 raise RuntimeError("synthetic SARIMAX fit failure for this test")
 
-        # forecasting.py imports SARIMAX at module level (`from statsmodels...
-        # import SARIMAX`), unlike forecasting_engine.py's local per-call
-        # import — so the patch target here is this module's own name.
-        monkeypatch.setattr(forecasting_module, "SARIMAX", _BoomSARIMAX)
+        # Forecasting-stack consolidation Phase 2: run_revenue_forecast's
+        # >=24mo branch now delegates to forecasting_engine.RevenueForecastModel
+        # (moved from this module in Phase 1), which does SARIMAX's import
+        # locally inside fit()'s try block — so the patch target is
+        # statsmodels' own class, not either forecasting module's namespace.
+        monkeypatch.setattr(sarimax_module, "SARIMAX", _BoomSARIMAX)
         result = run_revenue_forecast(self._make_series(30), horizon=4)
 
         assert result["ensemble_weights"]["sarimax"] == 0.0
