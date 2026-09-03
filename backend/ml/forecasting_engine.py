@@ -10,6 +10,18 @@ Strategy selector
   18–35 months        → Ridge regression with calendar features
   ≥ 36 months         → SARIMAX (seasonal ARIMA with exogenous vars)
 
+"ensemble" is a fifth strategy, reachable only via an explicit
+strategy_override — select_strategy()'s automatic history-length selection
+above never picks it. It's the SARIMAX+Ridge+GBR ensemble that used to live
+solely in backend/ml/forecasting.py (RevenueForecastModel, moved here
+verbatim — same feature engineering, same fit/predict math, same bootstrap
+residual CIs). run_revenue_forecast() in that module now delegates to
+forecast(strategy_override="ensemble") for its full-history (>=24mo) branch
+instead of keeping a second copy of this logic. See CLAUDE.md's payout-forecast
+history for why two independently-maintained forecasters was worth collapsing:
+GET /payout/forecast read the wrong shape off one of them for an unknown
+period before anyone noticed.
+
 Forecast types
 --------------
   revenue | pipeline | booking | payout | quota_attainment | ARR | commit | best_case
@@ -22,7 +34,9 @@ Output (ForecastResult)
 -----------------------
   strategy_used, backtest_mae, backtest_rmse, backtest_mape,
   assumptions, confidence_interval, periods, values,
-  scenario, forecast_type, warnings
+  scenario, forecast_type, warnings, and — populated only by the "ensemble"
+  strategy, empty for the other four — commit_values, best_case_values,
+  component_weights.
 """
 from __future__ import annotations
 
@@ -32,6 +46,10 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 import numpy as np
+import pandas as pd
+from sklearn.linear_model import Ridge
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.preprocessing import StandardScaler
 
 # ── Constants ────────────────────────────────────────────────────────────
 
@@ -39,6 +57,7 @@ STRATEGY_BASELINE = "baseline"
 STRATEGY_ETS      = "ets"
 STRATEGY_RIDGE    = "ridge"
 STRATEGY_SARIMAX  = "sarimax"
+STRATEGY_ENSEMBLE = "ensemble"  # override-only — never auto-selected, see select_strategy()
 
 SCENARIO_BASE              = "base"
 SCENARIO_OPTIMISTIC        = "optimistic"
@@ -79,6 +98,13 @@ class ForecastResult:
     warnings:           list[str]           = field(default_factory=list)
     history_months:     int                 = 0
     horizon_months:     int                 = 6
+    # Populated only by the "ensemble" strategy (see module docstring); every
+    # other strategy leaves these empty. Kept on the shared dataclass rather
+    # than a separate result type so every strategy still returns the one
+    # ForecastResult shape — the whole point of this module existing.
+    commit_values:      list[float]         = field(default_factory=list)
+    best_case_values:   list[float]         = field(default_factory=list)
+    component_weights:  dict[str, float]    = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -97,6 +123,9 @@ class ForecastResult:
             "warnings":            self.warnings,
             "history_months":      self.history_months,
             "horizon_months":      self.horizon_months,
+            "commit_values":       [round(v, 2) for v in self.commit_values],
+            "best_case_values":    [round(v, 2) for v in self.best_case_values],
+            "component_weights":   self.component_weights,
         }
 
 
@@ -323,6 +352,309 @@ def _forecast_sarimax(
         return values, mae, rmse, mape, assumptions
 
 
+# ── Ensemble strategy (moved from backend/ml/forecasting.py) ─────────────
+#
+# Everything in this section — feature engineering, fit, predict, the
+# bootstrap-CI math — is an unmodified relocation of what was
+# RevenueForecastModel in forecasting.py. Behavior is pinned by a captured
+# before/after output diff (see the branch this landed on), not just visual
+# comparison: moving ~250 lines of stochastic model code by hand is exactly
+# the kind of change that's easy to get subtly wrong.
+
+class _EnsembleFit:
+    """Internal fit/predict result for the ensemble strategy — deliberately
+    not named ForecastResult to avoid colliding with this module's own
+    dataclass of that name; _forecast_ensemble_full() below is what actually
+    builds a ForecastResult from this."""
+    def __init__(self, values, lower_ci, upper_ci, commit, best_case, weights, metrics, model_info):
+        self.values = values
+        self.lower_ci = lower_ci
+        self.upper_ci = upper_ci
+        self.commit = commit
+        self.best_case = best_case
+        self.weights = weights
+        self.metrics = metrics
+        self.model_info = model_info
+
+
+class RevenueForecastModel:
+    """
+    Ensemble revenue forecasting model.
+
+    Steps
+    -----
+    1. Feature engineering (lags, rolling stats, calendar features)
+    2. SARIMAX(1,1,1)(1,0,1,12) for trend + seasonality
+    3. Ridge regression on engineered features
+    4. Weighted ensemble with inverse-RMSE weights
+    5. Bootstrap confidence intervals
+    """
+
+    min_periods_sarimax: int = 12
+    min_periods_ridge: int = 6
+
+    def __init__(self, horizon: int = 6, alpha: float = 0.3):
+        self.horizon = horizon
+        self.alpha   = alpha          # Ridge regularisation
+        self.scaler  = StandardScaler()
+        self._fitted = False
+
+    # ── Feature Engineering ────────────────────────────────────────────────
+    def _build_features(self, series: pd.Series, short_mode: bool = False) -> pd.DataFrame:
+        df = pd.DataFrame({"y": series})
+        df["lag_1"]  = df["y"].shift(1)
+        df["lag_2"]  = df["y"].shift(2)
+        df["lag_3"]  = df["y"].shift(3)
+        if not short_mode and len(series) >= 13:
+            df["lag_12"] = df["y"].shift(12)
+        roll_window = min(3, len(series) - 1)
+        df["roll_3"] = df["y"].shift(1).rolling(max(2, roll_window)).mean()
+        roll6_window = min(6, len(series) - 1)
+        df["roll_6"] = df["y"].shift(1).rolling(max(2, roll6_window)).mean()
+        df["month"]  = series.index.month if hasattr(series.index, "month") else range(len(series))
+        df["trend"]  = np.arange(len(df))
+        df["trend_sq"] = df["trend"] ** 2
+        return df.dropna()
+
+    # ── Fit ────────────────────────────────────────────────────────────────
+    def fit(self, revenue_series: pd.Series):
+        """
+        Parameters
+        ----------
+        revenue_series : pd.Series
+            Monthly revenue indexed by period string 'YYYY-MM', sorted ascending.
+        """
+        self.series_ = revenue_series.astype(float)
+        n = len(self.series_)
+
+        if n < self.min_periods_ridge:
+            raise ValueError(
+                f"Insufficient data: need at least {self.min_periods_ridge} months, got {n}."
+            )
+
+        test_size = min(3, max(1, n // 5))
+        train, test = self.series_.iloc[:-test_size], self.series_.iloc[-test_size:]
+
+        # ── SARIMAX (only when enough history) ───────────────────────────
+        if n >= self.min_periods_sarimax:
+            try:
+                from statsmodels.tsa.statespace.sarimax import SARIMAX
+                self.sarimax_ = SARIMAX(
+                    train, order=(1, 1, 1), seasonal_order=(1, 0, 1, 12),
+                    enforce_stationarity=False, enforce_invertibility=False
+                ).fit(disp=False)
+                sarimax_pred = self.sarimax_.forecast(test_size)
+                sarimax_rmse = float(np.sqrt(mean_squared_error(test, sarimax_pred)))
+            except Exception:
+                self.sarimax_ = None
+                sarimax_rmse  = float("inf")
+        else:
+            # Not enough data for SARIMAX — use Ridge only
+            self.sarimax_ = None
+            sarimax_rmse  = float("inf")
+
+        # ── Ridge regression ─────────────────────────────────────────────
+        short_mode = n < self.min_periods_sarimax
+        feat_df = self._build_features(self.series_, short_mode=short_mode)
+        X = feat_df.drop(columns=["y"]).values
+        y = feat_df["y"].values
+        # Guard: if test_size > available rows, shrink
+        actual_test = min(test_size, len(X) - 1)
+        if actual_test < 1:
+            actual_test = 1
+        X_train, X_test = X[:-actual_test], X[-actual_test:]
+        y_train, y_test = y[:-actual_test], y[-actual_test:]
+        X_train_s = self.scaler.fit_transform(X_train)
+        X_test_s  = self.scaler.transform(X_test)
+        self.ridge_ = Ridge(alpha=self.alpha).fit(X_train_s, y_train)
+        ridge_pred  = self.ridge_.predict(X_test_s)
+        ridge_rmse  = float(np.sqrt(mean_squared_error(y_test, ridge_pred)))
+
+        # ── GBR (C1d) ─────────────────────────────────────────────────────
+        gbr_rmse = float("inf")
+        self.gbr_ = None
+        if len(X_train) >= 8:
+            try:
+                from sklearn.ensemble import GradientBoostingRegressor
+                self.gbr_ = GradientBoostingRegressor(
+                    n_estimators=100, max_depth=3, learning_rate=0.05,
+                    subsample=0.8, random_state=42,
+                ).fit(X_train_s, y_train)
+                gbr_pred = self.gbr_.predict(X_test_s)
+                gbr_rmse = float(np.sqrt(mean_squared_error(y_test, gbr_pred)))
+            except Exception:
+                self.gbr_ = None
+
+        # ── Ensemble weights (inverse RMSE) ──────────────────────────────
+        rmse_map: dict[str, float] = {"ridge": ridge_rmse}
+        if sarimax_rmse < float("inf"):
+            rmse_map["sarimax"] = sarimax_rmse
+        if gbr_rmse < float("inf"):
+            rmse_map["gbr"] = gbr_rmse
+        inv_sum = sum(1.0 / r for r in rmse_map.values())
+        self.w_sarimax = (1.0 / rmse_map["sarimax"] / inv_sum) if "sarimax" in rmse_map else 0.0
+        self.w_ridge   = (1.0 / rmse_map["ridge"]   / inv_sum)
+        self.w_gbr     = (1.0 / rmse_map["gbr"]     / inv_sum) if "gbr"     in rmse_map else 0.0
+
+        # ── Held-out metrics ─────────────────────────────────────────────
+        ensemble_pred = self.w_ridge * ridge_pred
+        if self.sarimax_ is not None:
+            ensemble_pred = ensemble_pred + self.w_sarimax * np.array(sarimax_pred)
+        if self.gbr_ is not None:
+            ensemble_pred = ensemble_pred + self.w_gbr * self.gbr_.predict(X_test_s)
+        self.metrics_ = {
+            "MAE":  round(float(mean_absolute_error(test.values, ensemble_pred)), 2),
+            "RMSE": round(float(np.sqrt(mean_squared_error(test.values, ensemble_pred))), 2),
+            "MAPE": round(float(np.mean(np.abs((test.values - ensemble_pred) / (test.values + 1e-9))) * 100), 2),
+        }
+        components = ["Ridge"]
+        if self.sarimax_ is not None:
+            components.insert(0, "SARIMAX(1,1,1)(1,0,1,12)")
+        if self.gbr_ is not None:
+            components.append("GBR")
+        self._model_info = " + ".join(components) + " ensemble"
+        self._fitted = True
+        return self
+
+    # ── Predict ────────────────────────────────────────────────────────────
+    def predict(self) -> _EnsembleFit:
+        assert self._fitted, "Call .fit() first."
+
+        n = len(self.series_)
+        warning = f"WARNING: Only {n} months of data. Forecasts may be unreliable." if n < 24 else ""
+        short_mode = n < self.min_periods_sarimax
+
+        # SARIMAX forecast
+        if self.sarimax_ is not None:
+            sx_fc   = self.sarimax_.get_forecast(self.horizon)
+            sx_mean = sx_fc.predicted_mean.values
+        else:
+            last    = float(self.series_.iloc[-1])
+            sx_mean = np.array([last] * self.horizon)
+
+        # Ridge iterative forecast
+        history = list(self.series_.values)
+        ridge_preds: list[float] = []
+        for _ in range(self.horizon):
+            tmp = pd.Series(history)
+            feat_row = self._build_features(tmp, short_mode=short_mode).iloc[[-1]]
+            X_row = self.scaler.transform(feat_row.drop(columns=["y"]).values)
+            pred  = float(self.ridge_.predict(X_row)[0])
+            ridge_preds.append(pred)
+            history.append(pred)
+        ridge_arr = np.array(ridge_preds)
+
+        # GBR iterative forecast (C1d)
+        gbr_arr = np.zeros(self.horizon)
+        if self.gbr_ is not None:
+            gbr_history = list(self.series_.values)
+            for j in range(self.horizon):
+                tmp = pd.Series(gbr_history)
+                feat_row = self._build_features(tmp, short_mode=short_mode).iloc[[-1]]
+                X_row = self.scaler.transform(feat_row.drop(columns=["y"]).values)
+                pred = float(self.gbr_.predict(X_row)[0])
+                gbr_arr[j] = pred
+                gbr_history.append(pred)
+
+        # Ensemble base forecast
+        ensemble = self.w_sarimax * sx_mean + self.w_ridge * ridge_arr + self.w_gbr * gbr_arr
+        ensemble = np.maximum(ensemble, 0.0)
+
+        # ── Bootstrap residual CIs (500 resamples, asymmetric p10/p90) ────
+        history_vals = self.series_.values
+        # Use training residuals as the noise distribution
+        feat_df_full = self._build_features(self.series_, short_mode=short_mode)
+        X_full_s = self.scaler.transform(feat_df_full.drop(columns=["y"]).values)
+        fitted_vals = (
+            self.w_ridge * self.ridge_.predict(X_full_s)
+            + (self.w_gbr * self.gbr_.predict(X_full_s) if self.gbr_ is not None else 0.0)
+        )
+        if self.sarimax_ is not None:
+            sx_in_sample = self.sarimax_.fittedvalues.values[-len(fitted_vals):]
+            fitted_vals = fitted_vals + self.w_sarimax * sx_in_sample
+        residuals = history_vals[-len(fitted_vals):] - fitted_vals
+
+        rng = np.random.default_rng(42)
+        n_boot = 500
+        boot_forecasts = np.zeros((n_boot, self.horizon))
+        for b in range(n_boot):
+            noise = rng.choice(residuals, size=self.horizon, replace=True)
+            boot_forecasts[b] = np.maximum(ensemble + noise, 0.0)
+        lower_ci = np.percentile(boot_forecasts, 10, axis=0)
+        upper_ci = np.percentile(boot_forecasts, 90, axis=0)
+
+        # ── Three-lane forecast (Commit / Base / Best Case) ───────────────
+        # Commit = p20, Base = p50 (median), Best Case = p80
+        commit     = np.percentile(boot_forecasts, 20, axis=0)
+        best_case  = np.percentile(boot_forecasts, 80, axis=0)
+        # Base lane is the ensemble point estimate (already computed as `ensemble`)
+
+        result = _EnsembleFit(
+            values    = [round(float(v), 2) for v in ensemble],
+            lower_ci  = [round(float(v), 2) for v in lower_ci],
+            upper_ci  = [round(float(v), 2) for v in upper_ci],
+            commit    = [round(float(v), 2) for v in commit],
+            best_case = [round(float(v), 2) for v in best_case],
+            weights   = {
+                "sarimax": float(self.w_sarimax),
+                "ridge":   float(self.w_ridge),
+                "gbr":     float(self.w_gbr),
+            },
+            metrics    = self.metrics_,
+            model_info = self._model_info,
+        )
+        if warning:
+            result.model_info = f"{result.model_info} | {warning}"
+        return result
+
+
+def _forecast_ensemble_full(
+    history: list[float],
+    history_periods: list[str],
+    horizon: int,
+) -> ForecastResult:
+    """
+    Fit and predict the SARIMAX+Ridge+GBR ensemble, returning a fully
+    populated ForecastResult directly (not the 5-tuple contract the other
+    _forecast_* strategy functions use) — the ensemble's own bootstrap CI and
+    commit/best-case lanes are real information the generic post-dispatch
+    _confidence_bounds() in forecast() would otherwise silently discard.
+    Requires >= 6 months of history (RevenueForecastModel's own floor);
+    forecast() is responsible for not calling this on shorter series.
+    """
+    series = pd.Series(dict(zip(history_periods, history))) if history_periods else pd.Series(history)
+    try:
+        series.index = pd.PeriodIndex(series.index, freq="M").to_timestamp()
+    except Exception:
+        series.index = pd.Index(series.index)
+
+    model = RevenueForecastModel(horizon=horizon).fit(series)
+    fit_result = model.predict()
+
+    last_period = history_periods[-1] if history_periods else "2024-01"
+    periods = _next_periods(last_period, horizon)
+
+    return ForecastResult(
+        forecast_type="revenue",
+        scenario=SCENARIO_BASE,
+        strategy_used=STRATEGY_ENSEMBLE,
+        periods=periods,
+        values=fit_result.values,
+        lower_bound=fit_result.lower_ci,
+        upper_bound=fit_result.upper_ci,
+        backtest_mae=fit_result.metrics.get("MAE"),
+        backtest_rmse=fit_result.metrics.get("RMSE"),
+        backtest_mape=fit_result.metrics.get("MAPE"),
+        assumptions=[fit_result.model_info],
+        warnings=[],
+        history_months=len(history),
+        horizon_months=horizon,
+        commit_values=fit_result.commit,
+        best_case_values=fit_result.best_case,
+        component_weights=fit_result.weights,
+    )
+
+
 # ── Public API ───────────────────────────────────────────────────────────
 
 def forecast(
@@ -364,6 +696,53 @@ def forecast(
     # Derive future period labels
     last_period = history_periods[-1] if history_periods else "2024-01"
     future_periods = _next_periods(last_period, horizon)
+
+    # The ensemble strategy returns a fully-populated ForecastResult directly
+    # (real bootstrap CI, commit/best-case lanes) rather than going through
+    # the generic 5-tuple dispatch + _confidence_bounds() below, which would
+    # discard that in favor of a symmetric MAE-based CI. RevenueForecastModel
+    # needs >= 6 months (its own floor) — below that, fall back to baseline
+    # with a warning rather than let the ValueError propagate; forecast()'s
+    # contract is "always return a ForecastResult", including for degenerate
+    # input, same as every other strategy here.
+    if strategy == STRATEGY_ENSEMBLE:
+        if n < 6:
+            # Don't compute a fallback result here — just warn and fall through
+            # to the generic dispatch block below. `dispatch` (built further down)
+            # has no "ensemble" key, so `dispatch.get(strategy, _forecast_baseline)`
+            # already resolves to _forecast_baseline on its own; computing it here
+            # too would just run the same deterministic function twice.
+            warn.append(f"Ensemble strategy needs >= 6 months of history (got {n}); using baseline instead.")
+        else:
+            result = _forecast_ensemble_full(history, history_periods, horizon)
+            values = [round(v * scenario_mult, 2) for v in result.values]
+            commit = [round(v * scenario_mult, 2) for v in result.commit_values]
+            best_case = [round(v * scenario_mult, 2) for v in result.best_case_values]
+            assumptions = list(result.assumptions)
+            if scenario != SCENARIO_BASE:
+                assumptions.append(
+                    f"Scenario '{scenario}' applied: ×{scenario_mult:.2f} multiplier on base forecast."
+                )
+            return ForecastResult(
+                forecast_type=forecast_type,
+                scenario=scenario,
+                strategy_used=STRATEGY_ENSEMBLE,
+                periods=result.periods,
+                values=values,
+                lower_bound=[round(v * scenario_mult, 2) for v in result.lower_bound],
+                upper_bound=[round(v * scenario_mult, 2) for v in result.upper_bound],
+                backtest_mae=result.backtest_mae,
+                backtest_rmse=result.backtest_rmse,
+                backtest_mape=result.backtest_mape,
+                confidence_interval=confidence_interval,
+                assumptions=assumptions,
+                warnings=warn + list(result.warnings),
+                history_months=n,
+                horizon_months=horizon,
+                commit_values=commit,
+                best_case_values=best_case,
+                component_weights=result.component_weights,
+            )
 
     # Dispatch to strategy
     dispatch = {

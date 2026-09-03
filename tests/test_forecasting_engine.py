@@ -191,6 +191,12 @@ def test_forecast_result_to_dict_has_exactly_the_documented_keys():
         "lower_bound", "upper_bound", "backtest_mae", "backtest_rmse",
         "backtest_mape", "confidence_interval", "assumptions", "warnings",
         "history_months", "horizon_months",
+        # Added for the "ensemble" strategy (forecasting-stack consolidation):
+        # real commit/best-case lanes and per-component weights. Every other
+        # strategy leaves these at their empty defaults ([]/{}) — they exist
+        # on every ForecastResult so callers don't need a strategy-specific
+        # shape check, matching this test's own "pin the shape" premise.
+        "commit_values", "best_case_values", "component_weights",
     }
     # And the attribute-access path audit/payout_audit.py relies on directly.
     for attr in ("values", "periods", "backtest_mape", "backtest_mae", "history_months", "strategy_used"):
@@ -266,6 +272,105 @@ def test_baseline_backtest_branch_runs_with_four_or_more_months():
     result = forecast(hist, periods, horizon=2, strategy_override="baseline")
     assert result.strategy_used == "baseline"
     assert result.backtest_mae is not None
+
+
+# ── Ensemble strategy (forecasting-stack consolidation, Phase 1) ───────────
+#
+# "ensemble" moves RevenueForecastModel from forecasting.py into this module
+# verbatim and exposes it as an explicit-override-only strategy — reachable
+# via strategy_override="ensemble", never auto-selected by select_strategy().
+# It bypasses the generic 5-tuple dispatch + _confidence_bounds() path
+# entirely (see forecast()'s special-case block) so it can return its own
+# real bootstrap CI and commit/best-case lanes instead of a synthetic
+# symmetric-MAE CI. These tests pin that both branches of that special case
+# (>= 6 months real ensemble, < 6 months fallback) behave correctly.
+
+def test_select_strategy_never_returns_ensemble():
+    """Ensemble is reachable only via explicit strategy_override — it must
+    never be an auto-selection outcome, at any history length."""
+    for months in (0, 3, 6, 12, 18, 24, 36, 60, 120):
+        assert select_strategy(months) != "ensemble"
+
+
+def _make_noisy_history(n=24):
+    """A perfectly linear ramp (_make_history's shape) makes one ensemble
+    component fit the backtest with RMSE == 0, and RevenueForecastModel's
+    inverse-RMSE weighting (1.0 / rmse) divides by zero — a real,
+    pre-existing bug in forecasting.py's original class, faithfully
+    preserved by the verbatim move (confirmed to reproduce identically
+    against the untouched forecasting.py code, unrelated to this branch).
+    Real revenue data is never perfectly linear, so exercise the ensemble
+    path with mild noise instead, same as every other real caller does."""
+    return [100_000 + i * 3_000 + (i % 4) * 1_500 for i in range(n)]
+
+
+def test_ensemble_strategy_with_enough_history_populates_real_lanes():
+    hist = _make_noisy_history(24)
+    periods = _make_periods_rolling(24)
+    result = forecast(hist, periods, horizon=6, strategy_override="ensemble")
+    assert result.strategy_used == "ensemble"
+    assert len(result.values) == 6
+    assert len(result.commit_values) == 6
+    assert len(result.best_case_values) == 6
+    assert set(result.component_weights.keys()) == {"sarimax", "ridge", "gbr"}
+    assert result.warnings == []
+    # commit (p20) <= base <= best_case (p80) at every horizon step, by
+    # construction of the bootstrap percentile lanes.
+    for c, v, b in zip(result.commit_values, result.values, result.best_case_values):
+        assert c <= v <= b
+
+
+def test_ensemble_strategy_below_floor_falls_back_to_baseline_with_a_warning():
+    """RevenueForecastModel's own floor is 6 months. Below that, forecast()
+    must not crash or silently run the real ensemble — it warns and falls
+    back to baseline, and the three ensemble-only fields stay at their empty
+    defaults rather than holding stale/partial data."""
+    hist = [100_000, 110_000, 95_000, 120_000]
+    periods = ["2024-01", "2024-02", "2024-03", "2024-04"]
+    result = forecast(hist, periods, horizon=3, strategy_override="ensemble")
+    assert result.strategy_used == "ensemble"
+    assert len(result.values) == 3
+    assert result.commit_values == []
+    assert result.best_case_values == []
+    assert result.component_weights == {}
+    assert any("Ensemble strategy needs >= 6 months" in w for w in result.warnings)
+
+
+def test_ensemble_strategy_matches_forecasting_py_original_numerically():
+    """The move must be behavior-preserving: identical input, identical
+    random seed -> identical output, field-for-field, against the original
+    RevenueForecastModel still in forecasting.py. This is the numeric-parity
+    check the consolidation plan requires before anything downstream is
+    allowed to start depending on the moved copy."""
+    import random
+    import numpy as np
+    import pandas as pd
+    from backend.ml.forecasting import RevenueForecastModel as OldModel
+    from backend.ml.forecasting_engine import RevenueForecastModel as NewModel
+
+    hist = _make_noisy_history(24)
+    periods = _make_periods_rolling(24)
+
+    def _series():
+        s = pd.Series(dict(zip(periods, hist)))
+        s.index = pd.PeriodIndex(s.index, freq="M").to_timestamp()
+        return s
+
+    random.seed(7)
+    np.random.seed(7)
+    old_result = OldModel(horizon=6).fit(_series()).predict()
+
+    random.seed(7)
+    np.random.seed(7)
+    new_result = NewModel(horizon=6).fit(_series()).predict()
+
+    assert old_result.forecast == new_result.values
+    assert old_result.lower_ci == new_result.lower_ci
+    assert old_result.upper_ci == new_result.upper_ci
+    assert old_result.commit_lane == new_result.commit
+    assert old_result.best_case_lane == new_result.best_case
+    assert old_result.ensemble_weights == new_result.weights
+    assert old_result.model_info == new_result.model_info
 
 
 def test_sarimax_failure_falls_back_to_ridge(monkeypatch):
