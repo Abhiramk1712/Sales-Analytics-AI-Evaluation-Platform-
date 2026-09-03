@@ -11,7 +11,15 @@ from backend.auth.dependencies import get_user_context, require_permission
 from backend.auth.models import UserContext
 from backend.auth.tenant import get_current_company_id, get_tenant_context
 from backend.database import get_db
-from backend.payout.audit_trail_service import adjust_payout, approve_payout, get_payout, list_payouts, lock_payout
+from backend.payout.audit_trail_service import (
+    adjust_payout,
+    approve_payout,
+    get_payout,
+    list_payouts,
+    lock_payout,
+    mark_paid,
+    mark_reviewed,
+)
 from backend.validation.quality_gate import get_critical_issues
 
 router = APIRouter(
@@ -128,6 +136,20 @@ async def get_payout_trace(
     }
 
 
+@router.post("/{payout_id}/review")
+async def review_payout_record(
+    payout_id: str,
+    ctx: UserContext = Depends(get_user_context),
+    _: Any = Depends(require_permission("approve_payouts")),
+) -> dict[str, Any]:
+    try:
+        return mark_reviewed(payout_id, actor=ctx.user_id or "revops-admin")
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Payout record not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
 @router.post("/{payout_id}/approve")
 async def approve_payout_record(
     payout_id: str,
@@ -167,6 +189,20 @@ async def lock_payout_record(
 ) -> dict[str, Any]:
     try:
         return lock_payout(payout_id, actor=ctx.user_id or "finance-admin")
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Payout record not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+@router.post("/{payout_id}/pay")
+async def mark_payout_paid(
+    payout_id: str,
+    ctx: UserContext = Depends(get_user_context),
+    _: Any = Depends(require_permission("approve_payouts")),
+) -> dict[str, Any]:
+    try:
+        return mark_paid(payout_id, actor=ctx.user_id or "finance-admin")
     except KeyError:
         raise HTTPException(status_code=404, detail="Payout record not found")
     except ValueError as exc:

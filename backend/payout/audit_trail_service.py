@@ -158,6 +158,16 @@ def lock_payout(payout_id: str, actor: str) -> dict[str, Any]:
     return _set_state(payout_id, "locked", actor, approval_status="locked", lock_record=True)
 
 
+def mark_paid(payout_id: str, actor: str) -> dict[str, Any]:
+    """
+    "paid" is a valid lifecycle_state (VALID_LIFECYCLE_STATES) and _set_state's
+    own lock guard already allows locked -> paid, but nothing called this
+    transition — a payout could reach "locked" through the API and then had
+    no path to "paid" at all. Mirrors approve_payout/lock_payout exactly.
+    """
+    return _set_state(payout_id, "paid", actor, approval_status="paid")
+
+
 def adjust_payout(
     payout_id: str,
     actor: str,

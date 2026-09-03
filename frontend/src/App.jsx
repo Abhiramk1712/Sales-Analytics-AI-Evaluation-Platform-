@@ -8,6 +8,7 @@ import { useUrlState } from "./hooks/useUrlState";
 
 // ── New page imports (Sprint 2) ───────────────────────────────────────────
 import PayoutsPage from "./pages/PayoutsPage";
+import PayoutAuditPage from "./pages/PayoutAuditPage";
 import ARRWaterfallPage from "./pages/ARRWaterfallPage";
 import RepScorecardPage from "./pages/RepScorecardPage";
 import AgentPage from "./pages/AgentPage";
@@ -3078,7 +3079,7 @@ const NAV_MODULES = [
   { label: "Executive Overview", tabs: ["Dashboard", "RevOps Control Center", "Reports"] },
   { label: "Revenue Intelligence", tabs: ["Forecast", "ARR Health", "ARR Waterfall", "Pipeline Health"] },
   { label: "People & Territory", tabs: ["Reps", "Rep Scorecard", "Org Hierarchy", "Territories"] },
-  { label: "Compensation", tabs: ["Payouts", "Plans"] },
+  { label: "Compensation", tabs: ["Payouts", "Payout Approvals", "Plans"] },
   { label: "AI & Operations", tabs: ["AI Agent", "Data Quality", "Model Monitoring", "Enterprise Grade", "ML Insights"] },
   { label: "Data Operations", tabs: ["Ingestion"] },
 ];
@@ -3088,11 +3089,11 @@ const PERIOD_AWARE_TABS = new Set(["Dashboard", "RevOps Control Center", "ARR He
 const ROLE_TAB_ACCESS = {
   executive: new Set(ALL_TABS.filter((t) => !["Data Quality", "Model Monitoring", "Enterprise Grade", "Ingestion"].includes(t))),
   revops_admin: new Set(ALL_TABS),
-  finance_admin: new Set(["Dashboard", "RevOps Control Center", "Payouts", "Plans", "Reports", "AI Agent", "Data Quality"]),
+  finance_admin: new Set(["Dashboard", "RevOps Control Center", "Payouts", "Payout Approvals", "Plans", "Reports", "AI Agent", "Data Quality"]),
   sales_manager: new Set(["Dashboard", "Forecast", "ARR Health", "Pipeline Health", "Reps", "Rep Scorecard", "Reports", "AI Agent"]),
   sales_rep: new Set(["Dashboard", "Rep Scorecard", "Forecast", "AI Agent"]),
   data_scientist: new Set(["Forecast", "ML Insights", "Model Monitoring", "Data Quality", "Reports", "AI Agent"]),
-  auditor: new Set(["Dashboard", "Payouts", "Reports", "Data Quality", "Model Monitoring", "Enterprise Grade"]),
+  auditor: new Set(["Dashboard", "Payouts", "Payout Approvals", "Reports", "Data Quality", "Model Monitoring", "Enterprise Grade"]),
 };
 
 export default function App() {
@@ -3423,6 +3424,7 @@ export default function App() {
       {tab === "Rep Scorecard" && <RepScorecardPage refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} />}
       {tab === "AI Agent"  && <AgentPage activeCompany={activeCompany} userRole={userRole} />}
       {tab === "Payouts"   && <PayoutsPage refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} period={period} />}
+      {tab === "Payout Approvals" && <PayoutAuditPage refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} />}
       {tab === "Plans"     && <PlansPage refreshKey={refreshKey} userRole={userRole} activeCompany={activeCompany} />}
       {tab === "Territories" && <TerritoriesPage refreshKey={refreshKey} period={period} activeCompany={activeCompany} userRole={userRole} />}
       {tab === "Reports" && <ReportsTab activeCompany={activeCompany} userRole={userRole} />}
