@@ -366,3 +366,26 @@ def test_sarimax_failure_falls_back_to_ridge(monkeypatch):
     result = forecast(hist, periods, horizon=3, strategy_override="sarimax")
     assert any("SARIMAX failed" in a and "Ridge" in a for a in result.assumptions)
     assert len(result.values) == 3
+
+
+def test_ensemble_fit_does_not_divide_by_zero_on_a_perfect_backtest_fit():
+    """A perfectly linear revenue series lets SARIMAX fit its backtest slice
+    almost exactly (rmse == 0.0), and the inverse-RMSE ensemble-weighting
+    formula (1.0 / rmse) divided by zero on that — a real, reproducible bug,
+    not a hypothetical: perfectly linear synthetic data isn't exotic input,
+    and real (if less extreme) near-zero-variance stretches of revenue data
+    aren't impossible either. Every other ensemble test in this file uses
+    noisy history specifically to avoid tripping this; this one exists to
+    pin the fix instead of dodging the case."""
+    from backend.ml.forecasting_engine import RevenueForecastModel
+    import pandas as pd
+
+    hist = list(range(100_000, 100_000 + 24 * 10_000, 10_000))  # perfectly linear
+    periods = _make_periods_rolling(24)
+    series = pd.Series(dict(zip(periods, hist)))
+    series.index = pd.PeriodIndex(series.index, freq="M").to_timestamp()
+
+    result = RevenueForecastModel(horizon=6).fit(series).predict()
+    assert abs(sum(result.weights.values()) - 1.0) < 1e-6
+    assert len(result.values) == 6
+    assert all(v >= 0 for v in result.values)

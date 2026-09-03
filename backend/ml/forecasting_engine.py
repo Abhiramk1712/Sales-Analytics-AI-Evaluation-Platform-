@@ -486,15 +486,22 @@ class RevenueForecastModel:
                 self.gbr_ = None
 
         # ── Ensemble weights (inverse RMSE) ──────────────────────────────
+        # A component that fits its backtest slice exactly (rmse == 0.0 — real
+        # on a short or unusually clean slice, e.g. a component that happens
+        # to memorize a small/linear test window) makes 1.0/r divide by zero.
+        # Floor every RMSE at EPSILON before inverting: a perfect fit still
+        # gets the largest weight (its inverse dominates the sum), but a
+        # finite one, rather than the whole fit() call raising.
+        EPSILON = 1e-6
         rmse_map: dict[str, float] = {"ridge": ridge_rmse}
         if sarimax_rmse < float("inf"):
             rmse_map["sarimax"] = sarimax_rmse
         if gbr_rmse < float("inf"):
             rmse_map["gbr"] = gbr_rmse
-        inv_sum = sum(1.0 / r for r in rmse_map.values())
-        self.w_sarimax = (1.0 / rmse_map["sarimax"] / inv_sum) if "sarimax" in rmse_map else 0.0
-        self.w_ridge   = (1.0 / rmse_map["ridge"]   / inv_sum)
-        self.w_gbr     = (1.0 / rmse_map["gbr"]     / inv_sum) if "gbr"     in rmse_map else 0.0
+        inv_sum = sum(1.0 / max(r, EPSILON) for r in rmse_map.values())
+        self.w_sarimax = (1.0 / max(rmse_map["sarimax"], EPSILON) / inv_sum) if "sarimax" in rmse_map else 0.0
+        self.w_ridge   = (1.0 / max(rmse_map["ridge"],   EPSILON) / inv_sum)
+        self.w_gbr     = (1.0 / max(rmse_map["gbr"],     EPSILON) / inv_sum) if "gbr"     in rmse_map else 0.0
 
         # ── Held-out metrics ─────────────────────────────────────────────
         ensemble_pred = self.w_ridge * ridge_pred
