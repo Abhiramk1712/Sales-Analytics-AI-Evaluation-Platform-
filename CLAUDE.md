@@ -43,7 +43,7 @@ make setup      # venv + pip install -r requirements.txt + npm install
 make seed       # generate companies/techo-solutions and load it into the DB
 make backend    # uvicorn on :8000
 make frontend   # vite dev server on :3000 (NOT 5173 — vite.config.js sets 3000)
-make test       # pytest -q, ~29s, 796 tests
+make test       # pytest -q, ~29s, 826 tests
 make coverage   # pytest -q --cov=backend --cov-report=term-missing
 make lint       # compileall backend + vite build
 make package    # clean shareable zip
@@ -200,7 +200,7 @@ file order.
 
 | | Enforced? |
 | --- | --- |
-| Backend tests pass | **Yes** — `pytest -q` in CI, blocking. 796 tests. |
+| Backend tests pass | **Yes** — `pytest -q` in CI, blocking. 826 tests. |
 | Packaging hygiene | **Yes** — `check_package_hygiene.py` in CI, blocking. |
 | Frontend build | **Yes** — `npm run build` in CI, blocking. |
 | Backend coverage % | **No threshold, no CI gate.** `make coverage` measures it locally (58% of `backend/` by line, last measured); nothing fails a build over it. |

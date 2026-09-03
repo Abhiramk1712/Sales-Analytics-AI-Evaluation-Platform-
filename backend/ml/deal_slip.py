@@ -108,7 +108,19 @@ class DealSlipModel:
         df["log_amount"] = np.log1p(df["amount"].fillna(0).clip(lower=0))
 
         # Activity features
-        act_total = activities_df.groupby("deal_id")["id"].count().rename("activity_count")
+        # A company can have deals with zero logged activities at all — not
+        # just zero for these specific deals, an empty activities table
+        # system-wide. That makes activities_df a DataFrame with no columns
+        # (pd.DataFrame([]) from an empty list comprehension upstream), and
+        # .groupby("deal_id") on a nonexistent column raised KeyError('deal_id'),
+        # which the caller (get_deal_slip_analysis / get_pipeline_rescue_what_if)
+        # only ever saw as "Deal slip model failed: 'deal_id'" — deal-slip
+        # analysis was completely broken for any dataset with no activity
+        # history. Same empty-Series fallback already used for act_recent below.
+        if "deal_id" in activities_df.columns:
+            act_total = activities_df.groupby("deal_id")["id"].count().rename("activity_count")
+        else:
+            act_total = pd.Series(dtype=int, name="activity_count")
         # Recent activity (last 14 days)
         if "activity_date" in activities_df.columns:
             cutoff = pd.Timestamp(today) - pd.Timedelta(days=14)
