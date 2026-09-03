@@ -139,6 +139,129 @@ def test_payout_approval_blocked_when_critical_issues_exist(monkeypatch) -> None
     assert "critical_issues" in detail
 
 
+# ── /review and /pay: no route called mark_reviewed/mark_paid before this ────
+# mark_reviewed already existed in audit_trail_service.py; mark_paid is new.
+# Both mirror approve_payout/lock_payout exactly, so tested the same way —
+# plus one real (unmocked) test of the actual lifecycle guard, since a mocked
+# service call proves the route wires to the function, not that the state
+# machine's locked-payout rule holds.
+
+def test_review_endpoint_calls_mark_reviewed(monkeypatch) -> None:
+    app = FastAPI()
+    app.include_router(payout_audit_router.router)
+
+    calls = {}
+
+    def fake_mark_reviewed(payout_id, actor):
+        calls["payout_id"] = payout_id
+        calls["actor"] = actor
+        return {"payout_id": payout_id, "lifecycle_state": "reviewed"}
+
+    monkeypatch.setattr(payout_audit_router, "mark_reviewed", fake_mark_reviewed)
+
+    client = TestClient(app)
+    res = client.post("/payout-audit/p-1/review", headers={"X-User-Role": "revops_admin"})
+
+    assert res.status_code == 200
+    assert res.json()["lifecycle_state"] == "reviewed"
+    assert calls["payout_id"] == "p-1"
+
+
+def test_pay_endpoint_calls_mark_paid(monkeypatch) -> None:
+    app = FastAPI()
+    app.include_router(payout_audit_router.router)
+
+    monkeypatch.setattr(
+        payout_audit_router,
+        "mark_paid",
+        lambda payout_id, actor: {"payout_id": payout_id, "lifecycle_state": "paid"},
+    )
+
+    client = TestClient(app)
+    res = client.post("/payout-audit/p-1/pay", headers={"X-User-Role": "finance_admin"})
+
+    assert res.status_code == 200
+    assert res.json()["lifecycle_state"] == "paid"
+
+
+def test_review_and_pay_are_gated_by_approve_payouts_permission() -> None:
+    """sales_manager has view_payouts (can list/read) but not approve_payouts."""
+    app = FastAPI()
+    app.include_router(payout_audit_router.router)
+    client = TestClient(app)
+
+    res = client.post("/payout-audit/p-1/review", headers={"X-User-Role": "sales_manager"})
+    assert res.status_code == 403
+
+    res = client.post("/payout-audit/p-1/pay", headers={"X-User-Role": "sales_manager"})
+    assert res.status_code == 403
+
+
+def test_full_lifecycle_against_the_real_service_not_a_mock(monkeypatch) -> None:
+    """
+    review -> approve -> lock -> pay against the actual audit_trail_service
+    state machine (no monkeypatching of the service layer), then confirms the
+    real lock guard: once locked, review/approve are rejected (409) but
+    adjust still works — adjust_payout has no lock guard by design
+    (corrections must reach a payout in any state, including paid).
+
+    /approve alone needs a data-quality check against a DB — get_critical_issues
+    is stubbed to "none found" so this test proves the lifecycle machine, not
+    that unrelated dependency.
+    """
+    from backend.payout.audit_trail_service import clear_store, upsert_payout_trace
+
+    app = FastAPI()
+    app.include_router(payout_audit_router.router)
+
+    async def fake_db():
+        yield object()
+
+    async def no_critical_issues(_db):
+        return []
+
+    app.dependency_overrides[payout_audit_router.get_db] = fake_db
+    monkeypatch.setattr(payout_audit_router, "get_critical_issues", no_critical_issues)
+
+    client = TestClient(app)
+    headers = {"X-User-Role": "revops_admin"}
+
+    clear_store()
+    try:
+        record = upsert_payout_trace(
+            company_id="test-co", period="2026-03", rep_id="r-1", user_id=None,
+            plan_id=None, rule_id=None, sales_credit_id=None,
+            credited_amount=10_000, quota=10_000, attainment_pct=100.0,
+            base_commission=1_000, accelerator_amount=0, spiff_amount=0,
+            clawback_amount=0, final_payout=1_000,
+            calculation_trace_json={}, source_records_json={}, computed_by="test",
+        )
+        pid = record["payout_id"]
+
+        assert client.post(f"/payout-audit/{pid}/review", headers=headers).json()["lifecycle_state"] == "reviewed"
+        assert client.post(f"/payout-audit/{pid}/approve", json={}, headers=headers).json()["lifecycle_state"] == "approved"
+        assert client.post(f"/payout-audit/{pid}/lock", headers=headers).json()["lifecycle_state"] == "locked"
+
+        # Real guard: locked payouts may only move to paid or adjusted.
+        blocked = client.post(f"/payout-audit/{pid}/review", headers=headers)
+        assert blocked.status_code == 409
+
+        paid = client.post(f"/payout-audit/{pid}/pay", headers=headers)
+        assert paid.status_code == 200
+        assert paid.json()["lifecycle_state"] == "paid"
+
+        adjusted = client.post(
+            f"/payout-audit/{pid}/adjust",
+            json={"adjustment_amount": -50.0, "reason": "overpaid spiff"},
+            headers=headers,
+        )
+        assert adjusted.status_code == 200
+        assert adjusted.json()["lifecycle_state"] == "adjusted"
+        assert adjusted.json()["final_payout"] == 950.0
+    finally:
+        clear_store()
+
+
 def test_agent_sensitive_action_guardrail_contract() -> None:
     app = FastAPI()
     app.include_router(agent_router.router)

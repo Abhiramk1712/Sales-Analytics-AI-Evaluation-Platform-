@@ -32,9 +32,18 @@ Each payout trace record stores:
 - GET /payout-audit
 - GET /payout-audit/{id}
 - GET /payout-audit/{id}/trace
+- POST /payout-audit/{id}/review
 - POST /payout-audit/{id}/approve
 - POST /payout-audit/{id}/lock
+- POST /payout-audit/{id}/pay
 - POST /payout-audit/{id}/adjust
+
+`/review` and `/pay` reuse `mark_reviewed`/`mark_paid` in
+`audit_trail_service.py`, which existed (and, for `mark_reviewed`, already
+did) before either had a route calling them — a payout could reach `locked`
+through the API and then have no path to `paid` at all. `/adjust` has no
+lifecycle guard (unlike the others, which block once `is_locked`) —
+corrections are deliberately reachable from any state, including `paid`.
 
 Not to be confused with `/payout` (singular) — a different router
 (`backend/routers/payout.py`) covering calculation, statements, and config.
