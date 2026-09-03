@@ -1,288 +1,26 @@
 """
 ml/forecasting.py
 =================
-Revenue Forecasting Model
---------------------------
-Uses an ensemble of:
-  1. SARIMAX  — captures seasonality and trend
-  2. Ridge Regression — uses engineered lag/calendar features
-  3. GradientBoostingRegressor — non-linear pattern capture (C1d)
+Revenue forecast entry point used by the rest of the app: run_revenue_forecast()
+(carry-forward / linear-trend / full-ensemble by history length) and
+build_arr_waterfall() (ARR bridge analysis).
 
-Academic note: This demonstrates time-series forecasting for sales data,
-including feature engineering, model evaluation (RMSE, MAE, MAPE), and
-confidence interval construction.
-
-C1 enhancements:
-  C1a: Bootstrap residual CIs (asymmetric p10/p90)
-  C1b: Three-lane forecast — Commit / Base / Best Case (quantile regression)
-  C1d: GBR added to SARIMAX+Ridge ensemble
+The SARIMAX+Ridge+GBR ensemble model itself — RevenueForecastModel — used to
+be defined in this module. It now lives in backend/ml/forecasting_engine.py
+(moved verbatim; see that module's docstring and _EnsembleFit), and
+run_revenue_forecast()'s full-ensemble branch delegates to it. This module
+kept only what's still genuinely its own: the two hand-rolled short-history
+fallback branches, ARR waterfall, and the public dict-shaped API every real
+caller already depends on.
 """
 import numpy as np
 import pandas as pd
-from typing import Optional
-from dataclasses import dataclass, field
-from sklearn.linear_model import Ridge
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-from statsmodels.tsa.statespace.sarimax import SARIMAX
 from backend.ml.evaluation import rolling_origin_backtest
 from backend.ml.model_registry import MODEL_REVENUE_FORECAST
 import warnings
-warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore")  # SARIMAX/GBR convergence warnings from the delegated ensemble fit
 
 _FORECAST_MODEL_VERSION = "ensemble_v3"  # bumped for C1d
-
-
-@dataclass
-class ForecastResult:
-    periods:          list[str]
-    forecast:         list[float]
-    lower_ci:         list[float]
-    upper_ci:         list[float]
-    commit_lane:      list[float]   = field(default_factory=list)  # C1b p20
-    best_case_lane:   list[float]   = field(default_factory=list)  # C1b p80
-    ensemble_weights: dict          = field(default_factory=dict)
-    metrics:          dict          = field(default_factory=dict)
-    model_info:       str           = ""
-
-
-class RevenueForecastModel:
-    """
-    Ensemble revenue forecasting model.
-
-    Steps
-    -----
-    1. Feature engineering (lags, rolling stats, calendar features)
-    2. SARIMAX(1,1,1)(1,0,1,12) for trend + seasonality
-    3. Ridge regression on engineered features
-    4. Weighted ensemble with inverse-RMSE weights
-    5. Bootstrap confidence intervals
-    """
-
-    def __init__(self, horizon: int = 6, alpha: float = 0.3):
-        self.horizon = horizon
-        self.alpha   = alpha          # Ridge regularisation
-        self.scaler  = StandardScaler()
-        self._fitted = False
-
-    # ── Feature Engineering ────────────────────────────────────────────────
-    def _build_features(self, series: pd.Series, short_mode: bool = False) -> pd.DataFrame:
-        df = pd.DataFrame({"y": series})
-        df["lag_1"]  = df["y"].shift(1)
-        df["lag_2"]  = df["y"].shift(2)
-        df["lag_3"]  = df["y"].shift(3)
-        if not short_mode and len(series) >= 13:
-            df["lag_12"] = df["y"].shift(12)
-        roll_window = min(3, len(series) - 1)
-        df["roll_3"] = df["y"].shift(1).rolling(max(2, roll_window)).mean()
-        roll6_window = min(6, len(series) - 1)
-        df["roll_6"] = df["y"].shift(1).rolling(max(2, roll6_window)).mean()
-        df["month"]  = series.index.month if hasattr(series.index, "month") else range(len(series))
-        df["trend"]  = np.arange(len(df))
-        df["trend_sq"] = df["trend"] ** 2
-        return df.dropna()
-
-    # ── Fit ────────────────────────────────────────────────────────────────
-    min_periods_sarimax: int = 12
-    min_periods_ridge: int = 6
-
-    def fit(self, revenue_series: pd.Series):
-        """
-        Parameters
-        ----------
-        revenue_series : pd.Series
-            Monthly revenue indexed by period string 'YYYY-MM', sorted ascending.
-        """
-        self.series_ = revenue_series.astype(float)
-        n = len(self.series_)
-
-        if n < self.min_periods_ridge:
-            raise ValueError(
-                f"Insufficient data: need at least {self.min_periods_ridge} months, got {n}."
-            )
-
-        test_size = min(3, max(1, n // 5))
-        train, test = self.series_.iloc[:-test_size], self.series_.iloc[-test_size:]
-
-        # ── SARIMAX (only when enough history) ───────────────────────────
-        if n >= self.min_periods_sarimax:
-            try:
-                self.sarimax_ = SARIMAX(
-                    train, order=(1, 1, 1), seasonal_order=(1, 0, 1, 12),
-                    enforce_stationarity=False, enforce_invertibility=False
-                ).fit(disp=False)
-                sarimax_pred = self.sarimax_.forecast(test_size)
-                sarimax_rmse = float(np.sqrt(mean_squared_error(test, sarimax_pred)))
-            except Exception:
-                self.sarimax_ = None
-                sarimax_rmse  = float("inf")
-        else:
-            # Not enough data for SARIMAX — use Ridge only
-            self.sarimax_ = None
-            sarimax_rmse  = float("inf")
-
-        # ── Ridge regression ─────────────────────────────────────────────
-        short_mode = n < self.min_periods_sarimax
-        feat_df = self._build_features(self.series_, short_mode=short_mode)
-        X = feat_df.drop(columns=["y"]).values
-        y = feat_df["y"].values
-        # Guard: if test_size > available rows, shrink
-        actual_test = min(test_size, len(X) - 1)
-        if actual_test < 1:
-            actual_test = 1
-        X_train, X_test = X[:-actual_test], X[-actual_test:]
-        y_train, y_test = y[:-actual_test], y[-actual_test:]
-        X_train_s = self.scaler.fit_transform(X_train)
-        X_test_s  = self.scaler.transform(X_test)
-        self.ridge_ = Ridge(alpha=self.alpha).fit(X_train_s, y_train)
-        ridge_pred  = self.ridge_.predict(X_test_s)
-        ridge_rmse  = float(np.sqrt(mean_squared_error(y_test, ridge_pred)))
-
-        # ── GBR (C1d) ─────────────────────────────────────────────────────
-        gbr_rmse = float("inf")
-        self.gbr_ = None
-        if len(X_train) >= 8:
-            try:
-                from sklearn.ensemble import GradientBoostingRegressor
-                self.gbr_ = GradientBoostingRegressor(
-                    n_estimators=100, max_depth=3, learning_rate=0.05,
-                    subsample=0.8, random_state=42,
-                ).fit(X_train_s, y_train)
-                gbr_pred = self.gbr_.predict(X_test_s)
-                gbr_rmse = float(np.sqrt(mean_squared_error(y_test, gbr_pred)))
-            except Exception:
-                self.gbr_ = None
-
-        # ── Ensemble weights (inverse RMSE) ──────────────────────────────
-        rmse_map: dict[str, float] = {"ridge": ridge_rmse}
-        if sarimax_rmse < float("inf"):
-            rmse_map["sarimax"] = sarimax_rmse
-        if gbr_rmse < float("inf"):
-            rmse_map["gbr"] = gbr_rmse
-        inv_sum = sum(1.0 / r for r in rmse_map.values())
-        self.w_sarimax = (1.0 / rmse_map["sarimax"] / inv_sum) if "sarimax" in rmse_map else 0.0
-        self.w_ridge   = (1.0 / rmse_map["ridge"]   / inv_sum)
-        self.w_gbr     = (1.0 / rmse_map["gbr"]     / inv_sum) if "gbr"     in rmse_map else 0.0
-
-        # ── Held-out metrics ─────────────────────────────────────────────
-        ensemble_pred = self.w_ridge * ridge_pred
-        if self.sarimax_ is not None:
-            ensemble_pred = ensemble_pred + self.w_sarimax * np.array(sarimax_pred)
-        if self.gbr_ is not None:
-            ensemble_pred = ensemble_pred + self.w_gbr * self.gbr_.predict(X_test_s)
-        self.metrics_ = {
-            "MAE":  round(float(mean_absolute_error(test.values, ensemble_pred)), 2),
-            "RMSE": round(float(np.sqrt(mean_squared_error(test.values, ensemble_pred))), 2),
-            "MAPE": round(float(np.mean(np.abs((test.values - ensemble_pred) / (test.values + 1e-9))) * 100), 2),
-        }
-        components = ["Ridge"]
-        if self.sarimax_ is not None:
-            components.insert(0, "SARIMAX(1,1,1)(1,0,1,12)")
-        if self.gbr_ is not None:
-            components.append("GBR")
-        self._model_info = " + ".join(components) + " ensemble"
-        self._fitted = True
-        return self
-
-    # ── Predict ────────────────────────────────────────────────────────────
-    def predict(self) -> ForecastResult:
-        assert self._fitted, "Call .fit() first."
-
-        n = len(self.series_)
-        warning = f"WARNING: Only {n} months of data. Forecasts may be unreliable." if n < 24 else ""
-        short_mode = n < self.min_periods_sarimax
-
-        # SARIMAX forecast
-        if self.sarimax_ is not None:
-            sx_fc   = self.sarimax_.get_forecast(self.horizon)
-            sx_mean = sx_fc.predicted_mean.values
-        else:
-            last    = float(self.series_.iloc[-1])
-            sx_mean = np.array([last] * self.horizon)
-
-        # Ridge iterative forecast
-        history = list(self.series_.values)
-        ridge_preds: list[float] = []
-        for _ in range(self.horizon):
-            tmp = pd.Series(history)
-            feat_row = self._build_features(tmp, short_mode=short_mode).iloc[[-1]]
-            X_row = self.scaler.transform(feat_row.drop(columns=["y"]).values)
-            pred  = float(self.ridge_.predict(X_row)[0])
-            ridge_preds.append(pred)
-            history.append(pred)
-        ridge_arr = np.array(ridge_preds)
-
-        # GBR iterative forecast (C1d)
-        gbr_arr = np.zeros(self.horizon)
-        if self.gbr_ is not None:
-            gbr_history = list(self.series_.values)
-            for j in range(self.horizon):
-                tmp = pd.Series(gbr_history)
-                feat_row = self._build_features(tmp, short_mode=short_mode).iloc[[-1]]
-                X_row = self.scaler.transform(feat_row.drop(columns=["y"]).values)
-                pred = float(self.gbr_.predict(X_row)[0])
-                gbr_arr[j] = pred
-                gbr_history.append(pred)
-
-        # Ensemble base forecast
-        ensemble = self.w_sarimax * sx_mean + self.w_ridge * ridge_arr + self.w_gbr * gbr_arr
-        ensemble = np.maximum(ensemble, 0.0)
-
-        # ── C1a: Bootstrap residual CIs (500 resamples, asymmetric p10/p90) ─
-        history_vals = self.series_.values
-        # Use training residuals as the noise distribution
-        feat_df_full = self._build_features(self.series_, short_mode=short_mode)
-        X_full_s = self.scaler.transform(feat_df_full.drop(columns=["y"]).values)
-        fitted_vals = (
-            self.w_ridge * self.ridge_.predict(X_full_s)
-            + (self.w_gbr * self.gbr_.predict(X_full_s) if self.gbr_ is not None else 0.0)
-        )
-        if self.sarimax_ is not None:
-            sx_in_sample = self.sarimax_.fittedvalues.values[-len(fitted_vals):]
-            fitted_vals = fitted_vals + self.w_sarimax * sx_in_sample
-        residuals = history_vals[-len(fitted_vals):] - fitted_vals
-
-        rng = np.random.default_rng(42)
-        n_boot = 500
-        boot_forecasts = np.zeros((n_boot, self.horizon))
-        for b in range(n_boot):
-            noise = rng.choice(residuals, size=self.horizon, replace=True)
-            boot_forecasts[b] = np.maximum(ensemble + noise, 0.0)
-        lower_ci = np.percentile(boot_forecasts, 10, axis=0)
-        upper_ci = np.percentile(boot_forecasts, 90, axis=0)
-
-        # ── C1b: Three-lane forecast (Commit / Base / Best Case) ─────────
-        # Commit = p20, Base = p50 (median), Best Case = p80
-        commit     = np.percentile(boot_forecasts, 20, axis=0)
-        best_case  = np.percentile(boot_forecasts, 80, axis=0)
-        # Base lane is the ensemble point estimate (already computed as `ensemble`)
-
-        # Generate future period labels
-        last_period = self.series_.index[-1]
-        try:
-            last_dt = pd.Period(last_period, "M")
-            periods = [(last_dt + i + 1).strftime("%Y-%m") for i in range(self.horizon)]
-        except Exception:
-            periods = [f"T+{i+1}" for i in range(self.horizon)]
-
-        result = ForecastResult(
-            periods          = periods,
-            forecast         = [round(float(v), 2) for v in ensemble],
-            lower_ci         = [round(float(v), 2) for v in lower_ci],
-            upper_ci         = [round(float(v), 2) for v in upper_ci],
-            commit_lane      = [round(float(v), 2) for v in commit],
-            best_case_lane   = [round(float(v), 2) for v in best_case],
-            ensemble_weights = {
-                "sarimax": float(self.w_sarimax),
-                "ridge":   float(self.w_ridge),
-                "gbr":     float(self.w_gbr),
-            },
-            metrics          = self.metrics_,
-            model_info       = self._model_info,
-        )
-        if warning:
-            result.model_info = f"{result.model_info} | {warning}"
-        return result
 
 
 # ── Convenience function used by the API ──────────────────────────────────
@@ -405,12 +143,11 @@ def run_revenue_forecast(revenue_by_period: dict[str, float], horizon: int = 6) 
         except Exception:
             pass
 
-    # Consolidation Phase 2: the SARIMAX+Ridge+GBR ensemble now lives in
-    # forecasting_engine.py (moved verbatim in Phase 1; numeric parity against
-    # this module's own original class is pinned by
-    # test_ensemble_strategy_matches_forecasting_py_original_numerically in
-    # tests/test_forecasting_engine.py). This is the only branch of
-    # run_revenue_forecast that used the class — the <6mo and 6-23mo branches
+    # The SARIMAX+Ridge+GBR ensemble lives in forecasting_engine.py — this
+    # module's own copy was deleted once this was the only remaining branch
+    # that used it (pipeline_tools.py, the other caller, now imports the
+    # forecasting_engine copy directly too). This is the only branch of
+    # run_revenue_forecast that ever used it — the <6mo and 6-23mo branches
     # above are hand-rolled and untouched. Local import: forecasting_engine.py
     # does not import this module, so this stays a one-way dependency rather
     # than a cycle, and importing it only where it's used keeps every other
