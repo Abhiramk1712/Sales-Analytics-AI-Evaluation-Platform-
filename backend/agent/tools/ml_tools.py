@@ -331,3 +331,63 @@ async def get_rep_clusters_summary(db: AsyncSession) -> dict[str, Any]:
 
     data = [{"name": name, "rep_count": count} for name, count in sorted(counts.items(), key=lambda x: x[1], reverse=True)]
     return _result("get_rep_clusters_summary", "success", {"clusters": data}, [], ["ml_predictions"])
+
+
+async def get_metric_anomaly_summary(db: AsyncSession, months: int = 12) -> dict[str, Any]:
+    """
+    Time-series anomaly detection on monthly revenue: which periods look
+    statistically unusual against their own trailing history, and why.
+
+    Feeds the agent's `anomaly_question` intent (see executor.py) — that
+    branch previously called get_sales_kpis + get_deal_risk_summary, neither
+    of which does anything resembling outlier/anomaly detection, despite the
+    planner routing "anomaly", "outlier", "spike", "unusual" language there.
+
+    Uses backend.ml.anomaly_detector.detect_anomalies (dual Z-score +
+    IsolationForest, with per-anomaly driver attribution) — built, tested,
+    but never called from anywhere before this.
+    """
+    from backend.ml.anomaly_detector import detect_anomalies
+
+    revenue_rows = (
+        await db.execute(
+            select(Revenue.period, func.sum(Revenue.amount).label("total"))
+            .group_by(Revenue.period)
+            .order_by(Revenue.period)
+        )
+    ).all()
+
+    records = [{"period": str(r.period), "revenue": float(r.total or 0.0)} for r in revenue_rows]
+    if months:
+        records = records[-months:]
+
+    if len(records) < 4:
+        return _result(
+            "get_metric_anomaly_summary",
+            "warning",
+            {"periods_analyzed": len(records), "anomalies": [], "anomaly_count": 0},
+            ["Not enough revenue history for anomaly detection (need at least 4 periods)."],
+            ["revenue"],
+        )
+
+    detection = detect_anomalies(records, feature_keys=["revenue"], label_key="period")
+    flagged = [a for a in detection["anomalies"] if a["is_anomaly"]]
+
+    warnings: list[str] = []
+    if flagged:
+        warnings.append(f"{len(flagged)} of {len(records)} period(s) flagged as anomalous.")
+
+    payload = {
+        "periods_analyzed": len(records),
+        "anomalies": flagged,
+        "anomaly_count": len(flagged),
+        "baseline": detection.get("baseline", {}),
+        "method": detection.get("method"),
+    }
+    return _result(
+        "get_metric_anomaly_summary",
+        "warning" if flagged else "success",
+        payload,
+        warnings,
+        ["revenue"],
+    )

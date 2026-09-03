@@ -3,8 +3,21 @@ backend/ml/anomaly_detector.py
 ================================
 C7 — Sales Anomaly Detector
 
-Dual-method: Z-score (per-metric) + IsolationForest (multivariate).
-Feeds `explain_metric_change()` with significance scores.
+Dual-method: Z-score (per-metric) + IsolationForest (multivariate), across a
+time series of periods for one entity/metric — flags which period looks
+unusual against its own trailing history, and which feature drove it.
+
+That's a different question from backend/statistics/sales_drivers.py's
+explain_metric_change() (a two-point current-vs-previous delta) and from
+GET /analytics/anomalies (cross-sectional: which rep looks unusual against
+its peers right now). This module previously claimed to feed
+explain_metric_change() — it can't: that function only ever sees two
+snapshots, never a history to build a distribution from, and had no caller
+here regardless. The real integration is
+backend.agent.tools.ml_tools.get_metric_anomaly_summary(), which feeds the
+agent's anomaly_question intent (see backend/agent/executor.py) — until that
+tool was added, a user asking "any revenue spikes?" was routed to an intent
+that gathered generic KPIs and deal-risk data, nothing about anomalies at all.
 
 Outputs anomaly flags, scores, and which features drove each anomaly.
 """
