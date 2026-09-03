@@ -336,41 +336,15 @@ def test_ensemble_strategy_below_floor_falls_back_to_baseline_with_a_warning():
     assert any("Ensemble strategy needs >= 6 months" in w for w in result.warnings)
 
 
-def test_ensemble_strategy_matches_forecasting_py_original_numerically():
-    """The move must be behavior-preserving: identical input, identical
-    random seed -> identical output, field-for-field, against the original
-    RevenueForecastModel still in forecasting.py. This is the numeric-parity
-    check the consolidation plan requires before anything downstream is
-    allowed to start depending on the moved copy."""
-    import random
-    import numpy as np
-    import pandas as pd
-    from backend.ml.forecasting import RevenueForecastModel as OldModel
-    from backend.ml.forecasting_engine import RevenueForecastModel as NewModel
-
-    hist = _make_noisy_history(24)
-    periods = _make_periods_rolling(24)
-
-    def _series():
-        s = pd.Series(dict(zip(periods, hist)))
-        s.index = pd.PeriodIndex(s.index, freq="M").to_timestamp()
-        return s
-
-    random.seed(7)
-    np.random.seed(7)
-    old_result = OldModel(horizon=6).fit(_series()).predict()
-
-    random.seed(7)
-    np.random.seed(7)
-    new_result = NewModel(horizon=6).fit(_series()).predict()
-
-    assert old_result.forecast == new_result.values
-    assert old_result.lower_ci == new_result.lower_ci
-    assert old_result.upper_ci == new_result.upper_ci
-    assert old_result.commit_lane == new_result.commit
-    assert old_result.best_case_lane == new_result.best_case
-    assert old_result.ensemble_weights == new_result.weights
-    assert old_result.model_info == new_result.model_info
+# test_ensemble_strategy_matches_forecasting_py_original_numerically used to
+# live here: identical input + seed -> byte-identical output against
+# forecasting.py's original RevenueForecastModel, proving the Phase 1 move
+# was behavior-preserving before Phase 2 was allowed to depend on it. Its
+# premise (two live copies to diff) no longer holds — forecasting.py's copy
+# was deleted once pipeline_tools.py (the last other caller) was migrated to
+# import this module's class directly, so this module IS the only copy now.
+# The forecast-shape and fallback-chain tests above remain the ongoing
+# coverage; this one had already done its job.
 
 
 def test_sarimax_failure_falls_back_to_ridge(monkeypatch):
@@ -392,3 +366,26 @@ def test_sarimax_failure_falls_back_to_ridge(monkeypatch):
     result = forecast(hist, periods, horizon=3, strategy_override="sarimax")
     assert any("SARIMAX failed" in a and "Ridge" in a for a in result.assumptions)
     assert len(result.values) == 3
+
+
+def test_ensemble_fit_does_not_divide_by_zero_on_a_perfect_backtest_fit():
+    """A perfectly linear revenue series lets SARIMAX fit its backtest slice
+    almost exactly (rmse == 0.0), and the inverse-RMSE ensemble-weighting
+    formula (1.0 / rmse) divided by zero on that — a real, reproducible bug,
+    not a hypothetical: perfectly linear synthetic data isn't exotic input,
+    and real (if less extreme) near-zero-variance stretches of revenue data
+    aren't impossible either. Every other ensemble test in this file uses
+    noisy history specifically to avoid tripping this; this one exists to
+    pin the fix instead of dodging the case."""
+    from backend.ml.forecasting_engine import RevenueForecastModel
+    import pandas as pd
+
+    hist = list(range(100_000, 100_000 + 24 * 10_000, 10_000))  # perfectly linear
+    periods = _make_periods_rolling(24)
+    series = pd.Series(dict(zip(periods, hist)))
+    series.index = pd.PeriodIndex(series.index, freq="M").to_timestamp()
+
+    result = RevenueForecastModel(horizon=6).fit(series).predict()
+    assert abs(sum(result.weights.values()) - 1.0) < 1e-6
+    assert len(result.values) == 6
+    assert all(v >= 0 for v in result.values)

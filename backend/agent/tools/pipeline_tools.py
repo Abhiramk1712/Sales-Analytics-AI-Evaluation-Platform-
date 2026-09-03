@@ -100,7 +100,7 @@ async def run_ml_pipeline(db: AsyncSession) -> dict[str, Any]:
     """
     try:
         from backend.ml.training_pipeline import get_global_pipeline
-        from backend.ml.forecasting import RevenueForecastModel
+        from backend.ml.forecasting_engine import RevenueForecastModel
         from backend.ml.deal_scoring import DealScoringModel
         from backend.ml.rep_clustering import RepClusteringModel
         from backend.models import Revenue
@@ -133,13 +133,23 @@ async def run_ml_pipeline(db: AsyncSession) -> dict[str, Any]:
                 model = RevenueForecastModel()
                 model.fit(series)
                 forecast = model.predict()
-                pipeline.register_training_run("forecast", "success", {"periods": forecast.periods, "metrics": forecast.metrics})
+                # forecasting_engine.RevenueForecastModel.predict() returns an
+                # _EnsembleFit, not this file's ForecastResult — it doesn't carry
+                # period labels itself (see forecasting_engine.py's own comment
+                # on _EnsembleFit), so they're computed the same way the old
+                # in-module class used to: last fitted period + 1..horizon.
+                try:
+                    last_dt = pd.Period(model.series_.index[-1], "M")
+                    periods = [(last_dt + i + 1).strftime("%Y-%m") for i in range(model.horizon)]
+                except Exception:
+                    periods = [f"T+{i+1}" for i in range(model.horizon)]
+                pipeline.register_training_run("forecast", "success", {"periods": periods, "metrics": forecast.metrics})
                 results["forecast"] = {
                     "status": "trained",
-                    "periods": forecast.periods,
-                    "forecast": forecast.forecast,
+                    "periods": periods,
+                    "forecast": forecast.values,
                     "metrics": forecast.metrics,
-                    "ensemble_weights": forecast.ensemble_weights,
+                    "ensemble_weights": forecast.weights,
                 }
             else:
                 warnings.append(f"Forecast skipped: only {len(revenue_rows)} revenue periods (need ≥{_MIN_MONTHS_FOR_FORECAST}).")
