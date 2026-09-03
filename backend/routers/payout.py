@@ -1044,7 +1044,15 @@ async def payout_forecast(
             try:
                 forecast_result = run_revenue_forecast(revenue_by_month)
                 # Aggregate monthly forecast into quarters matching future_quarters
-                monthly_proj: list[float] = list(forecast_result.forecast)
+                # run_revenue_forecast returns a dict (see backend/ml/forecasting.py),
+                # not an object — forecast_result.forecast raised AttributeError on
+                # every call, silently caught by the except below, so this endpoint
+                # had never actually run the real ensemble forecast; it always fell
+                # through to the seasonal-heuristic fallback regardless of how much
+                # history a rep had. Confirmed live before this fix: every rep in a
+                # 12-rep company with 8-24 months of history came back "medium"
+                # confidence, never "high" — the only way that combination happens.
+                monthly_proj: list[float] = list(forecast_result["forecast_values"])
                 quarterly_forecasts = []
                 for i in range(periods):
                     q_rev = sum(monthly_proj[i * 3: i * 3 + 3]) if len(monthly_proj) >= (i + 1) * 3 else (
