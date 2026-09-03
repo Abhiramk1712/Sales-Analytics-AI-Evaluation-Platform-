@@ -69,6 +69,100 @@ class TestRevenueForecast:
         result = run_revenue_forecast(series, horizon=3)
         assert result["forecast_periods"][0] > last_period
 
+    # ── Coverage pass ahead of the forecasting-stack consolidation ────────
+    #
+    # run_revenue_forecast has 3 real branches by history length (<6 baseline,
+    # 6-23 trend, >=24 full ensemble) — only the baseline one had a dedicated
+    # test. The shape-contract test below exists specifically because of what
+    # investigating the consolidation found: GET /payout/forecast read
+    # forecast_result.forecast — a real attribute, but on RevenueForecastModel
+    # .predict()'s *internal* ForecastResult (defined in this same module),
+    # not on what run_revenue_forecast actually returns to callers, which is
+    # a dict keyed "forecast_values". Two same-shaped-sounding but different
+    # objects in one call chain is exactly how that confusion happened; this
+    # pins the one callers actually see.
+
+    def test_full_ensemble_output_has_exactly_the_documented_keys(self):
+        from backend.ml.forecasting import run_revenue_forecast
+        result = run_revenue_forecast(self._make_series(30), horizon=6)
+        assert set(result.keys()) == {
+            "historical", "forecast_periods", "forecast_values", "lower_ci",
+            "upper_ci", "commit_lane", "best_case_lane", "ensemble_weights",
+            "model_metrics", "model_info", "model_used", "metadata", "warnings",
+        }
+        assert result["metadata"]["forecast_mode"] == "model"
+        # The exact mistake found in GET /payout/forecast: this dict has no
+        # top-level "forecast" key, only "forecast_values".
+        assert "forecast" not in result
+
+    def test_trend_branch_used_for_6_to_23_months(self):
+        """The middle branch (linear trend extrapolation) had no dedicated
+        test at all — every existing test used either <6 or >=24 months."""
+        from backend.ml.forecasting import run_revenue_forecast
+        series = self._make_series(12)
+        result = run_revenue_forecast(series, horizon=3)
+        assert result["metadata"]["forecast_mode"] == "trend"
+        assert result["model_used"] == "linear_trend"
+        assert "slope_per_month" in result["model_metrics"]
+
+    def test_short_history_shape_matches_full_ensemble_shape(self):
+        """The baseline (<6mo) and full-ensemble (>=24mo) branches are
+        independently-written code paths returning what's supposed to be the
+        same dict shape — a caller shouldn't have to special-case which one
+        it got. Confirms they actually match key-for-key."""
+        from backend.ml.forecasting import run_revenue_forecast
+        short_result = run_revenue_forecast({"2024-01": 100_000, "2024-02": 110_000}, horizon=3)
+        full_result = run_revenue_forecast(self._make_series(30), horizon=3)
+        assert set(short_result.keys()) == set(full_result.keys())
+
+    def test_gap_in_monthly_history_is_forward_filled_with_a_warning(self):
+        """A missing month in real revenue data is a realistic case (a
+        company that didn't log anything one month) — confirms it's handled
+        by forward-fill rather than silently skewing the series or crashing.
+
+        The gap-detection code only runs in the >= 24-month (full ensemble)
+        branch — dropping a month from a 24-month series first drops
+        history_len to 23, which reroutes to the untested-for-this trend
+        branch instead. Starting from 25 months keeps history_len at 24 with
+        a real gap in the calendar range."""
+        from backend.ml.forecasting import run_revenue_forecast
+        series = self._make_series(25)
+        keys = sorted(series.keys())
+        gapped = {k: v for k, v in series.items() if k != keys[12]}  # drop one middle month
+        assert len(gapped) == 24
+        result = run_revenue_forecast(gapped, horizon=3)
+        assert any("DATA GAP" in w for w in result["warnings"])
+        assert len(result["forecast_values"]) == 3
+
+    def test_zero_history_raises_a_clear_error(self):
+        from backend.ml.forecasting import run_revenue_forecast
+        with pytest.raises(ValueError, match="No historical revenue data"):
+            run_revenue_forecast({}, horizon=3)
+
+    def test_sarimax_fit_failure_falls_back_to_ridge_only_ensemble(self, monkeypatch):
+        """RevenueForecastModel.fit() catches a SARIMAX fit exception and
+        proceeds Ridge-only (sarimax_rmse = inf, w_sarimax excluded from the
+        ensemble) rather than the whole forecast failing. Proven, not just
+        read: force the fit to raise and confirm the ensemble still produces
+        a real result with SARIMAX weighted out."""
+        import backend.ml.forecasting as forecasting_module
+        from backend.ml.forecasting import run_revenue_forecast
+
+        class _BoomSARIMAX:
+            def __init__(self, *args, **kwargs):
+                raise RuntimeError("synthetic SARIMAX fit failure for this test")
+
+        # forecasting.py imports SARIMAX at module level (`from statsmodels...
+        # import SARIMAX`), unlike forecasting_engine.py's local per-call
+        # import — so the patch target here is this module's own name.
+        monkeypatch.setattr(forecasting_module, "SARIMAX", _BoomSARIMAX)
+        result = run_revenue_forecast(self._make_series(30), horizon=4)
+
+        assert result["ensemble_weights"]["sarimax"] == 0.0
+        assert "SARIMAX" not in result["model_info"]
+        assert len(result["forecast_values"]) == 4
+        assert abs(sum(result["ensemble_weights"].values()) - 1.0) < 1e-6
+
 
 # ── Deal Scoring ──────────────────────────────────────────────────────────
 class TestDealScoring:

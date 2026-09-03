@@ -427,6 +427,13 @@ def run_revenue_forecast(revenue_by_period: dict[str, float], horizon: int = 6) 
         "ensemble_weights":  result.ensemble_weights,
         "model_metrics":     result.metrics,
         "model_info":        result.model_info,
+        # The other two branches (<6mo baseline, 6-23mo trend) both include
+        # this key; this branch didn't, so a caller reading result["model_used"]
+        # got a value for short/medium history and silently None for the
+        # actual full ensemble — the one case it matters most for. No caller
+        # reads it today (checked), but the three branches promise the same
+        # shape and this is the one place that broke it.
+        "model_used":        _FORECAST_MODEL_VERSION,
         "metadata": {
             "forecast_mode": "model",
             "history_months": history_len,
