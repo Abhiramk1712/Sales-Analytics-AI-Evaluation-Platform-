@@ -20,6 +20,7 @@ from backend.agent.tools.metric_tools import get_metric_definition, list_metrics
 from backend.agent.tools.ml_tools import (
     get_deal_risk_summary,
     get_forecast_summary,
+    get_metric_anomaly_summary,
     get_rep_clusters_summary,
 )
 from backend.agent.tools.plan_tools import get_plan_performance_summary, get_plans_rules_catalog
@@ -226,6 +227,7 @@ class ToolExecutor:
         elif intent == "anomaly_question":
             results.append(await get_sales_kpis(db_session))
             results.append(await get_deal_risk_summary(db_session))
+            results.append(await get_metric_anomaly_summary(db_session))
 
         elif intent == "report_request":
             results.append(await get_sales_kpis(db_session))
