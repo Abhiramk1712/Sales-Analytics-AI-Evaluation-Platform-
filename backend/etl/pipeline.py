@@ -1,4 +1,18 @@
-"""Unified ETL pipeline: bronze -> silver -> gold -> feature store."""
+"""
+Unified ETL pipeline: bronze -> silver -> gold -> feature store.
+
+Standalone architecture demonstration, not part of the app's live data flow.
+The application's real path is ingestion (backend/ingestion/) -> validation
+(backend/validation/) -> the governed metrics layer (backend/metrics/), which
+analytics, reports, and the agent all read from — see docs/data_lifecycle.md.
+This module is a second, self-contained take on the same bronze/silver/gold
+concept, built in Python rather than SQL (the dbt/ folder is the SQL take).
+Nothing in the routers, agent tools, or workflows calls into it; its only
+consumer is POST /etl/run and its own dedicated tests
+(tests/test_etl_pipeline.py, test_data_contracts.py, test_gold_marts.py,
+test_feature_store_outputs.py). Kept as a deliberate second demonstration of
+the same data-engineering pattern, not a gap to wire in.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass

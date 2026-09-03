@@ -39,3 +39,12 @@ Warnings are propagated into:
 ## Consistency Goal
 
 Dashboard, reports, and AI answers should reflect the same governed metrics and evidence paths, reducing mismatch between surfaces.
+
+## Not part of this flow: `backend/etl/`
+
+A second, standalone bronze → silver → gold → feature-store pipeline exists
+at `backend/etl/`, reachable via `POST /etl/run`. It is a deliberate second
+demonstration of the same data-engineering pattern above, built in Python
+rather than SQL (`dbt/` is the SQL take) — not a step in the live flow this
+document describes. Nothing in the app calls into it outside its own route
+and its own tests. See `backend/etl/pipeline.py`'s module docstring.
