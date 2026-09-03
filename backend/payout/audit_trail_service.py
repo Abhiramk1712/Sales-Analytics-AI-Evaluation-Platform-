@@ -60,7 +60,7 @@ def upsert_payout_trace(
         if existing and existing.get("is_locked"):
             return {
                 **existing,
-                "warnings": ["Payout is locked and cannot be recalculated. Use /payouts/{id}/adjust for corrections."],
+                "warnings": ["Payout is locked and cannot be recalculated. Use /payout-audit/{id}/adjust for corrections."],
             }
 
         record = {

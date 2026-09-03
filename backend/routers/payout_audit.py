@@ -15,7 +15,12 @@ from backend.payout.audit_trail_service import adjust_payout, approve_payout, ge
 from backend.validation.quality_gate import get_critical_issues
 
 router = APIRouter(
-    prefix="/payouts",
+    # README's own API Surface table already documented this as /payout-audit
+    # (see README.md's API Surface section) — the code just never matched. One
+    # character apart from backend/routers/payout.py's /payout prefix (a
+    # different router entirely: calculation/statements/config, not lifecycle),
+    # easy to misread when skimming route tables.
+    prefix="/payout-audit",
     tags=["Payout Audit"],
     dependencies=[Depends(require_permission("view_payouts")), Depends(get_tenant_context)],
 )
@@ -39,7 +44,7 @@ async def list_payout_records(
     rows = list_payouts(company_id=company_id)
 
     # Fallback: if in-memory audit trail is empty but DB has PayoutRecord rows,
-    # surface them so the /payouts list is never empty after a fresh company load.
+    # surface them so the list is never empty after a fresh company load.
     if not rows:
         from sqlalchemy import select as _sel
         from backend.models import PayoutRecord, UserProfile, Rep

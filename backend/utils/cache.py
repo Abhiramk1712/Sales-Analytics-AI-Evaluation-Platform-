@@ -65,5 +65,10 @@ def make_cache_key(prefix: str, *, company: str = "", role: str = "", **params: 
     return ":".join(parts)
 
 
-# Global demo cache instance — replace with Redis in production (TODO)
-dashboard_cache = TTLCache(default_ttl=30, max_size=200)
+# No module-level cache instance here on purpose. One existed (`dashboard_cache
+# = TTLCache(...)`) but nothing in the app ever imported it — only this
+# module's own test exercised TTLCache/make_cache_key directly. A cache
+# instance nobody reads from or writes to isn't caching, it's a global that
+# implies caching is happening. When a real call site wires this in, that's
+# where the instance should live (or become Redis-backed, per the TODO these
+# classes were already written against) — scoped to what it caches.

@@ -29,12 +29,15 @@ Each payout trace record stores:
 
 ## API Endpoints
 
-- GET /payouts
-- GET /payouts/{id}
-- GET /payouts/{id}/trace
-- POST /payouts/{id}/approve
-- POST /payouts/{id}/lock
-- POST /payouts/{id}/adjust
+- GET /payout-audit
+- GET /payout-audit/{id}
+- GET /payout-audit/{id}/trace
+- POST /payout-audit/{id}/approve
+- POST /payout-audit/{id}/lock
+- POST /payout-audit/{id}/adjust
+
+Not to be confused with `/payout` (singular) — a different router
+(`backend/routers/payout.py`) covering calculation, statements, and config.
 
 ## Blocking Rules
 
