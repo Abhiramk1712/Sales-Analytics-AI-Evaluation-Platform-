@@ -203,7 +203,7 @@ file order.
 | Backend tests pass | **Yes** — `pytest -q` in CI, blocking. 847 tests. |
 | Packaging hygiene | **Yes** — `check_package_hygiene.py` in CI, blocking. |
 | Frontend build | **Yes** — `npm run build` in CI, blocking. |
-| Backend coverage % | **No threshold, no CI gate.** `make coverage` measures it locally (58% of `backend/` by line, last measured); nothing fails a build over it. |
+| Backend coverage % | **No threshold, no CI gate.** `make coverage` measures it locally (63% of `backend/` by line, last measured); nothing fails a build over it. |
 | Frontend tests | **No.** There is no test runner installed. |
 | Frontend lint / types | **No.** No ESLint, no TypeScript. |
 | dbt tests | **No.** `schema.yml` exists; `dbt test` never runs in CI. |
