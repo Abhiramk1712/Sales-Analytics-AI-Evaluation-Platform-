@@ -117,11 +117,6 @@ def _next_periods(last_period: str, n: int) -> list[str]:
     return result
 
 
-def _add_months(yr: int, mo: int, delta: int) -> tuple[int, int]:
-    mo0 = mo - 1 + delta
-    return yr + mo0 // 12, mo0 % 12 + 1
-
-
 # ── Strategy selector ───────────────────────────────────────────────────
 
 def select_strategy(history_months: int) -> str:
