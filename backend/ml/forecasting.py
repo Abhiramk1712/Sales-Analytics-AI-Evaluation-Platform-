@@ -405,8 +405,30 @@ def run_revenue_forecast(revenue_by_period: dict[str, float], horizon: int = 6) 
         except Exception:
             pass
 
-    model = RevenueForecastModel(horizon=horizon).fit(series)
+    # Consolidation Phase 2: the SARIMAX+Ridge+GBR ensemble now lives in
+    # forecasting_engine.py (moved verbatim in Phase 1; numeric parity against
+    # this module's own original class is pinned by
+    # test_ensemble_strategy_matches_forecasting_py_original_numerically in
+    # tests/test_forecasting_engine.py). This is the only branch of
+    # run_revenue_forecast that used the class — the <6mo and 6-23mo branches
+    # above are hand-rolled and untouched. Local import: forecasting_engine.py
+    # does not import this module, so this stays a one-way dependency rather
+    # than a cycle, and importing it only where it's used keeps every other
+    # code path in this file free of the added import cost.
+    from backend.ml.forecasting_engine import RevenueForecastModel as _EnsembleModel
+    model = _EnsembleModel(horizon=horizon).fit(series)
     result = model.predict()
+    # periods: computed the same way RevenueForecastModel's own predict() used
+    # to compute them internally (last fitted period + 1..horizon) — the new
+    # class's result object no longer carries periods itself (see
+    # forecasting_engine._EnsembleFit), so this reproduces that exact logic
+    # against model.series_ (the same fitted series) rather than duplicating
+    # a second, potentially-diverging period-generation implementation.
+    try:
+        last_dt = pd.Period(model.series_.index[-1], "M")
+        periods = [(last_dt + i + 1).strftime("%Y-%m") for i in range(horizon)]
+    except Exception:
+        periods = [f"T+{i+1}" for i in range(horizon)]
     backtest = rolling_origin_backtest(series)
     warnings_list: list[str] = gap_warnings[:]
     if backtest.get("status") != "ok":
@@ -418,13 +440,13 @@ def run_revenue_forecast(revenue_by_period: dict[str, float], horizon: int = 6) 
 
     return {
         "historical":        {p: v for p, v in revenue_by_period.items()},
-        "forecast_periods":  result.periods,
-        "forecast_values":   result.forecast,
+        "forecast_periods":  periods,
+        "forecast_values":   result.values,
         "lower_ci":          result.lower_ci,
         "upper_ci":          result.upper_ci,
-        "commit_lane":       result.commit_lane,       # C1b
-        "best_case_lane":    result.best_case_lane,    # C1b
-        "ensemble_weights":  result.ensemble_weights,
+        "commit_lane":       result.commit,       # C1b
+        "best_case_lane":    result.best_case,    # C1b
+        "ensemble_weights":  result.weights,
         "model_metrics":     result.metrics,
         "model_info":        result.model_info,
         # The other two branches (<6mo baseline, 6-23mo trend) both include
