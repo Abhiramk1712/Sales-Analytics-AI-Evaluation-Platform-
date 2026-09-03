@@ -1,4 +1,10 @@
-"""ETL orchestration endpoints for admin workflows."""
+"""
+ETL orchestration endpoints for admin workflows.
+
+Standalone — see backend/etl/pipeline.py's module docstring. Not called from
+the frontend, any agent tool, or any workflow; reachable only here and from
+this module's own tests.
+"""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
