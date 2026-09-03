@@ -106,7 +106,7 @@ def test_payouts_list_filters_by_lifecycle_state(monkeypatch) -> None:
     app.dependency_overrides[payout_audit_router.get_current_company_id] = lambda: "techo-solutions"
 
     client = TestClient(app)
-    res = client.get("/payouts?lifecycle_state=approved")
+    res = client.get("/payout-audit?lifecycle_state=approved")
 
     assert res.status_code == 200
     body = res.json()
@@ -129,7 +129,7 @@ def test_payout_approval_blocked_when_critical_issues_exist(monkeypatch) -> None
 
     client = TestClient(app)
     res = client.post(
-        "/payouts/p-123/approve",
+        "/payout-audit/p-123/approve",
         json={"note": "reviewed"},
         headers={"X-User-Role": "revops_admin"},
     )
