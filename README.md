@@ -191,7 +191,10 @@ sales-analytics-ai/
 │   ├── validation/           # Quality gates and RevOps validation rules
 │   ├── metrics/              # Governed metric definitions and registry
 │   ├── statistics/           # Descriptive stats, anomaly detection, funnel/driver analysis
-│   └── services/             # Business service layer
+│   ├── services/             # Business service layer
+│   └── etl/                  # Standalone bronze/silver/gold demo (Python take on what dbt/
+│                              #   does in SQL) — not part of the live data flow; see
+│                              #   docs/data_lifecycle.md
 │
 ├── frontend/                 # React dashboard application
 │   └── src/
