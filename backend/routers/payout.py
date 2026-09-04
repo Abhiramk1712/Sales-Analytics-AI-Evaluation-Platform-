@@ -371,11 +371,45 @@ async def calculate_payout(
 
     cfg = _override_config(req.config_override) or _active_config
     result = compute_payout(revenue, quota, deals_won, deals_lost, cfg)
+
+    user_row = (
+        await db.execute(select(UserProfile).where(UserProfile.email == rep.email))
+    ).scalars().first()
+    uid = user_row.id if user_row else None
+
+    # A real, persisted payout already exists for this rep+period -- prefer
+    # it over this endpoint's own compute_payout() estimate, the same
+    # precedent _quarterly_payout_baseline() established for
+    # /payout/statements (and now /payout/team-summary too). Skipped for an
+    # explicit config_override request, since that's deliberately asking
+    # "what would this look like under a different config" -- a real
+    # committed record answering a different question shouldn't silently
+    # override that.
+    existing_payout_id: Optional[str] = None
+    if uid is not None and not req.config_override:
+        real_record = (
+            await db.execute(
+                select(PayoutRecord)
+                .where(PayoutRecord.user_id == uid)
+                .where(PayoutRecord.period == req.period)
+            )
+        ).scalars().first()
+        if real_record is not None:
+            existing_payout_id = str(real_record.id)
+            real_total = float(real_record.payout_amount or 0.0)
+            result = {
+                **result,
+                "payout": real_total,
+                "commission_rate": float(real_record.commission_rate or 0.0),
+                "fallback_used": bool(real_record.fallback_used),
+                "bonus": round(real_total - result.get("base_commission", 0.0) - result.get("accelerator", 0.0), 2),
+            }
+
     audit = upsert_payout_trace(
         company_id=company_id,
         period=req.period,
         rep_id=str(req.rep_id),
-        user_id=None,
+        user_id=str(uid) if uid else None,
         plan_id=None,
         rule_id=result.get("rules_applied", [None])[0],
         sales_credit_id=None,
@@ -403,6 +437,7 @@ async def calculate_payout(
             "rep_name": rep.name,
         },
         computed_by=ctx.user_id or "system-demo",
+        existing_payout_id=existing_payout_id,
     )
 
     return {
@@ -466,6 +501,39 @@ async def team_payout_summary(
         cfg = plan_configs.get(plan_id) if plan_id else None
         cfg = cfg or _active_config
         result = compute_payout(revenue, quota, deals_won, deals_lost, cfg)
+
+        # A real, persisted payout already exists for this rep+period -- it
+        # is the source of truth (computed by credit_payout_engine.py), the
+        # same precedent _quarterly_payout_baseline() established for
+        # /payout/statements. Prefer it over this endpoint's own
+        # compute_payout() estimate, and register the audit-trail entry
+        # under the PayoutRecord's own id so this doesn't create a second,
+        # independently-approvable entry for a payout that already has one
+        # (see seed_from_db_record in backend/routers/payout_audit.py).
+        existing_payout_id: Optional[str] = None
+        if uid is not None:
+            real_record = (
+                await db.execute(
+                    select(PayoutRecord)
+                    .where(PayoutRecord.user_id == uid)
+                    .where(PayoutRecord.period == period_label)
+                )
+            ).scalars().first()
+            if real_record is not None:
+                existing_payout_id = str(real_record.id)
+                real_total = float(real_record.payout_amount or 0.0)
+                result = {
+                    **result,
+                    "payout": real_total,
+                    "commission_rate": float(real_record.commission_rate or 0.0),
+                    "fallback_used": bool(real_record.fallback_used),
+                    # bonus absorbs whatever base_commission/accelerator (both
+                    # still reasonable independent estimates) don't already
+                    # account for, so the breakdown sums exactly to the real
+                    # total -- same reconciliation rep_payout_statements uses.
+                    "bonus": round(real_total - result.get("base_commission", 0.0) - result.get("accelerator", 0.0), 2),
+                }
+
         audit = upsert_payout_trace(
             company_id=company_id,
             period=period_label,
@@ -496,6 +564,7 @@ async def team_payout_summary(
                 "rep_email": rep.email,
             },
             computed_by=ctx.user_id or "system-demo",
+            existing_payout_id=existing_payout_id,
         )
         rows.append({
             "payout_id": audit["payout_id"],

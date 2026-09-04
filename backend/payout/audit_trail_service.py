@@ -137,8 +137,20 @@ def upsert_payout_trace(
     calculation_trace_json: dict[str, Any],
     source_records_json: dict[str, Any],
     computed_by: str,
+    existing_payout_id: str | None = None,
 ) -> dict[str, Any]:
-    payout_id = _record_key(company_id=company_id, rep_id=rep_id, period=period)
+    """
+    `existing_payout_id`: when a persisted PayoutRecord already exists for
+    this (company, rep, period) -- i.e. seed_from_db_record has registered
+    (or will register) one under that record's own DB id -- callers
+    (backend/routers/payout.py) pass it here so this live recomputation
+    enriches that SAME record instead of creating a second, independently
+    -approvable entry under the rep/period hash key. Without this, a rep
+    +period with both a persisted PayoutRecord and a live /payout/calculate
+    or /payout/team-summary run showed as two separate rows in Payout
+    Approvals with two different payout amounts for the same payout.
+    """
+    payout_id = existing_payout_id or _record_key(company_id=company_id, rep_id=rep_id, period=period)
 
     with _store_lock:
         existing = _store.get(payout_id)

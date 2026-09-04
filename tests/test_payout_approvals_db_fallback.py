@@ -33,7 +33,8 @@ import pytest
 from sqlalchemy import delete
 
 from backend.database import get_session_factory
-from backend.models import Account, Deal, PayoutRecord, Plan, Rep, Revenue, UserProfile
+from backend.models import Account, Deal, PayoutRecord, Plan, Quota, Rep, Revenue, UserProfile
+from backend.routers.payout import team_payout_summary
 from backend.routers.payout_audit import (
     approve_payout_record,
     list_payout_records,
@@ -77,6 +78,7 @@ async def cleanup():
         await db.execute(delete(UserProfile).where(UserProfile.company_id == COMPANY))
         await db.execute(delete(Deal).where(Deal.company_id == COMPANY))
         await db.execute(delete(Revenue).where(Revenue.company_id == COMPANY))
+        await db.execute(delete(Quota).where(Quota.company_id == COMPANY))
         await db.execute(delete(Account).where(Account.company_id == COMPANY))
         await db.execute(delete(Rep).where(Rep.company_id == COMPANY))
         await db.commit()
@@ -238,3 +240,91 @@ def test_clear_store_scoped_to_one_company_leaves_others_intact():
     finally:
         clear_store(company_id=company_a)
         clear_store(company_id=company_b)
+
+
+@pytest.mark.asyncio
+async def test_team_summary_after_list_does_not_duplicate_the_payout(cleanup):
+    """seed_from_db_record() (from list_payout_records) keys a payout by its
+    PayoutRecord's own DB id; upsert_payout_trace() (from
+    /payout/team-summary) used to always key by a uuid5 hash of
+    (company, rep, period) -- a different id space entirely. So a rep+period
+    with both a persisted PayoutRecord and a live team-summary run produced
+    TWO independently-approvable rows with two different amounts for what
+    is conceptually the same payout. Confirmed live in techo-solutions'
+    2026-Q3 data.
+
+    List first (seeding the DB-id-keyed record), then run team-summary --
+    it must reuse that same id and prefer the real PayoutRecord's amount,
+    not add a second row."""
+    factory = get_session_factory()
+    email = "list-then-summary-rep@example.com"
+
+    async with factory() as db, tenant_scope(COMPANY):
+        rep = Rep(name="List Then Summary Rep", email=email)
+        user = UserProfile(name="List Then Summary Rep", email=email)
+        db.add_all([rep, user])
+        await db.flush()
+
+        # Revenue/quota that would make compute_payout() land on a very
+        # different number than the persisted PayoutRecord below, so a
+        # passing test can't be a coincidence of the two numbers matching.
+        db.add(Revenue(rep_id=rep.id, period="2026-08", amount=10_000))
+        db.add(Quota(rep_id=rep.id, period="2026-08", amount=8_000))
+        real_payout = PayoutRecord(
+            user_id=user.id, plan_id=None, period="2026-Q3",
+            payout_amount=99_999.99, commission_rate=0.5, fallback_used=False, confidence=1.0,
+        )
+        db.add(real_payout)
+        await db.commit()
+        real_payout_id = str(real_payout.id)
+
+        listing = await list_payout_records(lifecycle_state=None, company_id=COMPANY, db=db)
+        matching = [r for r in listing["rows"] if r["period"] == "2026-Q3"]
+        assert len(matching) == 1
+        assert matching[0]["payout_id"] == real_payout_id
+
+        await team_payout_summary(period="2026-Q3", db=db, company_id=COMPANY, ctx=_finance_admin_ctx())
+
+        after = await list_payout_records(lifecycle_state=None, company_id=COMPANY, db=db)
+        matching_after = [r for r in after["rows"] if r["period"] == "2026-Q3"]
+        assert len(matching_after) == 1, (
+            f"expected exactly one payout row for this rep+period, got {len(matching_after)}: {matching_after}"
+        )
+        assert matching_after[0]["payout_id"] == real_payout_id
+        assert matching_after[0]["final_payout"] == pytest.approx(99_999.99)
+
+
+@pytest.mark.asyncio
+async def test_team_summary_before_list_does_not_duplicate_the_payout(cleanup):
+    """Same guarantee, reverse order -- team-summary runs first (as it does
+    live: visiting the Payouts tab before Payout Approvals), then the list
+    is fetched. Must still resolve to one row, anchored to the real
+    PayoutRecord's id, not the hash team-summary would otherwise use."""
+    factory = get_session_factory()
+    email = "summary-then-list-rep@example.com"
+
+    async with factory() as db, tenant_scope(COMPANY):
+        rep = Rep(name="Summary Then List Rep", email=email)
+        user = UserProfile(name="Summary Then List Rep", email=email)
+        db.add_all([rep, user])
+        await db.flush()
+
+        db.add(Revenue(rep_id=rep.id, period="2026-08", amount=10_000))
+        db.add(Quota(rep_id=rep.id, period="2026-08", amount=8_000))
+        real_payout = PayoutRecord(
+            user_id=user.id, plan_id=None, period="2026-Q3",
+            payout_amount=77_777.77, commission_rate=0.4, fallback_used=False, confidence=1.0,
+        )
+        db.add(real_payout)
+        await db.commit()
+        real_payout_id = str(real_payout.id)
+
+        await team_payout_summary(period="2026-Q3", db=db, company_id=COMPANY, ctx=_finance_admin_ctx())
+
+        listing = await list_payout_records(lifecycle_state=None, company_id=COMPANY, db=db)
+        matching = [r for r in listing["rows"] if r["period"] == "2026-Q3"]
+        assert len(matching) == 1, (
+            f"expected exactly one payout row for this rep+period, got {len(matching)}: {matching}"
+        )
+        assert matching[0]["payout_id"] == real_payout_id
+        assert matching[0]["final_payout"] == pytest.approx(77_777.77)
