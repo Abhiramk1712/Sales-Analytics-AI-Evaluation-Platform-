@@ -121,3 +121,60 @@ def test_build_extension_tables_returns_new_keys():
     import backend.data_generator as dg
     assert hasattr(dg, "CREDIT_SPLIT_PROFILES")
     assert hasattr(dg, "EXTENSION_TABLE_ORDER")
+
+
+# ── Open-deal expected_close_date realism ──────────────────────────────────
+#
+# expected_close_date used to always be computed as created + cycle_days +
+# noise, regardless of stage — fine for a deal that actually closed on
+# schedule, but for a still-open deal it meant a date frozen at generation
+# time relative to whenever the deal happened to be created, not a
+# forward-looking commitment. With deals seasonally sampled across the
+# entire `months`-long window and stage chosen independent of deal age,
+# most open deals were old enough that this date had already passed by
+# "today": on techo-solutions' real seeded data, ~87% of ALL open deals were
+# flagged "overdue" by pipeline hygiene — not a modest, realistic minority,
+# virtually the entire open pipeline. Fixed by making expected_close_date
+# forward-looking (today + N days) for the ~82% of open deals that are on
+# track, and only deliberately in the past (a realistic slipped minority)
+# for the rest — without changing how many deals land in an open stage at
+# all, so overall pipeline size/value isn't collateral damage of the fix.
+
+def test_open_deal_close_dates_are_a_realistic_minority_overdue():
+    import random as _random
+    from datetime import date as _date
+    from backend.data_generator import _generate_dataset
+
+    _random.seed(42)
+    dataset = _generate_dataset(n_reps=8, n_accounts=20, n_deals=300, months=36)
+    deals = dataset["deals"]
+    today = _date.today()
+
+    open_deals = [d for d in deals if d["stage"] not in ("Closed Won", "Closed Lost")]
+    assert len(open_deals) > 0, "test is meaningless with zero open deals"
+
+    overdue = [d for d in open_deals if _date.fromisoformat(d["expected_close_date"]) < today]
+    overdue_pct = len(overdue) / len(open_deals)
+
+    # Was ~0.87 before the fix; target is ~0.18. Generous bound (not tuned
+    # tight against the target) so ordinary sampling noise doesn't flake it.
+    assert overdue_pct < 0.40, f"{overdue_pct:.0%} of open deals are overdue — pipeline hygiene signal is drowned out again"
+
+
+def test_open_deal_pipeline_size_is_not_collateral_damage():
+    """The fix must not achieve a low overdue rate by making almost nothing
+    open at all — an earlier draft of this fix did exactly that (age-biased
+    stage selection cut a 103-deal open pipeline down to 14). Open deals
+    should still make up a substantial share of the total, matching what
+    techo-solutions' real seeded data looks like today (~52% open)."""
+    import random as _random
+    from backend.data_generator import _generate_dataset
+
+    _random.seed(42)
+    dataset = _generate_dataset(n_reps=8, n_accounts=20, n_deals=300, months=36)
+    deals = dataset["deals"]
+
+    open_count = sum(1 for d in deals if d["stage"] not in ("Closed Won", "Closed Lost"))
+    open_pct = open_count / len(deals)
+
+    assert open_pct > 0.30, f"only {open_pct:.0%} of deals are open — pipeline size looks collapsed"

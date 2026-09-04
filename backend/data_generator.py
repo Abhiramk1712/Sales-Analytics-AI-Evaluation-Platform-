@@ -1537,6 +1537,7 @@ def _generate_dataset(
         amount = round(random.uniform(deal_size_min, deal_size_max), 2)
         # A9: seasonal deal creation date sampling
         created = _seasonal_random_date(deal_window_start, today)
+        cycle_days = random.randint(*profile["cycle_days_range"])
         close_noise = random.randint(-10, 10)
         prob = max(0, min(100, STAGE_PROB[stage] + close_noise))
         created_at = datetime.combine(created, datetime.min.time()) + timedelta(
@@ -1544,8 +1545,29 @@ def _generate_dataset(
             minutes=random.randint(0, 59),
             seconds=random.randint(0, 59),
         )
-        cycle_days = random.randint(*profile["cycle_days_range"])
         actual_close_date = (created + timedelta(days=cycle_days)) if stage in ("Closed Won", "Closed Lost") else None
+
+        # A10: expected_close_date for a still-open deal is inherently a
+        # forward-looking commitment — "when do we currently expect this to
+        # close" — not a value frozen at whenever the deal happened to be
+        # created. It used to always be created + cycle_days + noise
+        # regardless of stage: fine for a deal that closed on schedule, but
+        # with deals seasonally sampled across the entire `months`-long
+        # window and stage chosen independent of age, most open deals were
+        # old enough that this date had already passed by "today" — on
+        # techo-solutions' real seeded data, ~87% of ALL open deals were
+        # "overdue": not a modest, realistic minority, virtually the entire
+        # open pipeline, drowning out the hygiene signal instead of
+        # highlighting it. A real pipeline has a genuine minority of slipped
+        # deals worth flagging (kept here at ~18%) and a majority still
+        # tracking to a plausible near-term date.
+        if stage not in ("Closed Won", "Closed Lost"):
+            if random.random() < 0.18:
+                expected_close_date = today - timedelta(days=random.randint(1, 60))
+            else:
+                expected_close_date = today + timedelta(days=random.randint(7, max(cycle_days, 7)))
+        else:
+            expected_close_date = created + timedelta(days=cycle_days + random.randint(0, 30))
 
         deal_id = uuid.uuid4()
         product_name = deal_product_catalog[_ % len(deal_product_catalog)] if n_products <= len(deal_product_catalog) else (
@@ -1560,7 +1582,7 @@ def _generate_dataset(
             "stage": stage,
             "amount": amount,
             "close_probability": prob,
-            "expected_close_date": created + timedelta(days=cycle_days + random.randint(0, 30)),
+            "expected_close_date": expected_close_date,
             "actual_close_date": actual_close_date,
             "created_at": created_at,
         }
