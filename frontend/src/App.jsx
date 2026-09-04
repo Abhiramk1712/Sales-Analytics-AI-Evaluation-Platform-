@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, ScatterChart, Scatter, Cell } from "recharts";
 import { PaginationControls } from "./components/shared";
 import { useFetch } from "./hooks/useFetch";
-import { setRequestContext } from "./api/client";
+import { setRequestContext, apiGet, apiPost } from "./api/client";
 import { useUrlState } from "./hooks/useUrlState";
 
 // ── New page imports (Sprint 2) ───────────────────────────────────────────
@@ -1691,7 +1691,7 @@ function EnterpriseGradeTab({ refreshKey, activeCompany, userRole }) {
   );
 }
 
-function ReportsTab() {
+function ReportsTab({ activeCompany, userRole } = {}) {
   const [reportType, setReportType] = useState("executive_weekly");
   const [periodType, setPeriodType] = useState("monthly");
   const [reportTypeOptions, setReportTypeOptions] = useState([]);
@@ -1711,8 +1711,7 @@ function ReportsTab() {
   const [docError, setDocError] = useState(null);
 
   useEffect(() => {
-    fetch(`${API}/reports/types`)
-      .then((r) => r.json())
+    apiGet("/reports/types", { role: userRole, company: activeCompany })
       .then((d) => {
         if (d.report_types && d.labels) {
           setReportTypeOptions(d.report_types.map((rt) => ({ value: rt, label: d.labels[rt] || rt })));
@@ -1731,7 +1730,7 @@ function ReportsTab() {
           { value: "forecast_summary", label: "Forecast Summary" },
         ]);
       });
-  }, []);
+  }, [userRole, activeCompany]);
 
   const period = periodType === "monthly" ? `${selectedYear}-${selectedMonth}` : selectedYear;
   const YEARS = Array.from({ length: 6 }, (_, i) => String(currentYear - 3 + i));
@@ -1755,13 +1754,11 @@ function ReportsTab() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/reports/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report_type: rt, period: p, audience: "Sales Leadership", filters: {} }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Failed to generate report");
+      const data = await apiPost(
+        "/reports/generate",
+        { report_type: rt, period: p, audience: "Sales Leadership", filters: { company: activeCompany } },
+        { role: userRole, company: activeCompany }
+      );
       setReport(data);
       setSelectedDoc(null);
       setDocContent("");
@@ -1782,9 +1779,10 @@ function ReportsTab() {
     setDocLoading(true);
     setDocError(null);
     try {
-      const res = await fetch(`${API}/reports/knowledge-base/${encodeURIComponent(source)}`);
-      if (!res.ok) throw new Error(`Failed to fetch ${source}`);
-      const data = await res.json();
+      const data = await apiGet(
+        `/reports/knowledge-base/${encodeURIComponent(source)}`,
+        { role: userRole, company: activeCompany }
+      );
       setDocContent(data.content || "");
     } catch {
       setDocError("Unable to load knowledge document for this citation.");
