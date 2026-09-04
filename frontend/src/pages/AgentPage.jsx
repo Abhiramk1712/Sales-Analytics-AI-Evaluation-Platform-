@@ -254,7 +254,7 @@ function QualityBadge({ quality }) {
   );
 }
 
-export default function AgentPage() {
+export default function AgentPage({ activeCompany, userRole } = {}) {
   const [messages, setMessages] = useState([
     { id: "welcome", role: "assistant", content: WELCOME },
   ]);
@@ -301,7 +301,11 @@ export default function AgentPage() {
 
       const res = await fetch(`${API}/agent/chat/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(userRole ? { "X-User-Role": userRole } : {}),
+          ...(activeCompany ? { "X-Company-Id": activeCompany } : {}),
+        },
         body: JSON.stringify({ message: userMsg.content, history }),
         signal: controller.signal,
       });
@@ -373,7 +377,11 @@ export default function AgentPage() {
         try {
           const fallbackRes = await fetch(`${API}/agent/chat`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...(userRole ? { "X-User-Role": userRole } : {}),
+              ...(activeCompany ? { "X-Company-Id": activeCompany } : {}),
+            },
             body: JSON.stringify({ message: userMsg.content, history }),
           });
           const fallbackData = await fallbackRes.json();
@@ -408,7 +416,7 @@ export default function AgentPage() {
       setLoading(false);
       scrollToBottom();
     }
-  }, [input, loading, messages]);
+  }, [input, loading, messages, userRole, activeCompany]);
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {

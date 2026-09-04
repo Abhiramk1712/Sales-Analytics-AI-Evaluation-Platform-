@@ -170,9 +170,9 @@ class ReportGenerator:
             reps_near = sum(1 for r in top_reps.get("data", []) if 75 <= r.get("attainment_pct", 0) < 100)
             reps_below = sum(1 for r in top_reps.get("data", []) if r.get("attainment_pct", 0) < 75)
             plan_metrics = {
-                "total_revenue": float(kpis.get("total_revenue", {}).get("value", 0)),
-                "total_quota": float(kpis.get("total_quota", {}).get("value", 0)),
-                "attainment_pct": float(kpis.get("quota_attainment", {}).get("value", 0)),
+                "total_revenue": float(kpis.get("total_revenue", 0)),
+                "total_quota": float(kpis.get("total_quota", 0)),
+                "attainment_pct": float(kpis.get("attainment_pct", 0)),
                 "rep_count": n_reps,
                 "reps_at_quota": reps_at,
                 "reps_near_quota": reps_near,
@@ -202,11 +202,11 @@ class ReportGenerator:
             }
             hygiene_data = await calculators.get_pipeline_hygiene(db, filters)
             terr_metrics = {
-                "total_revenue": float(kpis.get("total_revenue", {}).get("value", 0)),
-                "deals_won": int(kpis.get("deals_won", {}).get("value", 0)),
-                "win_rate": float(kpis.get("win_rate", {}).get("value", 0)),
-                "avg_deal_size": float(kpis.get("average_deal_size", {}).get("value", 0)),
-                "open_pipeline": float(kpis.get("open_pipeline", {}).get("value", 0)),
+                "total_revenue": float(kpis.get("total_revenue", 0)),
+                "deals_won": int(kpis.get("deals_won", 0)),
+                "win_rate": float(kpis.get("win_rate", 0)),
+                "avg_deal_size": float(kpis.get("average_deal_size", 0)),
+                "open_pipeline": float(kpis.get("open_pipeline", 0)),
                 "confidence": "high",
             }
             markdown = ReportGenerator.render_template("territory_performance.md", {
@@ -220,11 +220,11 @@ class ReportGenerator:
             })
         elif report_type == "executive_sales_summary":
             key_metrics = {
-                "total_revenue": float(kpis.get("total_revenue", {}).get("value", 0)),
-                "total_quota": float(kpis.get("total_quota", {}).get("value", 0)),
-                "quota_attainment": float(kpis.get("quota_attainment", {}).get("value", 0)),
-                "open_pipeline": float(kpis.get("open_pipeline", {}).get("value", 0)),
-                "win_rate": float(kpis.get("win_rate", {}).get("value", 0)),
+                "total_revenue": float(kpis.get("total_revenue", 0)),
+                "total_quota": float(kpis.get("total_quota", 0)),
+                "quota_attainment": float(kpis.get("attainment_pct", 0)),
+                "open_pipeline": float(kpis.get("open_pipeline", 0)),
+                "win_rate": float(kpis.get("win_rate", 0)),
             }
             risks = [
                 f"{len(underperformers.get('data', []))} reps are below 75% attainment"
@@ -376,11 +376,11 @@ class ReportGenerator:
             pipeline = await calculators.get_open_pipeline(db, filters)
             weighted = await calculators.get_weighted_pipeline_coverage(db, filters)
             summary = {
-                "total_revenue": float(kpis.get("total_revenue", {}).get("value", 0)),
-                "quota_attainment": float(kpis.get("quota_attainment", {}).get("value", 0)),
-                "open_pipeline": float(kpis.get("open_pipeline", {}).get("value", 0)),
-                "pipeline_open": float((pipeline.get("data") or {}).get("open_pipeline", 0)) if isinstance(pipeline, dict) else 0.0,
-                "weighted_coverage_ratio": float((weighted.get("data") or {}).get("weighted_coverage_ratio", 0)) if isinstance(weighted, dict) else 0.0,
+                "total_revenue": float(kpis.get("total_revenue", 0)),
+                "quota_attainment": float(kpis.get("attainment_pct", 0)),
+                "open_pipeline": float(kpis.get("open_pipeline", 0)),
+                "pipeline_open": float(pipeline.get("value", 0)) if isinstance(pipeline, dict) else 0.0,
+                "weighted_coverage_ratio": float(weighted.get("ratio", 0)) if isinstance(weighted, dict) else 0.0,
             }
             markdown = ReportGenerator.render_template("revops_risk_report.md", {
                 "period": period,
