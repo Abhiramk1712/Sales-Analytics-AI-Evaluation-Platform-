@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from backend.metrics import calculators
-from backend.models import Rep, Deal, Quota, Revenue, Activity
+from backend.models import Rep, Deal, Quota, Activity
 
 
 def _as_tool_result(tool_name: str, status: str, data: Any, warnings: list[str], sources: list[str]) -> dict[str, Any]:
@@ -711,18 +711,29 @@ async def get_arr_trajectory(db: AsyncSession) -> dict[str, Any]:
     grr = await calculators.get_grr(db)
     arr_growth = await calculators.get_arr_growth_rate(db)
 
-    from backend.ml.forecasting import build_arr_waterfall
-    from sqlalchemy import select, func
-    rows = (await db.execute(
-        select(Revenue.period, func.sum(Revenue.amount).label("total"))
-        .group_by(Revenue.period)
-        .order_by(Revenue.period)
-    )).all()
-    revenue_by_period = {r.period: float(r.total) for r in rows}
-    waterfall = build_arr_waterfall(revenue_by_period)
+    # Sourced from the canonical arr_waterfall table (same source
+    # GET /ml/forecast/arr-waterfall and GET /analytics/arr-waterfall use) --
+    # not the double-counted Revenue-reconstruction build_arr_waterfall() used
+    # to call. See backend/routers/forecasting.py's arr_waterfall() docstring
+    # for the mechanics of that bug.
+    series = await calculators.calc_arr_waterfall_series(db, months=9999)
+    periods = [s["period"] for s in series]
+    net_new_arr_series = [s["net_new_arr"] for s in series]
+    arr_start_series = [s["arr_start"] for s in series]
+    expansion_series = [s["expansion"] for s in series]
+    contraction_series = [s["contraction"] for s in series]
+    churn_series = [s["churn"] for s in series]
 
-    # Latest NRR from waterfall
-    latest_nrr = next((v for v in reversed(waterfall["nrr_rolling_12m"]) if v is not None), None)
+    # Latest rolling 12-month NRR, computed from the continuous arr_start series.
+    latest_nrr = None
+    for i in range(len(periods) - 1, 10, -1):
+        window_start_arr = sum(arr_start_series[i - 11:i + 1]) / 12
+        if window_start_arr > 0:
+            window_exp = sum(expansion_series[i - 11:i + 1])
+            window_con = sum(contraction_series[i - 11:i + 1])
+            window_churn = sum(churn_series[i - 11:i + 1])
+            latest_nrr = round((window_start_arr + window_exp + window_con + window_churn) / window_start_arr * 100, 2)
+            break
 
     health = _arr_health(nrr["nrr_pct"], arr_growth["arr_growth_pct"])
     warnings: list[str] = []
@@ -736,8 +747,8 @@ async def get_arr_trajectory(db: AsyncSession) -> dict[str, Any]:
         "arr_current_12m": arr_growth.get("arr_current_12m", 0),
         "arr_prior_12m": arr_growth.get("arr_prior_12m", 0),
         "latest_rolling_nrr": latest_nrr,
-        "waterfall_periods": waterfall["periods"][-6:],
-        "net_new_arr_recent": waterfall["net_new_arr"][-6:],
+        "waterfall_periods": periods[-6:],
+        "net_new_arr_recent": net_new_arr_series[-6:],
         "health_assessment": health,
         "components": nrr.get("components", {}),
     }

@@ -38,7 +38,8 @@ from backend.models import (
     POSITION_RANK_DIRECTOR,
     POSITION_RANK_VP,
 )
-from backend.ml.forecasting import run_revenue_forecast, build_arr_waterfall
+from backend.ml.forecasting import run_revenue_forecast
+from backend.metrics import calculators
 from backend.ml.forecasting_engine import (
     FORECAST_TYPES,
     forecast as forecast_lab_run,
@@ -1542,45 +1543,60 @@ async def predictions_summary(db: AsyncSession = Depends(get_db)):
 
 @router.get("/forecast/arr-waterfall")
 async def arr_waterfall(db: AsyncSession = Depends(get_db)):
-    """ARR waterfall decomposition: new logo, expansion, contraction, churn, renewal per month."""
-    rows = (
-        await db.execute(
-            select(Revenue.period, func.sum(Revenue.amount).label("total"))
-            .group_by(Revenue.period)
-            .order_by(Revenue.period)
-        )
-    ).all()
-    if not rows:
+    """ARR waterfall decomposition: new logo, expansion, contraction, churn, renewal per month.
+
+    Sourced from the canonical `arr_waterfall` table via
+    backend.metrics.calculators.calc_arr_waterfall_series -- the same source
+    GET /analytics/arr-waterfall uses. This used to reconstruct components from
+    Revenue.revenue_type via build_arr_waterfall(), which computed
+    arr_start[period] = total_revenue[period] * 12 independently for every
+    period and then added new_logo/expansion/contraction/churn again on top --
+    double-counting components already inside that same period's total_revenue,
+    and never carrying arr_end forward as the next period's arr_start. Confirmed
+    live: April 2026 showed $2.8M "net new ARR" against a $4.7M ARR base in a
+    single month, and May's arr_start didn't match April's arr_end.
+    """
+    # No `months` param on this endpoint historically -- it always returns
+    # every available period. calc_arr_waterfall_series's `months` is a
+    # `.limit()`, so a generous constant preserves that "all periods" behavior.
+    series = await calculators.calc_arr_waterfall_series(db, months=9999)
+    if not series:
         raise HTTPException(status_code=404, detail="No revenue data available")
 
-    revenue_by_period = {r.period: float(r.total) for r in rows}
+    waterfall: dict[str, list] = {
+        "periods":     [s["period"] for s in series],
+        "arr_start":   [s["arr_start"] for s in series],
+        "arr_end":     [s["arr_end"] for s in series],
+        "new_logo":    [s["new_logo"] for s in series],
+        "expansion":   [s["expansion"] for s in series],
+        "contraction": [s["contraction"] for s in series],
+        "churn":       [s["churn"] for s in series],
+        "renewal":     [s["renewal"] for s in series],
+        "net_new_arr": [s["net_new_arr"] for s in series],
+    }
 
-    # Query revenue broken down by type for accurate waterfall components
-    typed_rows = (
-        await db.execute(
-            select(
-                Revenue.period,
-                Revenue.revenue_type,
-                func.sum(Revenue.amount).label("total"),
-            )
-            .where(Revenue.revenue_type.isnot(None))
-            .group_by(Revenue.period, Revenue.revenue_type)
-            .order_by(Revenue.period)
+    # Rolling 12-month NRR, computed from the same (now-continuous) arr_start series.
+    arr_start_series = waterfall["arr_start"]
+    expansion_series = waterfall["expansion"]
+    contraction_series = waterfall["contraction"]
+    churn_series = waterfall["churn"]
+    nrr_12m: list[float | None] = []
+    for i in range(len(waterfall["periods"])):
+        if i < 11:
+            nrr_12m.append(None)
+            continue
+        window_start_arr = sum(arr_start_series[i - 11:i + 1]) / 12
+        window_exp = sum(expansion_series[i - 11:i + 1])
+        window_con = sum(contraction_series[i - 11:i + 1])
+        window_churn = sum(churn_series[i - 11:i + 1])
+        nrr_12m.append(
+            round((window_start_arr + window_exp + window_con + window_churn) / window_start_arr * 100, 2)
+            if window_start_arr > 0 else None
         )
-    ).all()
+    waterfall["nrr_rolling_12m"] = nrr_12m
 
-    revenue_by_type: dict[str, dict[str, float]] | None = None
-    if typed_rows:
-        revenue_by_type = {}
-        for r in typed_rows:
-            bucket = revenue_by_type.setdefault(r.period, {})
-            bucket[r.revenue_type or "unknown"] = float(r.total or 0)
-
-    waterfall = build_arr_waterfall(revenue_by_period, revenue_by_type=revenue_by_type)
-
-    # Add net_mrr as an alias for net_new_arr / 12 for frontend compatibility
-    net_new_arr = waterfall.get("net_new_arr", [])
-    waterfall["net_mrr"] = [round(v / 12, 2) if v else 0 for v in net_new_arr]
+    # net_mrr as an alias for net_new_arr / 12, for frontend compatibility.
+    waterfall["net_mrr"] = [round(v / 12, 2) if v else 0 for v in waterfall["net_new_arr"]]
 
     return {
         "waterfall": waterfall,

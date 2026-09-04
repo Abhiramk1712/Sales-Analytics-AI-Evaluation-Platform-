@@ -2,16 +2,25 @@
 ml/forecasting.py
 =================
 Revenue forecast entry point used by the rest of the app: run_revenue_forecast()
-(carry-forward / linear-trend / full-ensemble by history length) and
-build_arr_waterfall() (ARR bridge analysis).
+(carry-forward / linear-trend / full-ensemble by history length).
 
 The SARIMAX+Ridge+GBR ensemble model itself — RevenueForecastModel — used to
 be defined in this module. It now lives in backend/ml/forecasting_engine.py
 (moved verbatim; see that module's docstring and _EnsembleFit), and
 run_revenue_forecast()'s full-ensemble branch delegates to it. This module
 kept only what's still genuinely its own: the two hand-rolled short-history
-fallback branches, ARR waterfall, and the public dict-shaped API every real
-caller already depends on.
+fallback branches and the public dict-shaped API every real caller already
+depends on.
+
+build_arr_waterfall() used to live here too. It computed arr_start[period] =
+total_revenue[period] * 12 independently for every period and then added
+new_logo/expansion/contraction/churn again on top -- double-counting
+components already inside that period's total_revenue, and never carrying
+arr_end forward as the next period's arr_start. Both real callers
+(backend/routers/forecasting.py's arr_waterfall() endpoint and
+backend/agent/tools/revops_tools.py's get_arr_trajectory()) now use
+backend.metrics.calculators.calc_arr_waterfall_series(), which reads the
+canonical `arr_waterfall` DB table and has correct bridge continuity.
 """
 import numpy as np
 import pandas as pd
@@ -208,92 +217,5 @@ def run_revenue_forecast(revenue_by_period: dict[str, float], horizon: int = 6) 
             "generated_at": pd.Timestamp.now().isoformat(),
         },
         "warnings": warnings_list,
-    }
-
-
-def build_arr_waterfall(
-    revenue_by_period: dict[str, float],
-    revenue_by_type: dict[str, dict[str, float]] | None = None,
-) -> dict:
-    """
-    Compute an ARR waterfall decomposition from monthly revenue data.
-
-    Parameters
-    ----------
-    revenue_by_period : {"2024-01": 120000.0, ...}
-    revenue_by_type   : {"2024-01": {"new_logo": 20000, "expansion": 5000, ...}, ...}
-                        If None, approximates components from total revenue.
-
-    Returns
-    -------
-    dict with:
-        periods          : list of YYYY-MM strings
-        arr_start        : starting ARR for each period
-        arr_end          : ending ARR for each period
-        new_logo         : new logo MRR × 12
-        expansion        : expansion ARR
-        contraction      : contraction ARR (negative)
-        churn            : churn ARR (negative)
-        renewal          : renewal ARR
-        net_new_arr      : new_logo + expansion + contraction + churn
-        nrr_rolling_12m  : rolling 12-month NRR %
-    """
-    if not revenue_by_period:
-        return {"periods": [], "arr_start": [], "arr_end": [], "net_new_arr": [], "nrr_rolling_12m": []}
-
-    periods_sorted = sorted(revenue_by_period.keys())
-    totals = [revenue_by_period[p] for p in periods_sorted]
-
-    # If typed data is provided, use it; otherwise approximate
-    if revenue_by_type:
-        new_logos     = [float(revenue_by_type.get(p, {}).get("new_logo", 0)) * 12 for p in periods_sorted]
-        expansions    = [float(revenue_by_type.get(p, {}).get("expansion", 0)) * 12 for p in periods_sorted]
-        contractions  = [-abs(float(revenue_by_type.get(p, {}).get("contraction", 0)) * 12) for p in periods_sorted]
-        churns        = [-abs(float(revenue_by_type.get(p, {}).get("churn", 0)) * 12) for p in periods_sorted]
-        renewals      = [float(revenue_by_type.get(p, {}).get("renewal", 0)) * 12 for p in periods_sorted]
-    else:
-        # Approximations based on industry benchmarks
-        new_logos     = [round(t * 0.15, 2) for t in totals]
-        expansions    = [round(t * 0.12, 2) for t in totals]
-        contractions  = [round(-t * 0.04, 2) for t in totals]
-        churns        = [round(-t * 0.05, 2) for t in totals]
-        renewals      = [round(t * 0.78, 2) for t in totals]
-
-    arr_start = []
-    arr_end = []
-    for i, total in enumerate(totals):
-        start = total * 12
-        arr_start.append(round(start, 2))
-        arr_end.append(round(start + new_logos[i] + expansions[i] + contractions[i] + churns[i], 2))
-
-    net_new_arr = [round(new_logos[i] + expansions[i] + contractions[i] + churns[i], 2) for i in range(len(periods_sorted))]
-
-    # Rolling 12-month NRR
-    nrr_12m = []
-    for i in range(len(periods_sorted)):
-        if i < 11:
-            nrr_12m.append(None)
-            continue
-        window_start_arr = sum(arr_start[max(0, i - 11):i + 1]) / 12
-        window_exp = sum(expansions[max(0, i - 11):i + 1])
-        window_con = sum(contractions[max(0, i - 11):i + 1])
-        window_churn = sum(churns[max(0, i - 11):i + 1])
-        if window_start_arr > 0:
-            nrr = round((window_start_arr + window_exp + window_con + window_churn) / window_start_arr * 100, 2)
-        else:
-            nrr = None
-        nrr_12m.append(nrr)
-
-    return {
-        "periods":         periods_sorted,
-        "arr_start":       arr_start,
-        "arr_end":         arr_end,
-        "new_logo":        new_logos,
-        "expansion":       expansions,
-        "contraction":     contractions,
-        "churn":           churns,
-        "renewal":         renewals,
-        "net_new_arr":     net_new_arr,
-        "nrr_rolling_12m": nrr_12m,
     }
 
