@@ -559,52 +559,59 @@ async def get_territory_performance(
     ).all()
     rep_name_by_id = {str(r.id): r.name for r in rep_rows}
 
-    rep_revenue_rows = (
-        await db.execute(
-            select(Revenue.rep_id, func.coalesce(func.sum(Revenue.amount), 0.0).label("revenue"))
-            .where(Revenue.rep_id.in_(rep_ids))
-            .group_by(Revenue.rep_id)
-        )
-    ).all()
+    rev_by_rep_stmt = select(Revenue.rep_id, func.coalesce(func.sum(Revenue.amount), 0.0).label("revenue")).where(
+        Revenue.rep_id.in_(rep_ids)
+    )
     if months:
-        rep_revenue_rows = (
-            await db.execute(
-                select(Revenue.rep_id, func.coalesce(func.sum(Revenue.amount), 0.0).label("revenue"))
-                .where(Revenue.rep_id.in_(rep_ids), Revenue.period.in_(months))
-                .group_by(Revenue.rep_id)
-            )
-        ).all()
+        rev_by_rep_stmt = rev_by_rep_stmt.where(Revenue.period.in_(months))
+    rep_revenue_rows = (await db.execute(rev_by_rep_stmt.group_by(Revenue.rep_id))).all()
     revenue_by_rep = {str(r.rep_id): float(r.revenue or 0.0) for r in rep_revenue_rows}
 
+    # Same period scoping as deal_stmt/lost_stmt/open_stmt above — these are
+    # the per-rep breakdown behind "Top Performers" and the reps table below.
+    # They used to run unfiltered regardless of `period`, while the
+    # territory-wide totals a few lines up correctly scoped to it: selecting
+    # "this quarter" showed "DEALS WON: 2" for the territory as a whole, and
+    # a "Top Performers" list right next to it claiming "Chelsea: 15 won,
+    # Kyle: 8 won" — this quarter's total contradicted by its own breakdown,
+    # each rep's real all-time win count wrongly asserted to be the quarter's.
+    won_by_rep_stmt = select(Deal.rep_id, func.count(Deal.id).label("count")).where(
+        Deal.rep_id.in_(rep_ids), Deal.stage == "Closed Won"
+    )
+    if date_filter:
+        won_by_rep_stmt = won_by_rep_stmt.where(
+            Deal.actual_close_date >= date_filter["start"],
+            Deal.actual_close_date <= date_filter["end"],
+        )
     won_by_rep = {
         str(r.rep_id): int(r.count or 0)
-        for r in (
-            await db.execute(
-                select(Deal.rep_id, func.count(Deal.id).label("count"))
-                .where(Deal.rep_id.in_(rep_ids), Deal.stage == "Closed Won")
-                .group_by(Deal.rep_id)
-            )
-        ).all()
+        for r in (await db.execute(won_by_rep_stmt.group_by(Deal.rep_id))).all()
     }
+
+    lost_by_rep_stmt = select(Deal.rep_id, func.count(Deal.id).label("count")).where(
+        Deal.rep_id.in_(rep_ids), Deal.stage == "Closed Lost"
+    )
+    if date_filter:
+        lost_by_rep_stmt = lost_by_rep_stmt.where(
+            Deal.actual_close_date >= date_filter["start"],
+            Deal.actual_close_date <= date_filter["end"],
+        )
     lost_by_rep = {
         str(r.rep_id): int(r.count or 0)
-        for r in (
-            await db.execute(
-                select(Deal.rep_id, func.count(Deal.id).label("count"))
-                .where(Deal.rep_id.in_(rep_ids), Deal.stage == "Closed Lost")
-                .group_by(Deal.rep_id)
-            )
-        ).all()
+        for r in (await db.execute(lost_by_rep_stmt.group_by(Deal.rep_id))).all()
     }
+
+    open_by_rep_stmt = select(Deal.rep_id, func.coalesce(func.sum(Deal.amount), 0.0).label("amount")).where(
+        Deal.rep_id.in_(rep_ids), ~Deal.stage.in_(["Closed Won", "Closed Lost"])
+    )
+    if date_filter:
+        open_by_rep_stmt = open_by_rep_stmt.where(
+            Deal.expected_close_date >= date_filter["start"],
+            Deal.expected_close_date <= date_filter["end"],
+        )
     open_by_rep = {
         str(r.rep_id): float(r.amount or 0.0)
-        for r in (
-            await db.execute(
-                select(Deal.rep_id, func.coalesce(func.sum(Deal.amount), 0.0).label("amount"))
-                .where(Deal.rep_id.in_(rep_ids), ~Deal.stage.in_(["Closed Won", "Closed Lost"]))
-                .group_by(Deal.rep_id)
-            )
-        ).all()
+        for r in (await db.execute(open_by_rep_stmt.group_by(Deal.rep_id))).all()
     }
 
     quota_by_rep: dict[str, float] = {}
