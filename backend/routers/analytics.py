@@ -1146,9 +1146,21 @@ async def deal_velocity(
 async def rep_activities(
     rep_id: str,
     limit: int = Query(50, le=200),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
-    """Recent activities logged for a rep."""
+    """Activities logged for a rep, paginated.
+
+    "count" used to be len(rows) — this page's own size, capped at `limit` by
+    construction, so it was never anything but a number equal to its own
+    limit once a rep had that many activities. The one frontend caller
+    (RepScorecardPage.jsx) re-paginated the resulting <=50 rows client-side,
+    which looked like real pagination (it reaches a final page) while
+    silently hiding every activity past the first `limit`. Confirmed live: a
+    rep with 121 real activities only ever showed the first 50. "count" is
+    now the true total across all pages, and `offset` lets a caller actually
+    reach the rest.
+    """
     import uuid as _uuid
     try:
         rid = _uuid.UUID(rep_id)
@@ -1159,11 +1171,16 @@ async def rep_activities(
     if not rep:
         raise HTTPException(status_code=404, detail="Rep not found")
 
+    total_count = int((
+        await db.execute(select(func.count(Activity.id)).where(Activity.rep_id == rid))
+    ).scalar() or 0)
+
     rows = (
         await db.execute(
             select(Activity)
             .where(Activity.rep_id == rid)
             .order_by(Activity.activity_date.desc())
+            .offset(offset)
             .limit(limit)
         )
     ).scalars().all()
@@ -1171,7 +1188,9 @@ async def rep_activities(
     return {
         "rep_id": rep_id,
         "rep_name": rep.name,
-        "count": len(rows),
+        "count": total_count,
+        "offset": offset,
+        "limit": limit,
         "activities": [
             {
                 "id": str(a.id),
@@ -1191,9 +1210,18 @@ async def rep_deals(
     rep_id: str,
     stage: str = Query(None),
     limit: int = Query(50, le=200),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
-    """Deals owned by a rep, optionally filtered by stage."""
+    """Deals owned by a rep, optionally filtered by stage, paginated.
+
+    Same fix as rep_activities() just below: "count" used to be len(rows) —
+    this page's own size, capped at `limit` — not the rep's true deal total.
+    Not yet observed to truncate anyone's real deal list (checked: no rep in
+    the seeded data has more than `limit`), but it's the identical bug
+    pattern on an identical code shape, so fixed the same way rather than
+    left to surface later for a rep with more deals.
+    """
     import uuid as _uuid
     try:
         rid = _uuid.UUID(rep_id)
@@ -1204,20 +1232,30 @@ async def rep_deals(
     if not rep:
         raise HTTPException(status_code=404, detail="Rep not found")
 
+    base_filters = [Deal.rep_id == rid]
+    if stage:
+        base_filters.append(Deal.stage == stage)
+
+    total_count = int((
+        await db.execute(select(func.count(Deal.id)).where(*base_filters))
+    ).scalar() or 0)
+
     q = (
         select(Deal, Account.name.label("account_name"))
         .join(Account, isouter=True)
-        .where(Deal.rep_id == rid)
+        .where(*base_filters)
+        .order_by(Deal.created_at.desc())
+        .offset(offset)
+        .limit(limit)
     )
-    if stage:
-        q = q.where(Deal.stage == stage)
-    q = q.order_by(Deal.created_at.desc()).limit(limit)
     rows = (await db.execute(q)).all()
 
     return {
         "rep_id": rep_id,
         "rep_name": rep.name,
-        "count": len(rows),
+        "count": total_count,
+        "offset": offset,
+        "limit": limit,
         "deals": [
             {
                 "deal_id": str(r.Deal.id),

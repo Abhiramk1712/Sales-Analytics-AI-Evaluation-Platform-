@@ -46,11 +46,23 @@ export default function RepScorecardPage({ refreshKey, activeCompany, userRole, 
   const { data: profileData, loading: profileLoading } = useFetch(
     selectedRepId ? withPeriod(`/analytics/reps/${selectedRepId}/profile`, period) : null, { role, company }
   );
+  // Paginated server-side: previously fetched a flat `?limit=50` and
+  // re-paginated that (already-truncated) array client-side, which looked
+  // like complete pagination — it reached a final page — while silently
+  // hiding every row past the first 50 for any rep with more than that many
+  // deals or activities. limit/offset here follow the current page/pageSize
+  // exactly, so `useFetch`'s own URL-keyed refetch does the paging.
   const { data: dealsData, loading: dealsLoading } = useFetch(
-    selectedRepId && activeTab === "deals" ? `/analytics/reps/${selectedRepId}/deals?limit=50` : null, { role, company }
+    selectedRepId && activeTab === "deals"
+      ? `/analytics/reps/${selectedRepId}/deals?limit=${dealsPageSize}&offset=${(dealsPage - 1) * dealsPageSize}`
+      : null,
+    { role, company }
   );
   const { data: activitiesData, loading: activitiesLoading } = useFetch(
-    selectedRepId && activeTab === "activities" ? `/analytics/reps/${selectedRepId}/activities?limit=50` : null, { role, company }
+    selectedRepId && activeTab === "activities"
+      ? `/analytics/reps/${selectedRepId}/activities?limit=${activitiesPageSize}&offset=${(activitiesPage - 1) * activitiesPageSize}`
+      : null,
+    { role, company }
   );
   const { data: stmtData, loading: stmtLoading } = useFetch(
     selectedRepId && activeTab === "quota" ? `/payout/statements/${selectedRepId}?periods=12` : null, { role, company }
@@ -75,22 +87,24 @@ export default function RepScorecardPage({ refreshKey, activeCompany, userRole, 
     setSelectedRepId(sortedReps[0].rep_id);
   }, [selectedRepId, sortedReps]);
 
-  const selectedRep = sortedReps.find((r) => r.rep_id === selectedRepId);
-  const allDeals = dealsData?.deals || [];
-  const dealsPages = Math.max(1, Math.ceil(allDeals.length / Math.max(1, dealsPageSize)));
-  const safeDealsPage = Math.min(dealsPage, dealsPages);
-  const pagedDeals = useMemo(() => {
-    const start = (safeDealsPage - 1) * dealsPageSize;
-    return allDeals.slice(start, start + dealsPageSize);
-  }, [allDeals, safeDealsPage, dealsPageSize]);
+  // Switching reps invalidates whatever page we were on for the old one
+  // (a rep with 3 deals has no "page 4") — reset before the next fetch
+  // builds its offset from stale page state.
+  useEffect(() => {
+    setDealsPage(1);
+    setActivitiesPage(1);
+  }, [selectedRepId]);
 
-  const allActivities = activitiesData?.activities || [];
-  const activitiesPages = Math.max(1, Math.ceil(allActivities.length / Math.max(1, activitiesPageSize)));
-  const safeActivitiesPage = Math.min(activitiesPage, activitiesPages);
-  const pagedActivities = useMemo(() => {
-    const start = (safeActivitiesPage - 1) * activitiesPageSize;
-    return allActivities.slice(start, start + activitiesPageSize);
-  }, [allActivities, safeActivitiesPage, activitiesPageSize]);
+  const selectedRep = sortedReps.find((r) => r.rep_id === selectedRepId);
+  // The server now paginates directly (limit/offset baked into the fetch
+  // URL above) — these are exactly the current page's rows, not a larger
+  // set to slice further.
+  const pagedDeals = dealsData?.deals || [];
+  const dealsTotalCount = dealsData?.count ?? 0;
+  const safeDealsPage = dealsPage;
+  const pagedActivities = activitiesData?.activities || [];
+  const activitiesTotalCount = activitiesData?.count ?? 0;
+  const safeActivitiesPage = activitiesPage;
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 16 }}>
@@ -254,7 +268,7 @@ export default function RepScorecardPage({ refreshKey, activeCompany, userRole, 
                   <PaginationControls
                     page={safeDealsPage}
                     pageSize={dealsPageSize}
-                    totalItems={allDeals.length}
+                    totalItems={dealsTotalCount}
                     onPageChange={setDealsPage}
                     onPageSizeChange={(next) => {
                       setDealsPageSize(next);
@@ -299,7 +313,7 @@ export default function RepScorecardPage({ refreshKey, activeCompany, userRole, 
                   <PaginationControls
                     page={safeActivitiesPage}
                     pageSize={activitiesPageSize}
-                    totalItems={allActivities.length}
+                    totalItems={activitiesTotalCount}
                     onPageChange={setActivitiesPage}
                     onPageSizeChange={(next) => {
                       setActivitiesPageSize(next);
