@@ -53,6 +53,10 @@ rsync -a --delete \
   --exclude ".env.production" \
   --exclude ".env.development" \
   --exclude ".env.test" \
+  --exclude "dbt/target/" \
+  --exclude "dbt/dbt_packages/" \
+  --exclude "dbt/logs/" \
+  --exclude "dbt/profiles.yml" \
   --exclude "backend/ml/saved/" \
   --exclude "reports/outputs/" \
   --exclude "reports/generated/" \
