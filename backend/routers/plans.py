@@ -8,9 +8,7 @@ GET /plans/{plan_id}
 GET /plans/{plan_id}/rules
 GET /plans/{plan_id}/assignments
 GET /plans/{plan_id}/performance
-GET /rules
-GET /rules/{rule_id}
-GET /rules/{rule_id}/impact
+GET /plans/rules/all
 GET /territories
 GET /territories/{territory_id}/performance
 """

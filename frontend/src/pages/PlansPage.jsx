@@ -239,7 +239,7 @@ export default function PlansPage({ refreshKey, userRole, activeCompany }) {
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
-                  <StatCard label="Revenue" value={fmt(planPerf?.revenue || 0)} sub="Selected period" accent="#1D9E75" />
+                  <StatCard label="Revenue" value={fmt(planPerf?.revenue || 0)} sub="All-time" accent="#1D9E75" />
                   <StatCard label="Quota" value={fmt(planPerf?.quota || 0)} sub="Plan aggregate" accent="#378ADD" />
                   <StatCard label="Attainment" value={pct(activeAttainment)} sub="Revenue / quota" accent={attainmentColor} />
                   <StatCard label="Assigned reps" value={String(planPerf?.rep_count || activeAssignments.length || 0)} sub="Current assignments" accent="#0E4C92" />
