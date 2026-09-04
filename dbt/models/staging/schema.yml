@@ -13,8 +13,9 @@ models:
       - name: team_id
         tests:
           - relationships:
-              to: ref('stg_teams')
-              field: id
+              arguments:
+                to: ref('stg_teams')
+                field: id
 
   - name: stg_accounts
     columns:
@@ -28,17 +29,20 @@ models:
       - name: account_id
         tests:
           - relationships:
-              to: ref('stg_accounts')
-              field: id
+              arguments:
+                to: ref('stg_accounts')
+                field: id
       - name: rep_id
         tests:
           - relationships:
-              to: ref('stg_reps')
-              field: id
+              arguments:
+                to: ref('stg_reps')
+                field: id
       - name: stage
         tests:
           - accepted_values:
-              values: ['Prospecting', 'Qualification', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost']
+              arguments:
+                values: ['Prospecting', 'Qualification', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost']
 
   - name: stg_revenue
     columns:
@@ -46,8 +50,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('stg_reps')
-              field: id
+              arguments:
+                to: ref('stg_reps')
+                field: id
       - name: period
         tests: [not_null]
 
@@ -57,8 +62,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('stg_reps')
-              field: id
+              arguments:
+                to: ref('stg_reps')
+                field: id
       - name: period
         tests: [not_null]
 
@@ -74,8 +80,9 @@ models:
       - name: plan_id
         tests:
           - relationships:
-              to: ref('stg_plans')
-              field: id
+              arguments:
+                to: ref('stg_plans')
+                field: id
 
   - name: stg_plan_assignments
     columns:
@@ -84,8 +91,9 @@ models:
       - name: plan_id
         tests:
           - relationships:
-              to: ref('stg_plans')
-              field: id
+              arguments:
+                to: ref('stg_plans')
+                field: id
 
   - name: stg_sales_units
     columns:
@@ -94,8 +102,9 @@ models:
       - name: opportunity_id
         tests:
           - relationships:
-              to: ref('stg_deals')
-              field: id
+              arguments:
+                to: ref('stg_deals')
+                field: id
 
   - name: stg_sales_credits
     columns:
@@ -104,8 +113,9 @@ models:
       - name: sales_unit_id
         tests:
           - relationships:
-              to: ref('stg_sales_units')
-              field: id
+              arguments:
+                to: ref('stg_sales_units')
+                field: id
 
   - name: stg_payouts
     columns:
@@ -114,8 +124,9 @@ models:
       - name: plan_id
         tests:
           - relationships:
-              to: ref('stg_plans')
-              field: id
+              arguments:
+                to: ref('stg_plans')
+                field: id
 
   - name: stg_bookings
     columns:
@@ -128,8 +139,9 @@ models:
       - name: deal_id
         tests:
           - relationships:
-              to: ref('stg_deals')
-              field: id
+              arguments:
+                to: ref('stg_deals')
+                field: id
 
   - name: stg_churn_events
     columns:
