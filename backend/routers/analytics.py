@@ -721,7 +721,11 @@ async def plans_governance(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/reps/{rep_id}/profile")
-async def rep_profile(rep_id: str, db: AsyncSession = Depends(get_db)):
+async def rep_profile(
+    rep_id: str,
+    period: str = Query(None, description="e.g. '2025-Q2', '2025', '2025-04'"),
+    db: AsyncSession = Depends(get_db),
+):
     rep = (await db.execute(select(Rep).where(Rep.id == rep_id))).scalar_one_or_none()
     if rep is None:
         raise HTTPException(status_code=404, detail="Rep not found")
@@ -788,7 +792,12 @@ async def rep_profile(rep_id: str, db: AsyncSession = Depends(get_db)):
             bucket["deals_open"] += count
             bucket["open_pipeline"] += value
 
-    total_revenue = float(
+    # All-time total — deliberately not period-scoped. product_performance below
+    # (and the "PLANS ASSIGNED" deal-count/value cards from `plans`) summarize a
+    # rep's full product history, same as monthly_trend; product_mix_pct needs
+    # a denominator on the same (all-time) basis, not the period-scoped total
+    # used by the "performance" summary below.
+    total_revenue_all_time = float(
         (
             await db.execute(
                 select(func.sum(Revenue.amount)).where(Revenue.rep_id == rep.id)
@@ -803,33 +812,32 @@ async def rep_profile(rep_id: str, db: AsyncSession = Depends(get_db)):
         item["win_rate"] = round((item["deals_won"] / closed * 100.0), 2) if closed > 0 else 0.0
         item["revenue"] = round(item["revenue"], 2)
         item["open_pipeline"] = round(item["open_pipeline"], 2)
-        item["product_mix_pct"] = round((item["revenue"] / total_revenue * 100.0), 2) if total_revenue > 0 else 0.0
+        item["product_mix_pct"] = round((item["revenue"] / total_revenue_all_time * 100.0), 2) if total_revenue_all_time > 0 else 0.0
         product_performance.append(item)
     product_performance.sort(key=lambda x: x["revenue"], reverse=True)
 
-    # Totals
-    total_quota = float((await db.execute(
-        select(func.sum(Quota.amount)).where(Quota.rep_id == rep.id)
-    )).scalar() or 0)
-    attainment_pct = (100.0 * total_revenue / total_quota) if total_quota > 0 else 0.0
-
-    deals_won = int((await db.execute(
-        select(func.count(Deal.id)).where(Deal.rep_id == rep.id, Deal.stage == "Closed Won")
-    )).scalar() or 0)
-    won_deal_value = float((await db.execute(
-        select(func.sum(Deal.amount)).where(Deal.rep_id == rep.id, Deal.stage == "Closed Won")
-    )).scalar() or 0.0)
-    deals_lost = int((await db.execute(
-        select(func.count(Deal.id)).where(Deal.rep_id == rep.id, Deal.stage == "Closed Lost")
-    )).scalar() or 0)
-    open_pipeline = float((await db.execute(
-        select(func.sum(Deal.amount)).where(
-            Deal.rep_id == rep.id,
-            ~Deal.stage.in_(["Closed Won", "Closed Lost"])
-        )
-    )).scalar() or 0)
-    win_rate = (100.0 * deals_won / max(1, deals_won + deals_lost))
-    average_deal_size = (won_deal_value / deals_won) if deals_won > 0 else 0.0
+    # "performance" summary (the top-of-page cards: Revenue/Quota/Attainment/Win
+    # Rate/Open Pipeline/Rank) — period-scoped via the same calculator
+    # rep_performance() already uses, rather than the unscoped totals this
+    # endpoint used to compute by hand. Those hand-rolled queries had no period
+    # parameter at all, so switching the header's period selector never changed
+    # anything on this page: every rep's card silently showed all-time numbers
+    # regardless of what was selected, while every sibling page (Executive
+    # Overview, the Reps list, RevOps Control Center) correctly scoped to the
+    # selected period — confirmed live: Chelsea Butler's "this quarter" Top
+    # Performers row showed 125.9% attainment while her own profile card showed
+    # 108.9% (all-time) on the same screen at the same time.
+    perf_filters = _period_to_filters(period) or {}
+    perf = await calculators.get_rep_performance(db, rep_id=str(rep.id), filters=perf_filters or None)
+    perf_data = perf["data"] or {}
+    total_revenue = float(perf_data.get("revenue", 0.0))
+    total_quota = float(perf_data.get("quota", 0.0))
+    attainment_pct = float(perf_data.get("attainment_pct", 0.0))
+    deals_won = int(perf_data.get("deals_won", 0))
+    deals_lost = int(perf_data.get("deals_lost", 0))
+    open_pipeline = float(perf_data.get("open_pipeline", 0.0))
+    win_rate = float(perf_data.get("win_rate", 0.0))
+    average_deal_size = float(perf_data.get("average_deal_size", 0.0))
 
     # Commission tier
     if attainment_pct >= 120:
@@ -841,12 +849,16 @@ async def rep_profile(rep_id: str, db: AsyncSession = Depends(get_db)):
     else:
         commission_tier = "Below Threshold (3%)"
 
-    # Rank by total revenue among all reps
-    rev_subq = (
-        select(Revenue.rep_id, func.sum(Revenue.amount).label("rev"))
-        .group_by(Revenue.rep_id)
-        .subquery()
-    )
+    # Rank by revenue among all reps, scoped to the same period as the
+    # "performance" block above — comparing a period-scoped revenue against
+    # other reps' all-time totals would rank correctly-computed 100.0%
+    # attainment reps below reps who are merely long-tenured.
+    rev_q = select(Revenue.rep_id, func.sum(Revenue.amount).label("rev")).select_from(Revenue)
+    if perf_filters.get("start_date"):
+        rev_q = rev_q.where(Revenue.period >= str(perf_filters["start_date"])[:7])
+    if perf_filters.get("end_date"):
+        rev_q = rev_q.where(Revenue.period <= str(perf_filters["end_date"])[:7])
+    rev_subq = rev_q.group_by(Revenue.rep_id).subquery()
     higher_count = int((await db.execute(
         select(func.count()).select_from(rev_subq).where(rev_subq.c.rev > total_revenue)
     )).scalar() or 0)
@@ -970,6 +982,31 @@ async def rep_profile(rep_id: str, db: AsyncSession = Depends(get_db)):
                     }
                 )
 
+    # Ramp data from RepRamp, most recent period. This used to live in a block
+    # after the function's only `return` — dead code, unreachable, and it
+    # referenced a `profile_resp` name this function never defined. No current
+    # frontend caller reads ramp_factor/ramp_status from this endpoint (checked),
+    # so nothing was visibly broken by it always coming back None — but it's
+    # real, intended data (RepRamp is populated by the data generator and read
+    # elsewhere, e.g. revops_tools.py) that this endpoint was silently never
+    # surfacing.
+    ramp_factor = None
+    ramp_status = None
+    try:
+        from backend.models import RepRamp as _RepRamp
+        ramp_row = (await db.execute(
+            select(_RepRamp)
+            .where(_RepRamp.rep_id == rep.id)
+            .order_by(_RepRamp.period.desc())
+            .limit(1)
+        )).scalars().first()
+        if ramp_row:
+            rf = float(ramp_row.ramp_factor or 1.0)
+            ramp_factor = round(rf, 4)
+            ramp_status = "fully_ramped" if rf >= 1.0 else "ramping"
+    except Exception:
+        pass
+
     return {
         "rep_id": str(rep.id),
         "name": rep.name,
@@ -999,29 +1036,11 @@ async def rep_profile(rep_id: str, db: AsyncSession = Depends(get_db)):
         },
         "commission_tier": commission_tier,
         "plan_name": assigned_plans[0]["name"] if assigned_plans else None,
-        "ramp_factor": None,  # populated below
-        "ramp_status": None,
+        "ramp_factor": ramp_factor,
+        "ramp_status": ramp_status,
         "rank": rank,
         "total_reps": total_reps,
     }
-
-    # Add ramp data from RepRamp table if available
-    try:
-        from backend.models import RepRamp as _RepRamp
-        ramp_row = (await db.execute(
-            select(_RepRamp)
-            .where(_RepRamp.rep_id == rep.id)
-            .order_by(_RepRamp.period.desc())
-            .limit(1)
-        )).scalars().first()
-        if ramp_row:
-            rf = float(ramp_row.ramp_factor or 1.0)
-            profile_resp["ramp_factor"] = round(rf, 4)
-            profile_resp["ramp_status"] = "fully_ramped" if rf >= 1.0 else "ramping"
-    except Exception:
-        pass
-
-    return profile_resp
 
 
 @router.get("/revops-kpis")

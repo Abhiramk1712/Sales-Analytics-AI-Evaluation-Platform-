@@ -45,6 +45,15 @@ export const safePct = (n, fallback = "—") => {
 export const withRefresh = (url, refreshKey) =>
   url.includes("?") ? `${url}&_r=${refreshKey}` : `${url}?_r=${refreshKey}`;
 
+// Appends the selected period as a query param. Was previously defined only
+// inside App.jsx, so pages outside it (e.g. RepScorecardPage.jsx) had no way
+// to reuse it and their fetches silently never scoped to the selected period.
+export const withPeriod = (url, period) => {
+  if (!period) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}period=${encodeURIComponent(period)}`;
+};
+
 export const STAGE_COLORS = {
   Prospecting: "#B5D4F4",
   Qualification: "#85B7EB",
