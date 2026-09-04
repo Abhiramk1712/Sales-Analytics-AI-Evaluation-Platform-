@@ -32,7 +32,7 @@ from backend.database import get_db
 from backend.auth.dependencies import get_user_context, require_permission
 from backend.auth.models import UserContext
 from backend.auth.tenant import get_current_company_id, get_tenant_context
-from backend.models import Rep, Revenue, Quota, Deal, Rule as RuleModel, PlanAssignment, UserProfile
+from backend.models import Rep, Revenue, Quota, Deal, Rule as RuleModel, PlanAssignment, UserProfile, PayoutRecord
 from backend.payout.engine import (
     CommissionTier,
     DEFAULT_PAYOUT_CONFIG,
@@ -535,13 +535,87 @@ async def team_payout_summary(
     }
 
 
+async def _quarterly_payout_baseline(
+    db: AsyncSession,
+    rep_id: uuid.UUID,
+    user_id: Optional[uuid.UUID],
+    quarter_label: str,
+    rep_cfg: PayoutConfig,
+) -> dict[str, Any]:
+    """The correct, quarterly-grain payout baseline for one quarter.
+
+    Commission tiers and the flat per-tier bonus are defined at quarterly
+    grain (Quota rows are quarterly; Rule.bonus_amount is a once-a-quarter
+    figure) — they only mean anything evaluated cumulatively across the
+    whole quarter, never against one month's revenue in isolation. Prefers
+    the real PayoutRecord for the quarter (the actual source of truth,
+    computed by credit_payout_engine.py) when one exists; falls back to
+    compute_payout() run once against quarterly-aggregated revenue/quota/
+    deals (e.g. for the current in-flight quarter, before a real payout run
+    has happened for it) — never against a single month's numbers, which is
+    the bug this replaced.
+    """
+    q_start, q_end = _quarter_to_months(quarter_label)
+    quarter_revenue = await _rep_revenue_for_period(db, rep_id, q_start, q_end)
+    quarter_quota = await _rep_quota_for_period(db, rep_id, q_start, q_end)
+
+    real_record = None
+    if user_id is not None:
+        real_record = (
+            await db.execute(
+                select(PayoutRecord)
+                .where(PayoutRecord.user_id == user_id)
+                .where(PayoutRecord.period == quarter_label)
+            )
+        ).scalars().first()
+
+    if real_record is not None:
+        commission_rate = float(real_record.commission_rate or 0.0)
+        payout_amount = float(real_record.payout_amount or 0.0)
+        fallback_used = bool(real_record.fallback_used)
+    else:
+        deals_won, deals_lost = await _rep_deal_counts(db, rep_id, q_start, q_end)
+        result = compute_payout(quarter_revenue, quarter_quota, deals_won, deals_lost, rep_cfg)
+        commission_rate = result["commission_rate"]
+        payout_amount = result["payout"]
+        fallback_used = result["fallback_used"]
+
+    tier_label = "Below threshold"
+    for tier in rep_cfg.tiers:
+        if abs(tier.rate - commission_rate) < 1e-9:
+            tier_label = f"{tier.min_attainment_pct:.0f}–{tier.max_attainment_pct:.0f}% @ {tier.rate:.0%} (quarterly)"
+            break
+
+    return {
+        "quarter_revenue": quarter_revenue,
+        "quarter_quota": quarter_quota,
+        "commission_rate": commission_rate,
+        "payout_amount": payout_amount,
+        "tier_label": tier_label,
+        "fallback_used": fallback_used,
+        "accelerator_rate": rep_cfg.accelerator_rate,
+    }
+
+
 @router.get("/statements/{rep_id}")
 async def rep_payout_statements(
     rep_id: uuid.UUID,
     periods: int = Query(6, ge=1, le=24, description="Number of recent months"),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Return last N monthly payout periods for a rep."""
+    """Return last N monthly payout periods for a rep.
+
+    Each month's commission/accelerator/bonus is this month's share (by
+    revenue) of its quarter's real payout — not independently re-evaluated
+    from this one month's isolated attainment. See
+    _quarterly_payout_baseline() for why: the plan's tiers and flat bonus
+    are quarterly-grain rules, and evaluating them against a single month
+    let a rep's one strong month trigger a bonus their quarter as a whole
+    never earned (confirmed live: a rep at 98.4% cumulative quarterly
+    attainment — no bonus in the real payout record — showed a full bonus
+    in this endpoint for the one month of that quarter where isolated
+    monthly attainment happened to clear 100%).
+    """
     rep = (await db.execute(select(Rep).where(Rep.id == rep_id))).scalars().first()
     if not rep:
         raise HTTPException(status_code=404, detail=f"Rep {rep_id} not found")
@@ -570,35 +644,49 @@ async def rep_payout_statements(
     ).scalars().all()
 
     statements: list[dict[str, Any]] = []
+    quarter_cache: dict[str, dict[str, Any]] = {}
     for p in sorted(period_rows):  # ascending chronological
         revenue = await _rep_revenue_for_period(db, rep_id, p, p)
         quota = await _rep_quota_for_period(db, rep_id, p, p)
-        deals_won, deals_lost = await _rep_deal_counts(db, rep_id, p, p)
-        result = compute_payout(revenue, quota, deals_won, deals_lost, rep_cfg)
 
-        # Determine which tier applied
-        attainment = result["attainment_pct"]
-        tier_label = "Below threshold"
-        for tier in rep_cfg.tiers:
-            if tier.min_attainment_pct <= attainment < tier.max_attainment_pct:
-                tier_label = f"{tier.min_attainment_pct:.0f}–{tier.max_attainment_pct:.0f}% @ {tier.rate:.0%}"
-                break
+        quarter_label = _overlapping_quarters(p, p)[0][0]
+        if quarter_label not in quarter_cache:
+            quarter_cache[quarter_label] = await _quarterly_payout_baseline(
+                db, rep_id, user_id_for_rep, quarter_label, rep_cfg
+            )
+        baseline = quarter_cache[quarter_label]
+
+        weight = (revenue / baseline["quarter_revenue"]) if baseline["quarter_revenue"] > 0 else (1.0 / 3.0)
+        commission_rate = baseline["commission_rate"]
+        base_commission = round(revenue * commission_rate, 2)
+        accelerator_est = max(0.0, baseline["quarter_revenue"] - baseline["quarter_quota"]) * baseline["accelerator_rate"]
+        accelerator = round(accelerator_est * weight, 2)
+        payout_amount = round(baseline["payout_amount"] * weight, 2)
+        # bonus is the remainder that makes commission + accelerator + bonus
+        # equal this month's share of the quarter's real payout exactly, to
+        # the cent — the real PayoutRecord doesn't break its total down into
+        # these components, so bonus absorbs whatever commission/accelerator
+        # (both independently, reasonably estimated) don't already account for.
+        bonus = round(payout_amount - base_commission - accelerator, 2)
+
+        month_attainment = round((100.0 * revenue / quota), 2) if quota > 0 else 0.0
 
         statements.append({
             "period": p,
             "revenue": revenue,
             "quota": quota,
-            "attainment_pct": attainment,
-            "tier_applied": tier_label,
-            "commission": result["base_commission"],
-            "base_commission": result["base_commission"],
-            "commission_rate": result["commission_rate"],
-            "accelerator": result["accelerator"],
-            "bonus": result["bonus"],
-            "payout": result["payout"],
-            "total_payout": result["payout"],
-            "confidence": "high" if not result["fallback_used"] else "medium",
-            "fallback_used": result["fallback_used"],
+            "attainment_pct": month_attainment,
+            "tier_applied": baseline["tier_label"],
+            "commission": base_commission,
+            "base_commission": base_commission,
+            "commission_rate": commission_rate,
+            "accelerator": accelerator,
+            "bonus": bonus,
+            "payout": payout_amount,
+            "total_payout": payout_amount,
+            "confidence": "high" if not baseline["fallback_used"] else "medium",
+            "fallback_used": baseline["fallback_used"],
+            "quarter": quarter_label,
         })
 
     return {
