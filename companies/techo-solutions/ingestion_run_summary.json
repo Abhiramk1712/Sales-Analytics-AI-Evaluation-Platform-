@@ -1,18 +1,18 @@
 {
-  "run_id": "26279230-c0bf-4d2d-a1e0-b493cf199271",
+  "run_id": "35da04ee-d590-444e-a2c9-d0d4a60b0f0f",
   "company_name": "techo-solutions",
   "company_directory": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions",
-  "generated_at": "2026-09-02T17:50:25.763081+00:00",
+  "generated_at": "2026-09-04T17:56:35.966838+00:00",
   "status": "success",
-  "total_csv_rows": 3705,
+  "total_csv_rows": 3795,
   "db_rows_loaded": {
     "teams": 5,
     "reps": 12,
     "quotas": 132,
     "accounts": 60,
     "deals": 198,
-    "activities": 739,
-    "revenue": 950,
+    "activities": 725,
+    "revenue": 1010,
     "positions": 9,
     "users": 12,
     "managers": 12,
@@ -23,16 +23,16 @@
     "products": 5,
     "rep_product_assignments": 43,
     "user_territory_assignments": 12,
-    "attainment_snapshots": 411,
+    "attainment_snapshots": 422,
     "rep_ramp": 144,
-    "leads": 49,
+    "leads": 65,
     "opportunities": 198,
-    "arr_waterfall": 384,
-    "bookings": 81,
+    "arr_waterfall": 396,
+    "bookings": 82,
     "churn_events": 6,
-    "sales_units": 81,
+    "sales_units": 82,
     "sales_unit_line_items": 0,
-    "sales_credits": 99,
+    "sales_credits": 102,
     "payouts": 144,
     "auto_repair_quota_rows": 12,
     "auto_repair_sales_units": 0,
@@ -65,25 +65,25 @@
     ]
   },
   "revops_reconciliation": {
-    "closed_won_total": 14462983.99,
-    "bookings_total": 14462983.99,
-    "revenue_total": 6526775.27,
-    "quota_total": 7875024.98,
-    "quota_to_revenue_ratio": 1.2066,
+    "closed_won_total": 14326743.41,
+    "bookings_total": 14326743.41,
+    "revenue_total": 6866122.77,
+    "quota_total": 8188586.5,
+    "quota_to_revenue_ratio": 1.1926,
     "booking_to_closed_won_ratio": 1.0,
-    "closed_won_count": 81,
-    "bookings_count": 81,
+    "closed_won_count": 82,
+    "bookings_count": 82,
     "rep_ratio_outlier_threshold": 5.0,
     "rep_ratio_outliers": 0,
     "rep_ratio_outliers_gt5x": 0,
-    "team_ratio_avg": 1.2854,
-    "team_ratio_max": 1.6248,
+    "team_ratio_avg": 1.2451,
+    "team_ratio_max": 1.5157,
     "team_count_with_ratio": 5
   },
   "sources": [
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/teams.csv",
-      "loaded_at": "2026-09-02T17:50:25.252138+00:00",
+      "loaded_at": "2026-09-04T17:56:35.160583+00:00",
       "row_count": 5,
       "column_count": 3,
       "columns": [
@@ -99,7 +99,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/reps.csv",
-      "loaded_at": "2026-09-02T17:50:25.252232+00:00",
+      "loaded_at": "2026-09-04T17:56:35.160777+00:00",
       "row_count": 12,
       "column_count": 6,
       "columns": [
@@ -118,7 +118,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/quotas.csv",
-      "loaded_at": "2026-09-02T17:50:25.252378+00:00",
+      "loaded_at": "2026-09-04T17:56:35.161013+00:00",
       "row_count": 132,
       "column_count": 3,
       "columns": [
@@ -134,7 +134,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/accounts.csv",
-      "loaded_at": "2026-09-02T17:50:25.252492+00:00",
+      "loaded_at": "2026-09-04T17:56:35.161190+00:00",
       "row_count": 60,
       "column_count": 5,
       "columns": [
@@ -152,7 +152,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/deals.csv",
-      "loaded_at": "2026-09-02T17:50:25.252914+00:00",
+      "loaded_at": "2026-09-04T17:56:35.161857+00:00",
       "row_count": 198,
       "column_count": 11,
       "columns": [
@@ -176,8 +176,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/activities.csv",
-      "loaded_at": "2026-09-02T17:50:25.254308+00:00",
-      "row_count": 739,
+      "loaded_at": "2026-09-04T17:56:35.163933+00:00",
+      "row_count": 725,
       "column_count": 7,
       "columns": [
         "id",
@@ -196,8 +196,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/revenue.csv",
-      "loaded_at": "2026-09-02T17:50:25.255826+00:00",
-      "row_count": 950,
+      "loaded_at": "2026-09-04T17:56:35.166185+00:00",
+      "row_count": 1010,
       "column_count": 8,
       "columns": [
         "rep_id",
@@ -217,8 +217,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/arr_waterfall.csv",
-      "loaded_at": "2026-09-02T17:50:25.256380+00:00",
-      "row_count": 384,
+      "loaded_at": "2026-09-04T17:56:35.167072+00:00",
+      "row_count": 396,
       "column_count": 10,
       "columns": [
         "rep_id",
@@ -240,8 +240,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/attainment_snapshots.csv",
-      "loaded_at": "2026-09-02T17:50:25.256961+00:00",
-      "row_count": 411,
+      "loaded_at": "2026-09-04T17:56:35.168420+00:00",
+      "row_count": 422,
       "column_count": 8,
       "columns": [
         "id",
@@ -261,8 +261,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/bookings.csv",
-      "loaded_at": "2026-09-02T17:50:25.257182+00:00",
-      "row_count": 81,
+      "loaded_at": "2026-09-04T17:56:35.168815+00:00",
+      "row_count": 82,
       "column_count": 12,
       "columns": [
         "booking_id",
@@ -286,7 +286,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/churn_events.csv",
-      "loaded_at": "2026-09-02T17:50:25.257247+00:00",
+      "loaded_at": "2026-09-04T17:56:35.168931+00:00",
       "row_count": 6,
       "column_count": 7,
       "columns": [
@@ -306,8 +306,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/leads.csv",
-      "loaded_at": "2026-09-02T17:50:25.257374+00:00",
-      "row_count": 49,
+      "loaded_at": "2026-09-04T17:56:35.169176+00:00",
+      "row_count": 65,
       "column_count": 9,
       "columns": [
         "id",
@@ -328,7 +328,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/managers.csv",
-      "loaded_at": "2026-09-02T17:50:25.257440+00:00",
+      "loaded_at": "2026-09-04T17:56:35.169285+00:00",
       "row_count": 12,
       "column_count": 5,
       "columns": [
@@ -346,7 +346,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/opportunities.csv",
-      "loaded_at": "2026-09-02T17:50:25.257832+00:00",
+      "loaded_at": "2026-09-04T17:56:35.169898+00:00",
       "row_count": 198,
       "column_count": 10,
       "columns": [
@@ -369,7 +369,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/plan_assignments.csv",
-      "loaded_at": "2026-09-02T17:50:25.257906+00:00",
+      "loaded_at": "2026-09-04T17:56:35.170020+00:00",
       "row_count": 11,
       "column_count": 9,
       "columns": [
@@ -391,7 +391,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/plans.csv",
-      "loaded_at": "2026-09-02T17:50:25.257968+00:00",
+      "loaded_at": "2026-09-04T17:56:35.170111+00:00",
       "row_count": 4,
       "column_count": 8,
       "columns": [
@@ -412,7 +412,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/positions.csv",
-      "loaded_at": "2026-09-02T17:50:25.258039+00:00",
+      "loaded_at": "2026-09-04T17:56:35.170209+00:00",
       "row_count": 9,
       "column_count": 10,
       "columns": [
@@ -435,7 +435,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/products.csv",
-      "loaded_at": "2026-09-02T17:50:25.258095+00:00",
+      "loaded_at": "2026-09-04T17:56:35.170294+00:00",
       "row_count": 5,
       "column_count": 7,
       "columns": [
@@ -455,7 +455,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/rep_hierarchy.csv",
-      "loaded_at": "2026-09-02T17:50:25.258167+00:00",
+      "loaded_at": "2026-09-04T17:56:35.170389+00:00",
       "row_count": 12,
       "column_count": 7,
       "columns": [
@@ -475,7 +475,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/rep_product_assignments.csv",
-      "loaded_at": "2026-09-02T17:50:25.258301+00:00",
+      "loaded_at": "2026-09-04T17:56:35.170586+00:00",
       "row_count": 43,
       "column_count": 11,
       "columns": [
@@ -499,7 +499,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/rep_ramp.csv",
-      "loaded_at": "2026-09-02T17:50:25.258491+00:00",
+      "loaded_at": "2026-09-04T17:56:35.170880+00:00",
       "row_count": 144,
       "column_count": 7,
       "columns": [
@@ -519,7 +519,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/rules.csv",
-      "loaded_at": "2026-09-02T17:50:25.258577+00:00",
+      "loaded_at": "2026-09-04T17:56:35.171016+00:00",
       "row_count": 16,
       "column_count": 15,
       "columns": [
@@ -547,8 +547,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/sales_credits.csv",
-      "loaded_at": "2026-09-02T17:50:25.258780+00:00",
-      "row_count": 99,
+      "loaded_at": "2026-09-04T17:56:35.171331+00:00",
+      "row_count": 102,
       "column_count": 8,
       "columns": [
         "id",
@@ -568,8 +568,8 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/sales_units.csv",
-      "loaded_at": "2026-09-02T17:50:25.258967+00:00",
-      "row_count": 81,
+      "loaded_at": "2026-09-04T17:56:35.171631+00:00",
+      "row_count": 82,
       "column_count": 10,
       "columns": [
         "id",
@@ -591,7 +591,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/territories.csv",
-      "loaded_at": "2026-09-02T17:50:25.259055+00:00",
+      "loaded_at": "2026-09-04T17:56:35.171766+00:00",
       "row_count": 20,
       "column_count": 11,
       "columns": [
@@ -615,7 +615,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/user_territory_assignments.csv",
-      "loaded_at": "2026-09-02T17:50:25.259124+00:00",
+      "loaded_at": "2026-09-04T17:56:35.171877+00:00",
       "row_count": 12,
       "column_count": 10,
       "columns": [
@@ -638,7 +638,7 @@
     },
     {
       "source_file": "/Users/abhiramkattunga/Desktop/sales-analytics-ai/companies/techo-solutions/users.csv",
-      "loaded_at": "2026-09-02T17:50:25.259194+00:00",
+      "loaded_at": "2026-09-04T17:56:35.171996+00:00",
       "row_count": 12,
       "column_count": 14,
       "columns": [
