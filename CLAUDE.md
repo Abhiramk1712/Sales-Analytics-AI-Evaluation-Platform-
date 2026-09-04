@@ -46,9 +46,16 @@ make frontend   # vite dev server on :3000 (NOT 5173 — vite.config.js sets 300
 make test       # pytest -q, ~29s, 847 tests
 make coverage   # pytest -q --cov=backend --cov-report=term-missing
 make lint       # compileall backend + vite build
+make dbt-test   # dbt build (run + test) against local Postgres, 27 models / 63 tests
 make package    # clean shareable zip
 make clean      # drop caches and build output
 ```
+
+`make dbt-test` needs real data to test anything meaningful against — run `make seed` first (or it
+runs against whatever's already loaded). It copies `dbt/profiles.example.yml` to `dbt/profiles.yml`
+(gitignored, same convention as `.env`/`.env.example`) on first run. Needs `dbt-core`/`dbt-postgres`
+installed — `pip install -r dbt/requirements.txt` (kept separate from `requirements.txt`; only
+`dbt/models/**` work needs it).
 
 ```bash
 # One test, one test method
@@ -174,6 +181,21 @@ directory was untracked, so on a fresh clone the list was empty and every test i
 passed while checking nothing. The module now refuses to run on an empty list. Apply the
 same suspicion to any check whose scope is discovered at runtime.
 
+### A written test suite that never runs is not verified code
+
+*Why:* `dbt/models/schema.yml` had 63 real, specific tests — `not_null`, `unique`,
+`relationships`, `accepted_values` — and `dbt test` had never actually been run against
+this project's own database before it was wired into CI. Three real bugs were sitting in
+it undiscovered: `max(case when ... then true else false end)` in
+`int_plan_rule_coverage.sql` (Postgres has no `max(boolean)` — `bool_or()` is the correct
+aggregate for "true if any row is true"), two staging-model tests written against column
+names (`booking_id`, `event_id`) that don't exist — the real primary key on both tables is
+`id`, and a `not_null` test on `mart_comp_plan_effectiveness.plan_id` that was asserting an
+invariant the schema itself contradicts: `payouts.plan_id` is nullable by design (the
+credit payout engine's fallback path resolves no plan), so that mart now filters those rows
+out instead of failing on data it was never wrong to produce. None of this was a dbt
+problem — dbt caught all three the first time it actually ran.
+
 ### Confirm before deleting reachable functionality
 
 Before removing a page, component, route or endpoint, check: is it routed or imported? Is
@@ -206,9 +228,9 @@ file order.
 | Backend coverage % | **No threshold, no CI gate.** `make coverage` measures it locally (63% of `backend/` by line, last measured); nothing fails a build over it. |
 | Frontend tests | **No.** There is no test runner installed. |
 | Frontend lint / types | **No.** No ESLint, no TypeScript. |
-| dbt tests | **No.** `schema.yml` exists; `dbt test` never runs in CI. |
+| dbt tests | **Yes** — `dbt build` (`run` + `test`, 27 models / 63 tests) in CI, blocking, against a `make seed`-loaded dataset. See below. |
 
-Four of seven rows are honest gaps. Do not describe this project as having test coverage
+Three of seven rows are honest gaps. Do not describe this project as having test coverage
 enforcement — it has a passing test suite, which is a different claim. If you add a
 threshold, measure the baseline first and raise it to that, rather than asserting a
 number ahead of the measurement.

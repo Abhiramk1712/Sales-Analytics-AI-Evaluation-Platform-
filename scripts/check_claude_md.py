@@ -181,6 +181,7 @@ def check_ci_gates(text: str) -> tuple[bool, str]:
         "pytest": "pytest" in ci,
         "check_package_hygiene": "check_package_hygiene" in ci,
         "npm run build": "npm run build" in ci,
+        "dbt build": "dbt build" in ci,
     }
     missing = [name for name, present in expected.items() if not present]
     if missing:
@@ -192,7 +193,7 @@ def check_ci_gates(text: str) -> tuple[bool, str]:
             return False, (
                 f"ci.yml now runs {tool}; CLAUDE.md still lists {label} as not enforced"
             )
-    return True, "CI gates: pytest, hygiene and build enforced; stated gaps still gaps"
+    return True, "CI gates: pytest, hygiene, build and dbt build enforced; stated gaps still gaps"
 
 
 CHECKS = (

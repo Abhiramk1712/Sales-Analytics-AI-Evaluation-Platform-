@@ -119,7 +119,11 @@ models:
 
   - name: stg_bookings
     columns:
-      - name: booking_id
+      # bookings.id is the real primary key (see backend/models.py's Booking
+      # model / \d bookings) — "booking_id" here never matched an actual
+      # column, so this test had been erroring on every real run since it
+      # was written; dbt just had never been run to notice.
+      - name: id
         tests: [not_null, unique]
       - name: deal_id
         tests:
@@ -129,5 +133,7 @@ models:
 
   - name: stg_churn_events
     columns:
-      - name: event_id
+      # Same mismatch as stg_bookings above: churn_events.id is the real
+      # primary key, not "event_id".
+      - name: id
         tests: [not_null, unique]

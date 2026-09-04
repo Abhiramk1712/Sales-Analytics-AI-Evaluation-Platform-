@@ -4,7 +4,7 @@ PYTHON ?= python3
 VENV ?= .venv
 VENV_BIN := $(VENV)/bin
 
-.PHONY: setup seed backend frontend test coverage lint package clean
+.PHONY: setup seed backend frontend test coverage lint package clean dbt-test
 
 COMPANY ?= techo-solutions
 
@@ -35,6 +35,10 @@ coverage:
 lint:
 	"$(VENV_BIN)/python" -m compileall backend
 	cd frontend && npm run build
+
+dbt-test:
+	@if [[ ! -f dbt/profiles.yml ]]; then cp dbt/profiles.example.yml dbt/profiles.yml; fi
+	"$(VENV_BIN)/dbt" build --project-dir dbt --profiles-dir dbt
 
 package:
 	bash scripts/package_clean.sh

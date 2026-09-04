@@ -53,6 +53,9 @@ dbt/dbt_packages/
 dbt/logs/
 logs/dbt.log
 
+# dbt local profile (copied from dbt/profiles.example.yml — same convention as .env/.env.example)
+dbt/profiles.yml
+
 # Editor
 .vscode/
 .idea/

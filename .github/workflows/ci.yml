@@ -47,6 +47,43 @@ jobs:
       - name: Hygiene check
         run: python scripts/check_package_hygiene.py --path .
 
+      - name: Install dbt
+        run: pip install -r dbt/requirements.txt
+
+      - name: Seed reference dataset (for dbt to test against real data, not an empty DB)
+        # Not `make seed`: that target invokes $(VENV_BIN)/python (.venv/bin/python),
+        # which only exists after `make setup`'s local venv creation. CI installs
+        # dependencies straight into the runner's system Python (see "Install backend
+        # dependencies" above) and every other step here already calls tools directly
+        # for that reason — this mirrors that, using the exact same args as the
+        # Makefile's `seed` recipe.
+        run: |
+          python -m backend.data_generator \
+            --company-name techo-solutions \
+            --n-reps 12 --n-accounts 60 --n-deals 150 --months 36 \
+            --include-org-hierarchy
+
+      - name: Run dbt build (run + test)
+        env:
+          DO_NOT_TRACK: "1"
+        run: |
+          mkdir -p /tmp/dbt_profile
+          cat > /tmp/dbt_profile/profiles.yml <<'PROFILE'
+          sales_analytics_ai:
+            target: dev
+            outputs:
+              dev:
+                type: postgres
+                host: localhost
+                port: 5432
+                user: postgres
+                password: postgres
+                dbname: sales_analytics
+                schema: public
+                threads: 4
+          PROFILE
+          dbt build --project-dir dbt --profiles-dir /tmp/dbt_profile
+
       - name: Run backend tests
         run: pytest -q
 
