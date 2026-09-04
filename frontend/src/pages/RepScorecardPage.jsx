@@ -8,7 +8,7 @@ import {
 } from "recharts";
 import { useFetch } from "../hooks/useFetch";
 import { MetricCard, Skeleton, Card, SectionTitle, ErrorMessage, PaginationControls } from "../components/shared";
-import { fmt, pct, withRefresh } from "../utils/format";
+import { fmt, pct, withRefresh, withPeriod } from "../utils/format";
 import { useUrlState } from "../hooks/useUrlState";
 
 const STAGE_COLORS = {
@@ -28,7 +28,7 @@ function ActivityTypeTag({ type }) {
   );
 }
 
-export default function RepScorecardPage({ refreshKey, activeCompany, userRole }) {
+export default function RepScorecardPage({ refreshKey, activeCompany, userRole, period }) {
   const role = userRole || "executive";
   const company = activeCompany || "";
   const [selectedRepId, setSelectedRepId] = useState(null);
@@ -42,9 +42,9 @@ export default function RepScorecardPage({ refreshKey, activeCompany, userRole }
   const [activitiesPage, setActivitiesPage] = useState(1);
   const [activitiesPageSize, setActivitiesPageSize] = useState(10);
 
-  const { data: repsData, loading: repsLoading } = useFetch(withRefresh("/analytics/reps/performance", refreshKey), { role, company });
+  const { data: repsData, loading: repsLoading } = useFetch(withPeriod(withRefresh("/analytics/reps/performance", refreshKey), period), { role, company });
   const { data: profileData, loading: profileLoading } = useFetch(
-    selectedRepId ? `/analytics/reps/${selectedRepId}/profile` : null, { role, company }
+    selectedRepId ? withPeriod(`/analytics/reps/${selectedRepId}/profile`, period) : null, { role, company }
   );
   const { data: dealsData, loading: dealsLoading } = useFetch(
     selectedRepId && activeTab === "deals" ? `/analytics/reps/${selectedRepId}/deals?limit=50` : null, { role, company }

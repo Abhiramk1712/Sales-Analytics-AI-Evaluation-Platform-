@@ -735,8 +735,8 @@ function PlanDetailModal({ plan, repProfile, onClose }) {
   );
 }
 
-function RepProfilePanel({ repId }) {
-  const { data: profile, loading, error } = useFetch(`/analytics/reps/${repId}/profile`);
+function RepProfilePanel({ repId, period }) {
+  const { data: profile, loading, error } = useFetch(withPeriod(`/analytics/reps/${repId}/profile`, period));
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
 
@@ -1198,7 +1198,7 @@ function RepsTab({ refreshKey, period, userRole, activeCompany }) {
       )}
 
       {/* Selected Rep Profile */}
-      {activeRepId && <RepProfilePanel key={activeRepId} repId={activeRepId} />}
+      {activeRepId && <RepProfilePanel key={activeRepId} repId={activeRepId} period={period} />}
 
       {/* Overview section — cluster + table */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
@@ -2953,7 +2953,7 @@ function RevOpsControlCenterTab({ refreshKey, activeCompany, period, userRole })
                   <div style={{ fontSize: 15, fontWeight: 700, color: "var(--color-green)" }}>{fmt(Number(selectedRep.payout || 0))}</div>
                 </div>
               </div>
-              <RepProfilePanel repId={selectedRepId} />
+              <RepProfilePanel repId={selectedRepId} period={period} />
             </div>
           )}
           {!selectedRep && (
@@ -3085,7 +3085,7 @@ const NAV_MODULES = [
 ];
 
 const ALL_TABS = NAV_MODULES.flatMap((module) => module.tabs);
-const PERIOD_AWARE_TABS = new Set(["Dashboard", "RevOps Control Center", "ARR Health", "Pipeline Health", "Forecast", "Reps", "Territories", "Payouts"]);
+const PERIOD_AWARE_TABS = new Set(["Dashboard", "RevOps Control Center", "ARR Health", "Pipeline Health", "Forecast", "Reps", "Rep Scorecard", "Territories", "Payouts"]);
 const ROLE_TAB_ACCESS = {
   executive: new Set(ALL_TABS.filter((t) => !["Data Quality", "Model Monitoring", "Enterprise Grade", "Ingestion"].includes(t))),
   revops_admin: new Set(ALL_TABS),
@@ -3421,7 +3421,7 @@ export default function App() {
       {tab === "Forecast"  && <ForecastTab refreshKey={refreshKey} activeCompany={activeCompany} period={period} userRole={userRole} />}
       {tab === "ML Insights" && <MLInsightsPage refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} />}
       {tab === "Reps"      && <RepsTab refreshKey={refreshKey} period={period} userRole={userRole} activeCompany={activeCompany} />}
-      {tab === "Rep Scorecard" && <RepScorecardPage refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} />}
+      {tab === "Rep Scorecard" && <RepScorecardPage refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} period={period} />}
       {tab === "AI Agent"  && <AgentPage activeCompany={activeCompany} userRole={userRole} />}
       {tab === "Payouts"   && <PayoutsPage refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} period={period} />}
       {tab === "Payout Approvals" && <PayoutAuditPage refreshKey={refreshKey} activeCompany={activeCompany} userRole={userRole} />}
