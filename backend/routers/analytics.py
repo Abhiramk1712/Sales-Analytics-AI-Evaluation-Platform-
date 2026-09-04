@@ -1590,6 +1590,7 @@ async def manager_tree(db: AsyncSession = Depends(get_db)):
     managers = (await db.execute(select(Manager))).scalars().all()
     positions = (await db.execute(select(Position))).scalars().all()
     plans = (await db.execute(select(Plan))).scalars().all()
+    cascade_rules = (await db.execute(select(PlanCascadeRule))).scalars().all()
 
     pos_by_id = {str(p.id): p for p in positions}
     plan_count_by_owner: dict[str, int] = {}
@@ -1597,6 +1598,18 @@ async def manager_tree(db: AsyncSession = Depends(get_db)):
         if pl.owner_user_id:
             k = str(pl.owner_user_id)
             plan_count_by_owner[k] = plan_count_by_owner.get(k, 0) + 1
+
+    # The frontend (OrgHierarchyPage.jsx) renders a "N cascade" badge on any
+    # node with cascade_rule_count > 0 — that field was always hardcoded to
+    # 0 here ("populated below if needed", but nothing below ever did),
+    # so the badge never once rendered even for a rank-1 exec who genuinely
+    # owns a real, active cascade rule. Counted the same way plan_count_by_owner
+    # just above already counts Plan rows per owner.
+    cascade_rule_count_by_owner: dict[str, int] = {}
+    for cr in cascade_rules:
+        if cr.owner_user_id:
+            k = str(cr.owner_user_id)
+            cascade_rule_count_by_owner[k] = cascade_rule_count_by_owner.get(k, 0) + 1
 
     # manager_user_id -> list of user_ids that report to them
     reports_map: dict[str, list[str]] = {}
@@ -1610,10 +1623,19 @@ async def manager_tree(db: AsyncSession = Depends(get_db)):
 
     user_by_id = {str(u.id): u for u in users}
 
-    def build_node(uid: str, depth: int = 0) -> dict:
+    def build_node(uid: str, ancestors: frozenset[str] = frozenset()) -> dict:
         u = user_by_id[uid]
         pos = pos_by_id.get(str(u.position_id)) if u.position_id else None
-        direct_report_ids = reports_map.get(uid, [])
+        # Defense in depth, not a fix for a currently-reachable bug: Manager.
+        # user_id is unique (one manager row per person), which already makes
+        # a cycle unreachable from any root the `roots` selection above would
+        # ever choose — a cycle's every member has a real, present manager,
+        # so none of them (or anything upstream of them) can qualify as a
+        # root in the first place. This guard only matters if that DB
+        # constraint is ever relaxed or bypassed (e.g. a raw-SQL import path);
+        # it's inert against this endpoint's actual current inputs.
+        direct_report_ids = [cid for cid in reports_map.get(uid, []) if cid not in ancestors]
+        next_ancestors = ancestors | {uid}
         return {
             "id": uid,
             "name": u.name,
@@ -1622,8 +1644,8 @@ async def manager_tree(db: AsyncSession = Depends(get_db)):
             "rank_label": pos.rank_label if pos else None,
             "position_name": pos.name if pos else None,
             "plan_count": plan_count_by_owner.get(uid, 0),
-            "cascade_rule_count": 0,  # populated below if needed
-            "reports": [build_node(cid, depth + 1) for cid in direct_report_ids],
+            "cascade_rule_count": cascade_rule_count_by_owner.get(uid, 0),
+            "reports": [build_node(cid, next_ancestors) for cid in direct_report_ids],
         }
 
     # Find roots: users with no manager or whose manager_user_id doesn't exist in users
