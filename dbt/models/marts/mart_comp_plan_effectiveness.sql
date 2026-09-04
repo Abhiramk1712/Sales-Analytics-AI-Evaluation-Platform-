@@ -5,6 +5,14 @@ with payout_totals as (
         sum(payout_amount) as total_payout_amount,
         count(*) as payout_count
     from {{ ref('stg_payouts') }}
+    -- payouts.plan_id is nullable — the credit payout engine falls back to
+    -- rep-level revenue aggregation (no plan resolved) when SalesCredit rows
+    -- don't exist (see backend/payout/credit_payout_engine.py). Those
+    -- payouts didn't come from any comp plan being effective or ineffective,
+    -- so they don't belong in a per-plan effectiveness report. They're
+    -- already tracked on their own terms in int_payout_quality_signals
+    -- (signal_type = 'fallback_used').
+    where plan_id is not null
     group by 1, 2
 )
 select
