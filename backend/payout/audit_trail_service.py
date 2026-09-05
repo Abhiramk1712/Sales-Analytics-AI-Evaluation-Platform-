@@ -12,10 +12,100 @@ _store: dict[str, dict[str, Any]] = {}
 _store_lock = Lock()
 
 
-def clear_store() -> None:
-    """Clear all in-memory payout audit trail records (used on company switch)."""
+def clear_store(company_id: str | None = None) -> None:
+    """Clear in-memory payout audit trail records for one company (used when
+    that company's dataset is (re)loaded, since its underlying PayoutRecord
+    rows are about to be replaced and any old payout_ids are about to be
+    invalid).
+
+    `company_id=None` clears every company's records -- this used to be the
+    *only* behavior, called unconditionally on every company load. Since
+    records are already keyed by company_id (see `_record_key`/
+    `list_payouts`), loading company A was wiping every approval, lock, and
+    correction ever recorded for company B, C, ... too. Two companies are a
+    supported, resident-at-once configuration (tests/test_tenancy_
+    enforcement.py); this scopes the clear to match.
+    """
     with _store_lock:
-        _store.clear()
+        if company_id is None:
+            _store.clear()
+            return
+        for payout_id in [pid for pid, rec in _store.items() if rec.get("company_id") == company_id]:
+            del _store[payout_id]
+
+
+def seed_from_db_record(
+    *,
+    payout_id: str,
+    company_id: str,
+    period: str,
+    user_id: str | None,
+    rep_id: str | None,
+    rep_name: str | None,
+    plan_id: str | None,
+    credited_amount: float,
+    final_payout: float,
+    confidence: float,
+    fallback_used: bool,
+) -> dict[str, Any]:
+    """Register a real DB PayoutRecord as an actionable in-memory audit
+    record, keyed by that record's own stable id -- not the rep/period hash
+    `upsert_payout_trace` uses, since a PayoutRecord's id is already stable
+    and callers (GET /payout-audit's list response) already hand it out as
+    `payout_id`.
+
+    Without this, a payout that nothing had explicitly run /payout/calculate
+    or /payout/team-summary against existed only as a display-only row built
+    from the DB, never registered here -- so review/approve/lock/pay on it
+    raised KeyError (404 "Payout record not found"), always, regardless of
+    company or period.
+
+    Idempotent: if this payout_id is already tracked (a real lifecycle
+    action already happened, or an earlier call already seeded it), the
+    existing record -- and its lifecycle/approval state -- is returned
+    unchanged rather than reset to draft.
+    """
+    with _store_lock:
+        existing = _store.get(payout_id)
+        if existing:
+            return existing
+
+        record = {
+            "payout_id": payout_id,
+            "company_id": company_id,
+            "rep_id": rep_id,
+            "rep_name": rep_name,
+            "user_id": user_id,
+            "plan_id": plan_id,
+            "rule_id": None,
+            "sales_credit_id": None,
+            "period": period,
+            "credited_amount": float(credited_amount or 0.0),
+            "quota": 0.0,
+            "attainment_pct": 0.0,
+            "base_commission": float(final_payout or 0.0),
+            "accelerator_amount": 0.0,
+            "spiff_amount": 0.0,
+            "clawback_amount": 0.0,
+            "final_payout": float(final_payout or 0.0),
+            "calculation_trace_json": {"mode": "db_fallback_seed"},
+            "source_records_json": {
+                "fallback_used": bool(fallback_used),
+                "confidence": float(confidence or 0.0),
+            },
+            "computed_at": _utcnow(),
+            "computed_by": "system-db-seed",
+            "approval_status": "draft",
+            "approved_by": None,
+            "approved_at": None,
+            "locked_at": None,
+            "version": 1,
+            "is_locked": False,
+            "correction_ref": None,
+            "lifecycle_state": "draft",
+        }
+        _store[payout_id] = record
+        return record
 
 
 def _utcnow() -> str:
@@ -47,8 +137,20 @@ def upsert_payout_trace(
     calculation_trace_json: dict[str, Any],
     source_records_json: dict[str, Any],
     computed_by: str,
+    existing_payout_id: str | None = None,
 ) -> dict[str, Any]:
-    payout_id = _record_key(company_id=company_id, rep_id=rep_id, period=period)
+    """
+    `existing_payout_id`: when a persisted PayoutRecord already exists for
+    this (company, rep, period) -- i.e. seed_from_db_record has registered
+    (or will register) one under that record's own DB id -- callers
+    (backend/routers/payout.py) pass it here so this live recomputation
+    enriches that SAME record instead of creating a second, independently
+    -approvable entry under the rep/period hash key. Without this, a rep
+    +period with both a persisted PayoutRecord and a live /payout/calculate
+    or /payout/team-summary run showed as two separate rows in Payout
+    Approvals with two different payout amounts for the same payout.
+    """
+    payout_id = existing_payout_id or _record_key(company_id=company_id, rep_id=rep_id, period=period)
 
     with _store_lock:
         existing = _store.get(payout_id)

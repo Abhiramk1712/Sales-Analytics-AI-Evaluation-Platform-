@@ -83,11 +83,15 @@ async def load_company_into_context(
         else:
             use_loader = loader
 
-        # In-memory caches keyed to the previously loaded company.
+        # In-memory caches keyed to the company being (re)loaded. Scoped to
+        # `normalized` -- clear_store() with no argument would wipe every
+        # *other* resident company's audit trail too (approvals, locks,
+        # corrections), even though records are already keyed by company_id
+        # and loading one company leaves every other tenant's rows intact.
         try:
             from backend.payout.audit_trail_service import clear_store as _clear_payout_store
 
-            _clear_payout_store()
+            _clear_payout_store(company_id=normalized)
         except ImportError:
             pass
 
