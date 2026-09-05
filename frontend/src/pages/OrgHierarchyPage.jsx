@@ -239,7 +239,7 @@ function CascadeRulesTable({ rules }) {
 }
 
 // ── Positions table ──────────────────────────────────────────────────────────
-function PositionsTable({ positions }) {
+function PositionsTable({ positions, activeCompany, userRole }) {
   const [editing, setEditing] = useState(null); // { id, rank, rank_label }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -251,7 +251,11 @@ function PositionsTable({ positions }) {
     try {
       const res = await fetch(`${API}/analytics/positions/${editing.id}/rank`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(userRole ? { "X-User-Role": userRole } : {}),
+          ...(activeCompany ? { "X-Company-Id": activeCompany } : {}),
+        },
         body: JSON.stringify({ rank: editing.rank, rank_label: editing.rank_label }),
       });
       if (!res.ok) {
@@ -532,7 +536,7 @@ export default function OrgHierarchyPage({ refreshKey, activeCompany, userRole }
           </div>
           {posLoading
             ? <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>Loading positions…</div>
-            : <PositionsTable positions={positions || []} />
+            : <PositionsTable positions={positions || []} activeCompany={activeCompany} userRole={userRole} />
           }
         </div>
       )}

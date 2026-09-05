@@ -102,7 +102,7 @@ async def _save_run(db: AsyncSession, run: ModelRun) -> None:
     )
     await db.flush()
     # Keep local fallback for environments where DB persistence is unavailable.
-    store.append_run(summary)
+    store.append_run(summary, company_id=get_active_company())
 
 
 async def _persist_prediction(
@@ -1393,7 +1393,7 @@ async def model_runs(
         }
 
     fallback_runs = []
-    for run in store.load_runs():
+    for run in store.load_runs(company_id=company_id):
         metrics_json = run.get("metrics") or {}
         fallback_runs.append(
             {
@@ -1709,14 +1709,20 @@ async def model_drift_report(
     model_name: str = "revenue_forecast",
     rep_id: str | None = None,
     db: AsyncSession = Depends(get_db),
+    company_id: str = Depends(get_current_company_id),
 ):
     """
     Compare the model's training-time metrics (from ModelStore) against the
     current rolling-origin backtest performance.  Returns a drift report with
     per-metric deltas and an overall ``drifted`` flag.
+
+    The baseline is scoped to this company -- unscoped, this compared every
+    tenant's current backtest against whichever company's run happened to be
+    the globally most recent one in ModelStore (confirmed live: techo-solutions
+    and insurex both got the identical baseline_trained_at/training_rows).
     """
     # 1. Load baseline from model store
-    all_runs = store.load_runs()
+    all_runs = store.load_runs(company_id=company_id)
     # Take the latest run matching the requested model_name
     matching = [r for r in all_runs if r.get("model_name") == model_name]
     if not matching:

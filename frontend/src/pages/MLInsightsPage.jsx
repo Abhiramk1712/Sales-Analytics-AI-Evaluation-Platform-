@@ -54,7 +54,11 @@ export default function MLInsightsPage({ refreshKey = 0, activeCompany, userRole
 
       fetch(`${API}/ml/forecast/run`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(role ? { "X-User-Role": role } : {}),
+          ...(company ? { "X-Company-Id": company } : {}),
+        },
         signal: controller.signal,
         body: JSON.stringify({
           target,
@@ -86,7 +90,7 @@ export default function MLInsightsPage({ refreshKey = 0, activeCompany, userRole
       clearTimeout(timer);
       controller.abort();
     };
-  }, [target, horizon, scenario, refreshKey, includeLstmCandidate]);
+  }, [target, horizon, scenario, refreshKey, includeLstmCandidate, role, company]);
 
   const compareData = runData;
   const compareLoading = runLoading;

@@ -297,7 +297,12 @@ export default function PayoutsPage({ refreshKey, activeCompany, userRole, perio
       let best = sortedReps[0];
       for (const rep of sortedReps.slice(0, 12)) {
         try {
-          const response = await fetch(`${API}/payout/statements/${rep.rep_id}?periods=${stmtPeriods}`);
+          const response = await fetch(`${API}/payout/statements/${rep.rep_id}?periods=${stmtPeriods}`, {
+            headers: {
+              ...(role ? { "X-User-Role": role } : {}),
+              ...(company ? { "X-Company-Id": company } : {}),
+            },
+          });
           if (!response.ok) continue;
           const payload = await response.json();
           const rows = Array.isArray(payload?.statements) ? payload.statements : [];
@@ -320,7 +325,7 @@ export default function PayoutsPage({ refreshKey, activeCompany, userRole, perio
     return () => {
       cancelled = true;
     };
-  }, [activeView, repId, sortedReps, stmtPeriods]);
+  }, [activeView, repId, sortedReps, stmtPeriods, role, company]);
 
   const VIEWS = [
     { id: "team", label: "Team Summary" },
