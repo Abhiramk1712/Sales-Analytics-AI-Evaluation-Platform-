@@ -24,10 +24,16 @@ def test_data_quality_summary_route(monkeypatch):
     res = client.get("/data-quality/summary")
     assert res.status_code == 200
     body = res.json()
-    # The summary endpoint maps the internal PASS/WARN/FAIL vocabulary onto a
-    # lowercase presentation one (pass/warning/fail). That is deliberate; this
-    # assertion had been left on the internal spelling.
-    assert body["status"] == "warning"
+    # This used to lowercase the response ("warning") while _build_checks()/
+    # GET /data-quality/checks use "WARN" -- not deliberate, despite a comment
+    # that used to claim so: DataQualityTab's "OVERALL STATUS" card compares
+    # against "PASS"/"WARN" and never matched, so a 100/100-score, all-PASS
+    # dataset rendered its status badge in the FAIL color. Confirmed live
+    # against techo-solutions before fixing this. Now uppercase throughout,
+    # matching _build_checks()'s own vocabulary.
+    assert body["status"] == "WARN"
+    assert body["checks"][1]["status"] == "WARN"
+    assert body["checks"][0]["status"] == "PASS"
     assert "score" in body
     assert isinstance(body["checks"], list)
 
