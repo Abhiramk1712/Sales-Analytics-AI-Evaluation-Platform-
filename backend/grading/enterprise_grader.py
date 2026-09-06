@@ -246,15 +246,23 @@ class EnterpriseGrader:
         try:
             if check_name == "test_coverage_200plus":
                 import subprocess
+                import sys
                 # A single -q lists one line per collected test ("path::name").
                 # Passing -q twice (as this used to) raises pytest's
                 # quietness a level further and collapses that to one
                 # "path: <count>" summary line per *file* instead -- ~100
                 # lines for this suite's ~150 files, always under 200
-                # regardless of how many individual tests exist (867 of
+                # regardless of how many individual tests exist (869 of
                 # them, confirmed via --collect-only with a single -q).
+                #
+                # sys.executable, not a hardcoded ".venv/bin/python" -- CI
+                # installs dependencies into the runner's system Python
+                # directly and has no .venv at all (the same gotcha
+                # documented in CLAUDE.md for `make seed`); sys.executable
+                # is always the interpreter actually running this check,
+                # locally or in CI.
                 result = subprocess.run(
-                    [".venv/bin/python", "-m", "pytest", "tests", "--tb=no", "--co", "-q"],
+                    [sys.executable, "-m", "pytest", "tests", "--tb=no", "--co", "-q"],
                     capture_output=True, text=True, cwd=str(self.root),
                 )
                 lines = [l for l in result.stdout.split("\n") if "<Module" not in l and l.strip() and "::" in l]
