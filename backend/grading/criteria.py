@@ -34,7 +34,7 @@ FUNCTIONAL_CHECKS = [
      "backend.transformations.canonical_mapping", 3),
     ("data_lifecycle_and_quality", "revenue_saas_fields",
      "Revenue model has revenue_type, contract_term_months, is_recurring fields",
-     "backend.models.Revenue", 3),
+     "backend.models", 3),
     ("data_lifecycle_and_quality", "nrr_fallback_labeled",
      "get_nrr() returns fallback_mode flag and [FALLBACK] label when revenue_type absent",
      "backend.metrics.calculators", 3),

@@ -575,7 +575,14 @@ async def data_quality_summary(db: AsyncSession = Depends(get_db)) -> dict[str, 
     error_count = sum(1 for c in checks if c.get("severity") == "error")
     warning_count = sum(1 for c in checks if c.get("severity") == "warning")
     score = max(0, 100 - (critical_count * 20) - (error_count * 12) - (warning_count * 4))
-    overall_status = "fail" if (critical_count + error_count) > 0 else ("warning" if warning_count > 0 else "pass")
+    # Uppercase, matching _build_checks()/_status_from_count()'s own convention
+    # (and GET /data-quality/checks' output for these exact same checks) --
+    # this endpoint used to lowercase both the top-level and per-check status
+    # ("pass"/"warning"/"fail"), which DataQualityTab's "OVERALL STATUS" card
+    # never matched (it compares against "PASS"/"WARN"), so a perfect 100/100
+    # score rendered in the FAIL color. Confirmed live: techo-solutions,
+    # 0 errors, 0 warnings, showed "pass" in red-orange.
+    overall_status = "FAIL" if (critical_count + error_count) > 0 else ("WARN" if warning_count > 0 else "PASS")
 
     return {
         "company": get_active_company() or settings.DEMO_DEFAULT_COMPANY,
@@ -584,7 +591,7 @@ async def data_quality_summary(db: AsyncSession = Depends(get_db)) -> dict[str, 
         "checks": [
             {
                 "name": c.get("name", ""),
-                "status": "fail" if c.get("status") == "FAIL" else ("warning" if c.get("status") == "WARN" else "pass"),
+                "status": c.get("status", "PASS"),
                 "details": c.get("message", ""),
                 "affected_rows": c.get("affected_rows", 0),
                 "severity": c.get("severity", "info"),
