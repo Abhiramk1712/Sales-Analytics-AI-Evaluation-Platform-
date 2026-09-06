@@ -853,7 +853,21 @@ async def rep_profile(
     # "performance" block above — comparing a period-scoped revenue against
     # other reps' all-time totals would rank correctly-computed 100.0%
     # attainment reps below reps who are merely long-tenured.
+    #
+    # Scoped to quota-carrying reps only, matching /analytics/reps/performance
+    # (the Reps tab's own list) and every top-reps leaderboard elsewhere in the
+    # app. An Executive/Leadership row in the reps table still has a rep_id and
+    # can have real Revenue rows attributed to it, so leaving it in inflates
+    # total_reps and can distort the comparison. Confirmed live: techo-solutions'
+    # CRO -- an Executive, correctly excluded from the Reps tab's own 11-rep
+    # list -- has $159K of all-time revenue on her rep row, but this endpoint
+    # reported total_reps=12: "Rank #8 of 12" on the same screen where every
+    # sibling view (including this rep's own profile page) treats the team as
+    # 11 reps.
+    selling_ids = await _selling_rep_ids(db)
     rev_q = select(Revenue.rep_id, func.sum(Revenue.amount).label("rev")).select_from(Revenue)
+    if selling_ids:
+        rev_q = rev_q.where(Revenue.rep_id.in_(selling_ids))
     if perf_filters.get("start_date"):
         rev_q = rev_q.where(Revenue.period >= str(perf_filters["start_date"])[:7])
     if perf_filters.get("end_date"):
@@ -863,7 +877,10 @@ async def rep_profile(
         select(func.count()).select_from(rev_subq).where(rev_subq.c.rev > total_revenue)
     )).scalar() or 0)
     rank = higher_count + 1
-    total_reps = int((await db.execute(select(func.count(Rep.id)))).scalar() or 0)
+    total_reps_q = select(func.count(Rep.id))
+    if selling_ids:
+        total_reps_q = total_reps_q.where(Rep.id.in_(selling_ids))
+    total_reps = int((await db.execute(total_reps_q)).scalar() or 0)
 
     # Position / role from UserProfile + Position table (matched by email)
     position_title: str | None = None

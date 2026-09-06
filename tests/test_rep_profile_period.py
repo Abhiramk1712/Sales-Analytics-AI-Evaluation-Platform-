@@ -35,7 +35,7 @@ import pytest
 from sqlalchemy import delete
 
 from backend.database import get_session_factory
-from backend.models import Rep, Revenue, Quota, Deal, RepRamp
+from backend.models import Rep, Revenue, Quota, Deal, RepRamp, UserProfile, Position
 from backend.routers.analytics import rep_profile
 from backend.tenancy import tenant_scope
 from backend.tenant_guard import unscoped
@@ -67,6 +67,8 @@ async def cleanup():
         await db.execute(delete(Quota).where(Quota.company_id == COMPANY))
         await db.execute(delete(Revenue).where(Revenue.company_id == COMPANY))
         await db.execute(delete(Rep).where(Rep.company_id == COMPANY))
+        await db.execute(delete(UserProfile).where(UserProfile.company_id == COMPANY))
+        await db.execute(delete(Position).where(Position.company_id == COMPANY))
         await db.commit()
 
 
@@ -169,6 +171,56 @@ async def test_profile_rank_is_scoped_to_the_same_period_as_revenue(cleanup):
 
     assert q1["rank"] == 2   # outranked in Q1 (other rep has $100k that quarter)
     assert q2["rank"] == 1   # other rep has no Q2 revenue at all
+
+
+@pytest.mark.asyncio
+async def test_rank_and_total_reps_exclude_non_quota_carrying_positions(cleanup):
+    """rank/total_reps used to be computed from every row in the reps table,
+    with no regard for whether that row is actually a quota-carrying seller
+    -- unlike GET /analytics/reps/performance (the Reps tab's own list) and
+    every top-reps leaderboard, which already exclude Executive/Leadership
+    positions via _selling_rep_ids(). An Executive can still have a rep_id
+    and real Revenue rows attributed to it, so leaving them in inflated
+    total_reps and could distort the comparison. Confirmed live: techo-
+    solutions' CRO (correctly excluded from the Reps tab's own 11-rep list)
+    has real revenue on her rep row, and this endpoint reported
+    total_reps=12 -- "Rank #8 of 12" while every sibling view on the same
+    screen treated the team as 11 reps.
+
+    Two IC reps (quota-carrying) plus one Executive whose revenue sits
+    between them -- the Executive must not count in total_reps, and must
+    not push the lower IC rep's rank down."""
+    factory = get_session_factory()
+    async with factory() as db, tenant_scope(COMPANY):
+        ic_a = Rep(name="IC Rep A", email="ic-a@example.com")
+        ic_b = Rep(name="IC Rep B", email="ic-b@example.com")
+        exec_rep = Rep(name="Exec Rep", email="exec-rep@example.com")
+        db.add_all([ic_a, ic_b, exec_rep])
+        await db.flush()
+
+        ic_position = Position(name="Account Executive", level="Individual Contributor", rank=5)
+        exec_position = Position(name="Chief Revenue Officer", level="Executive", rank=1)
+        db.add_all([ic_position, exec_position])
+        await db.flush()
+
+        db.add_all([
+            UserProfile(name="IC Rep A", email="ic-a@example.com", position_id=ic_position.id),
+            UserProfile(name="IC Rep B", email="ic-b@example.com", position_id=ic_position.id),
+            UserProfile(name="Exec Rep", email="exec-rep@example.com", position_id=exec_position.id),
+        ])
+
+        # Revenue ordering for 2025-Q1: IC Rep A ($50k) > Exec Rep ($40k) > IC Rep B ($10k).
+        # If the Executive counts, IC Rep B is outranked by both -> rank 3.
+        # Excluding the Executive, IC Rep B is outranked only by IC Rep A -> rank 2.
+        db.add(Revenue(rep_id=ic_a.id, period="2025-01", amount=50_000))
+        db.add(Revenue(rep_id=exec_rep.id, period="2025-01", amount=40_000))
+        db.add(Revenue(rep_id=ic_b.id, period="2025-01", amount=10_000))
+        await db.commit()
+
+        result = await rep_profile(rep_id=str(ic_b.id), period="2025-Q1", db=db)
+
+    assert result["total_reps"] == 2, "Executive must not be counted among quota-carrying reps"
+    assert result["rank"] == 2, "Executive's revenue must not push a real IC rep's rank down"
 
 
 @pytest.mark.asyncio
