@@ -925,9 +925,21 @@ async def quota_fairness(
     """Check quota equity across reps. Returns Gini coefficient and outliers."""
     start_p, end_p, period_label = _resolve_period_alias(period)
 
-    rep_ids = (
+    # Scoped to quota-carrying reps only, matching /analytics/reps/performance
+    # and /payout/team-summary. An Executive/Leadership position can still
+    # have Quota rows (this platform's data generator assigns every position
+    # a quota, including the CRO), so leaving them in skews mean/std/gini
+    # with a target that was never meant to be compared against individual
+    # reps' territories -- confirmed live: techo-solutions' CRO carries a
+    # $130K quarterly quota, roughly 2.4x a typical IC's, and rep_count
+    # reported 12 while every sibling view treats the team as 11 reps.
+    from backend.routers.analytics import _selling_rep_ids
+    selling_ids = await _selling_rep_ids(db)
+
+    all_rep_ids = (
         await db.execute(select(Quota.rep_id).group_by(Quota.rep_id))
     ).scalars().all()
+    rep_ids = [rid for rid in all_rep_ids if not selling_ids or str(rid) in selling_ids]
 
     rows: list[dict[str, Any]] = []
     for rid in rep_ids:
@@ -1132,6 +1144,20 @@ async def payout_forecast(
     if rep_id:
         reps_q = reps_q.where(Rep.id == rep_id)
     reps = (await db.execute(reps_q)).scalars().all()
+
+    # Scoped to quota-carrying reps only, matching /payout/team-summary --
+    # unless a specific rep_id was explicitly requested, which (like
+    # /payout/calculate) is respected regardless of role. An Executive/
+    # Leadership position can still have a rep_id and its own Revenue/Quota
+    # rows (this platform's data generator assigns every position both), so
+    # leaving them in the team-wide forecast projects an individual
+    # commission payout for someone who was never meant to carry one, and
+    # folds it into the team-total chart the frontend renders.
+    if not rep_id:
+        from backend.routers.analytics import _selling_rep_ids
+        selling_ids = await _selling_rep_ids(db)
+        if selling_ids:
+            reps = [r for r in reps if str(r.id) in selling_ids]
 
     if not reps:
         raise HTTPException(status_code=404, detail="No reps found")
