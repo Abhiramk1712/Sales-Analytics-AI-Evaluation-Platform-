@@ -415,6 +415,22 @@ async def get_territory_performance(
     user_ids = [a.user_id for a in assignments]
 
     rep_ids = await get_rep_ids_for_user_ids(db, user_ids)
+
+    # Scoped to quota-carrying reps only, matching /analytics/reps/performance,
+    # /payout/team-summary, /payout/quota-fairness, and /payout/forecast. An
+    # Executive/Leadership user can be assigned to a territory (for reporting
+    # or oversight) while still carrying their own company-wide Revenue/Quota
+    # rows unrelated to that territory's actual sales capacity. Confirmed
+    # live: techo-solutions' CRO is assigned to "EMEA Subregion 2" and her
+    # $130K quota (her own leadership target, not a territory quota) was
+    # nearly half the territory's reported total_quota -- understating the
+    # real rep's (Brandon Davis, 150.3% attainment) performance to a
+    # misleading ~98% territory-wide figure.
+    from backend.routers.analytics import _selling_rep_ids
+    selling_ids = await _selling_rep_ids(db)
+    if selling_ids:
+        rep_ids = [rid for rid in rep_ids if str(rid) in selling_ids]
+
     used_region_fallback = False
 
     # Fallback for datasets without users/user_territory_assignments.
@@ -433,6 +449,8 @@ async def get_territory_performance(
         if scope_buckets:
             rep_rows = (await db.execute(select(Rep.id, Rep.region))).all()
             rep_ids = [r.id for r in rep_rows if _region_bucket(r.region) in scope_buckets]
+            if selling_ids:
+                rep_ids = [rid for rid in rep_ids if str(rid) in selling_ids]
             used_region_fallback = bool(rep_ids)
 
     if not rep_ids:

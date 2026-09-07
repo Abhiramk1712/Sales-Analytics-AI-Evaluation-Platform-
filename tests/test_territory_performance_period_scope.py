@@ -33,7 +33,7 @@ from sqlalchemy import delete
 
 from backend.database import get_session_factory
 from backend.models import (
-    Rep, Deal, Revenue, Quota, Territory, UserProfile, UserTerritoryAssignment,
+    Rep, Deal, Position, Revenue, Quota, Territory, UserProfile, UserTerritoryAssignment,
 )
 from backend.routers.plans import get_territory_performance
 from backend.tenancy import tenant_scope
@@ -64,6 +64,7 @@ async def cleanup():
         await db.execute(delete(UserTerritoryAssignment).where(UserTerritoryAssignment.company_id == COMPANY))
         await db.execute(delete(Territory).where(Territory.company_id == COMPANY))
         await db.execute(delete(UserProfile).where(UserProfile.company_id == COMPANY))
+        await db.execute(delete(Position).where(Position.company_id == COMPANY))
         await db.execute(delete(Quota).where(Quota.company_id == COMPANY))
         await db.execute(delete(Revenue).where(Revenue.company_id == COMPANY))
         await db.execute(delete(Deal).where(Deal.company_id == COMPANY))
@@ -113,3 +114,58 @@ async def test_rep_breakdown_sums_to_territory_total_for_a_scoped_period(cleanup
     assert q1_result["deals_won"] == 3
     assert q1_result["reps"][0]["deals_won"] == 3
     assert sum(r["deals_won"] for r in q1_result["reps"]) == q1_result["deals_won"]
+
+
+@pytest.mark.asyncio
+async def test_executive_assigned_to_territory_excluded_from_performance(cleanup):
+    """An Executive/Leadership user can be assigned to a territory (e.g. for
+    reporting or oversight) while still carrying their own company-wide
+    Revenue/Quota rows unrelated to that territory's actual sales capacity
+    -- unlike /analytics/reps/performance, /payout/team-summary,
+    /payout/quota-fairness, and /payout/forecast, this endpoint didn't
+    exclude them via _selling_rep_ids(). Confirmed live: techo-solutions'
+    CRO is assigned to a territory, and her large personal quota was nearly
+    half that territory's reported total_quota -- understating the real
+    rep's 150.3% attainment to a misleading ~98% territory-wide figure.
+
+    One real IC rep plus one Executive, both assigned to the same
+    territory, with the Executive's quota large enough that including it
+    would be unmistakable in the total."""
+    factory = get_session_factory()
+    async with factory() as db, tenant_scope(COMPANY):
+        ic_email = "territory-ic@example.com"
+        exec_email = "territory-exec@example.com"
+        ic_rep = Rep(name="Territory IC", email=ic_email, region="EMEA")
+        exec_rep = Rep(name="Territory Exec", email=exec_email, region="EMEA")
+        db.add_all([ic_rep, exec_rep])
+
+        ic_user = UserProfile(name="Territory IC", email=ic_email)
+        exec_user = UserProfile(name="Territory Exec", email=exec_email)
+        db.add_all([ic_user, exec_user])
+
+        territory = Territory(name="Test EMEA Exec", territory_code=f"T-TEST-{uuid.uuid4().hex[:6]}", region="EMEA")
+        db.add(territory)
+        await db.flush()
+
+        ic_position = Position(name="Account Executive", level="Individual Contributor", rank=5)
+        exec_position = Position(name="Chief Revenue Officer", level="Executive", rank=1)
+        db.add_all([ic_position, exec_position])
+        await db.flush()
+        ic_user.position_id = ic_position.id
+        exec_user.position_id = exec_position.id
+
+        db.add(UserTerritoryAssignment(user_id=ic_user.id, territory_id=territory.id, is_primary=True))
+        db.add(UserTerritoryAssignment(user_id=exec_user.id, territory_id=territory.id, is_primary=True))
+
+        db.add(Quota(rep_id=ic_rep.id, period="2025-Q1", amount=100_000))
+        db.add(Revenue(rep_id=ic_rep.id, period="2025-02", amount=150_000))
+        db.add(Quota(rep_id=exec_rep.id, period="2025-Q1", amount=1_000_000))
+        db.add(Revenue(rep_id=exec_rep.id, period="2025-02", amount=1_000_000))
+        await db.commit()
+
+        result = await get_territory_performance(territory_id=str(territory.id), period="2025-Q1", db=db)
+
+    assert result["assigned_reps"] == 1
+    assert [r["name"] for r in result["reps"]] == ["Territory IC"]
+    assert result["total_quota"] == 100_000.0
+    assert result["total_revenue"] == 150_000.0
