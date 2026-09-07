@@ -33,14 +33,14 @@ from backend.agent.tools.revops_tools import (
     get_rep_ramp_status,
 )
 from backend.database import get_session_factory
-from backend.models import Activity, Deal, Quota, Rep, Revenue
+from backend.models import Activity, Deal, Position, Quota, Rep, Revenue, UserProfile
 from backend.tenancy import tenant_scope
 from backend.tenant_guard import unscoped
 
 COMPANY = f"test-revops-tools-{uuid.uuid4().hex[:8]}"
 PERIOD = "2026-03"
 
-CLEANUP_MODELS = [Activity, Deal, Quota, Revenue, Rep]
+CLEANUP_MODELS = [Activity, Deal, Quota, Revenue, UserProfile, Position, Rep]
 
 
 @pytest.fixture(autouse=True)
@@ -157,6 +157,39 @@ async def test_quota_risk_rep_with_no_quota_is_skipped(cleanup):
 
         result = await get_quota_risk_summary(db)
 
+    assert result["data"]["at_risk_rep_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_quota_risk_excludes_executive_even_when_flagged(cleanup):
+    """get_quota_risk_summary is reachable directly from the AI Agent chat
+    ("which reps are at quota risk") and used no _selling_rep_ids() filter
+    at all -- an Executive with a large personal quota and comparatively
+    low personal revenue easily satisfies "< 60% attainment AND < 2x
+    pipeline coverage" and gets listed as a critical-risk rep. Confirmed
+    live: techo-solutions' CRO (19.8% attainment on her own $803K quota)
+    was the #1 result, ahead of the one real at-risk IC."""
+    factory = get_session_factory()
+    async with factory() as db, tenant_scope(COMPANY):
+        exec_rep = await _make_rep(db, name="Exec Rep", email="exec-risk@example.com")
+        await _make_revenue(db, rep=exec_rep, amount=50_000)   # 5% attainment
+        await _make_quota(db, rep=exec_rep, amount=1_000_000)
+        # No pipeline at all -> would trip "Severe: pipeline coverage < 1x".
+
+        healthy_rep = await _make_rep(db, name="Healthy Rep", email="healthy-risk@example.com")
+        await _make_revenue(db, rep=healthy_rep, amount=90_000)
+        await _make_quota(db, rep=healthy_rep, amount=100_000)
+
+        exec_position = Position(name="Chief Revenue Officer", level="Executive", rank=1)
+        db.add(exec_position)
+        await db.flush()
+        db.add(UserProfile(name="Exec Rep", email="exec-risk@example.com", position_id=exec_position.id))
+        await db.commit()
+
+        result = await get_quota_risk_summary(db)
+
+    names = {r["rep_name"] for r in result["data"]["at_risk_reps"]}
+    assert "Exec Rep" not in names
     assert result["data"]["at_risk_rep_count"] == 0
 
 
@@ -371,3 +404,39 @@ async def test_ramp_status_skips_reps_with_no_hire_date(cleanup):
 
     assert result["data"]["ramping_rep_count"] == 0
     assert result["data"]["fully_ramped_rep_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_ramp_status_excludes_executive(cleanup):
+    """An Executive with their own hire_date/Revenue/Quota rows must not
+    be counted in the ramping/fully-ramped roster -- matching
+    get_payout_summary, get_quota_risk_summary, and _step_cluster_reps."""
+    factory = get_session_factory()
+    async with factory() as db, tenant_scope(COMPANY):
+        veteran_rep = await _make_rep(
+            db, name="Veteran Rep", email="vet-ramp@example.com",
+            hire_date=date.today() - timedelta(days=900),
+        )
+        await _make_revenue(db, rep=veteran_rep, amount=50_000)
+        await _make_quota(db, rep=veteran_rep, amount=100_000)
+
+        exec_rep = await _make_rep(
+            db, name="Exec Rep", email="exec-ramp@example.com",
+            hire_date=date.today() - timedelta(days=900),
+        )
+        await _make_revenue(db, rep=exec_rep, amount=50_000)
+        await _make_quota(db, rep=exec_rep, amount=100_000)
+
+        exec_position = Position(name="Chief Revenue Officer", level="Executive", rank=1)
+        db.add(exec_position)
+        await db.flush()
+        db.add(UserProfile(name="Exec Rep", email="exec-ramp@example.com", position_id=exec_position.id))
+        await db.commit()
+
+        result = await get_rep_ramp_status(db)
+
+    # Both are past ramp (900 days since hire), so only fully_ramped_rep_count
+    # distinguishes "counted" from "excluded" here -- 2 would mean the
+    # Executive was rolled into the roster alongside the real veteran rep.
+    assert result["data"]["fully_ramped_rep_count"] == 1
+    assert "Exec Rep" not in [r["rep_name"] for r in result["data"]["ramping_reps"]]

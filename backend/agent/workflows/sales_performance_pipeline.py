@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -235,13 +235,27 @@ async def _step_cluster_reps(db: AsyncSession) -> dict[str, Any]:
 
     run_rep_clustering(reps: list[dict]) — not RepClusterer class.
     We fetch rep performance data from DB first.
+
+    RepClusteringModel.fit() (backend/ml/rep_clustering.py) requires the
+    input frame to carry exactly its FEATURES columns: attainment_pct,
+    win_rate, avg_deal_size, pipeline_coverage, avg_sales_cycle,
+    activity_rate. This step previously built total_revenue/quota/
+    attainment/deals_won/deals_lost instead -- four of those six required
+    columns were never present (and "attainment" != "attainment_pct"), so
+    every call raised KeyError('avg_sales_cycle') inside fit(). Column
+    definitions below match the working /ml/cluster/reps endpoint
+    (backend/routers/forecasting.py).
     """
     try:
         from backend.ml.rep_clustering import run_rep_clustering
-        from backend.models import Rep, Revenue, Quota, Deal
+        from backend.models import Rep, Revenue, Quota, Deal, Activity
         from sqlalchemy import select, func
+        from backend.routers.analytics import _selling_rep_ids
 
         reps = (await db.execute(select(Rep))).scalars().all()
+        selling_ids = await _selling_rep_ids(db)
+        if selling_ids:
+            reps = [r for r in reps if str(r.id) in selling_ids]
         if not reps:
             return _no_data("No reps found for clustering.")
 
@@ -259,15 +273,32 @@ async def _step_cluster_reps(db: AsyncSession) -> dict[str, Any]:
             lost = int((await db.execute(
                 select(func.count(Deal.id)).where(Deal.rep_id == rep.id, Deal.stage == "Closed Lost")
             )).scalar() or 0)
+            avg_deal_size = float((await db.execute(
+                select(func.avg(Deal.amount)).where(Deal.rep_id == rep.id, Deal.stage == "Closed Won")
+            )).scalar() or 0)
+            open_pipeline = float((await db.execute(
+                select(func.sum(Deal.amount)).where(
+                    Deal.rep_id == rep.id, ~Deal.stage.in_(["Closed Won", "Closed Lost"])
+                )
+            )).scalar() or 0)
+            avg_cycle_days = (await db.execute(
+                select(func.avg(func.extract("day", Deal.actual_close_date - Deal.created_at))).where(
+                    Deal.rep_id == rep.id, Deal.actual_close_date.isnot(None),
+                )
+            )).scalar()
+            activity_count = int((await db.execute(
+                select(func.count(Activity.id)).join(Deal).where(Deal.rep_id == rep.id)
+            )).scalar() or 0)
+
             rep_dicts.append({
-                "rep_id":        str(rep.id),
-                "name":          rep.name,
-                "total_revenue": rev,
-                "quota":         quota,
-                "attainment":    (rev / quota * 100) if quota > 0 else 0,
-                "deals_won":     won,
-                "deals_lost":    lost,
-                "win_rate":      (won / max(1, won + lost)) * 100,
+                "rep_id":            str(rep.id),
+                "name":              rep.name,
+                "attainment_pct":    (rev / quota * 100) if quota > 0 else 0,
+                "win_rate":          (won / max(1, won + lost)) * 100,
+                "avg_deal_size":     avg_deal_size,
+                "pipeline_coverage": (open_pipeline / quota) if quota > 0 else 0,
+                "avg_sales_cycle":   float(avg_cycle_days) if avg_cycle_days else 45.0,
+                "activity_rate":     activity_count,
             })
 
         result = run_rep_clustering(rep_dicts)
@@ -327,10 +358,17 @@ async def _step_generate_report(
 
 
 async def _step_grade_enterprise(db: AsyncSession) -> dict[str, Any]:
-    """Run enterprise grading and return category scores."""
+    """Run enterprise grading and return category scores.
+
+    EnterpriseGrader requires repo_root (see GET /grading/enterprise-readiness,
+    backend/routers/grading.py) -- this step called it with no arguments at
+    all, so it raised TypeError on every single invocation.
+    """
     try:
+        from pathlib import Path
         from backend.grading.enterprise_grader import EnterpriseGrader
-        grader = EnterpriseGrader()
+        root = Path(__file__).resolve().parents[3]
+        grader = EnterpriseGrader(str(root))
         grade = grader.run()
         return _ok(grade)
     except Exception as e:

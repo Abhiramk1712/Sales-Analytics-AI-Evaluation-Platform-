@@ -180,3 +180,57 @@ async def test_anthropic_stream_complete_yields_each_text_delta():
     assert tokens == ["Cl", "au", "de"]
     assert "".join(tokens) == "Claude"
     assert fake.stream_kwargs["model"] == AnthropicProvider.DEFAULT_MODEL
+
+
+class _StrictAnthropicMessagesNoTemperature:
+    """Mimics an SDK build whose messages.create()/stream() genuinely don't
+    accept `temperature` -- raises TypeError exactly like a real mismatched
+    signature would, unlike _FakeAnthropicMessages above (which accepts any
+    kwargs via **kwargs and so can't catch this). Confirmed live against
+    this repo's own pinned anthropic==1.3.0 install: its installed
+    AsyncMessages.create()/stream() reject `temperature` outright, and
+    chat_completion/stream_complete raised TypeError on every real call
+    until they learned to retry without it."""
+
+    def __init__(self, content_text=None, stream_tokens=None):
+        self._content_text = content_text
+        self._stream_tokens = stream_tokens or []
+        self.create_kwargs = None
+        self.stream_kwargs = None
+
+    async def create(self, **kwargs):
+        if "temperature" in kwargs:
+            raise TypeError("AsyncMessages.create() got an unexpected keyword argument 'temperature'")
+        self.create_kwargs = kwargs
+        block = SimpleNamespace(type="text", text=self._content_text)
+        return SimpleNamespace(content=[block])
+
+    def stream(self, **kwargs):
+        if "temperature" in kwargs:
+            raise TypeError("AsyncMessages.stream() got an unexpected keyword argument 'temperature'")
+        self.stream_kwargs = kwargs
+        return _FakeAnthropicStreamCtx(self._stream_tokens)
+
+
+@pytest.mark.asyncio
+async def test_anthropic_chat_completion_falls_back_when_sdk_rejects_temperature():
+    provider = AnthropicProvider(api_key="sk-ant-test")
+    fake = _StrictAnthropicMessagesNoTemperature(content_text="hello from claude")
+    provider.client = SimpleNamespace(messages=fake)
+
+    result = await provider.chat_completion(messages=[{"role": "user", "content": "hi"}])
+
+    assert result == "hello from claude"
+    assert "temperature" not in fake.create_kwargs
+
+
+@pytest.mark.asyncio
+async def test_anthropic_stream_complete_falls_back_when_sdk_rejects_temperature():
+    provider = AnthropicProvider(api_key="sk-ant-test")
+    fake = _StrictAnthropicMessagesNoTemperature(stream_tokens=["Cl", "au", "de"])
+    provider.client = SimpleNamespace(messages=fake)
+
+    tokens = [t async for t in provider.stream_complete(messages=[{"role": "user", "content": "hi"}])]
+
+    assert "".join(tokens) == "Claude"
+    assert "temperature" not in fake.stream_kwargs

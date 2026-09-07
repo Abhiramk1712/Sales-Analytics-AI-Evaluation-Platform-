@@ -3,6 +3,8 @@
  * Sprint 2.4
  */
 import { useState, useRef, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Bar,
   BarChart,
@@ -19,13 +21,51 @@ import {
   YAxis,
 } from "recharts";
 import { API } from "../utils/format";
-import { Card } from "../components/shared";
 
 const WELCOME = "Hi! I'm your sales intelligence assistant. Ask me about pipeline health, forecast accuracy, quota attainment, rep performance, or ARR trends.";
 
+// ── Icons (inline SVG — no icon package in this project) ──────────────────
+
+function BotAvatarIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="4" y="8" width="16" height="12" rx="3" stroke="#fff" strokeWidth="1.8" />
+      <path d="M12 8V4" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="12" cy="3" r="1.4" fill="#fff" />
+      <circle cx="9" cy="14" r="1.4" fill="#fff" />
+      <circle cx="15" cy="14" r="1.4" fill="#fff" />
+      <path d="M2 13h2M20 13h2" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function SendIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M4 12L20 4L14 20L11 13L4 12Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function StopIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+      <rect x="5" y="5" width="14" height="14" rx="2" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function TypingIndicator() {
   return (
-    <div style={{ display: "flex", gap: 4, alignItems: "center", padding: "8px 12px" }}>
+    <div style={{ display: "flex", gap: 4, alignItems: "center", padding: "10px 14px" }}>
       {[0, 1, 2].map((i) => (
         <span
           key={i}
@@ -33,9 +73,9 @@ function TypingIndicator() {
             width: 6,
             height: 6,
             borderRadius: "50%",
-            background: "#378ADD",
-            opacity: 0.7,
-            animation: `bounce 1.2s ${i * 0.2}s infinite`,
+            background: "var(--color-accent-primary)",
+            opacity: 0.6,
+            animation: `agent-bounce 1.2s ${i * 0.15}s infinite`,
           }}
         />
       ))}
@@ -69,8 +109,8 @@ function AgentChart({ chart }) {
     <div
       style={{
         marginTop: 10,
-        border: "0.5px solid var(--color-border-tertiary)",
-        borderRadius: 10,
+        border: "1px solid var(--color-border-secondary)",
+        borderRadius: "var(--border-radius-md)",
         padding: "10px 10px 6px",
         background: "var(--color-background-primary)",
       }}
@@ -93,7 +133,7 @@ function AgentChart({ chart }) {
                   type="monotone"
                   dataKey={s.key}
                   name={s.label || s.key}
-                  stroke={s.color || "#378ADD"}
+                  stroke={s.color || "var(--color-accent-primary)"}
                   strokeWidth={2}
                   dot={false}
                 />
@@ -112,7 +152,7 @@ function AgentChart({ chart }) {
                 label
               >
                 {chart.data.map((row, idx) => (
-                  <Cell key={`pie-${idx}`} fill={row.fill || series[idx]?.color || "#378ADD"} />
+                  <Cell key={`pie-${idx}`} fill={row.fill || series[idx]?.color || "var(--color-accent-primary)"} />
                 ))}
               </Pie>
             </PieChart>
@@ -128,7 +168,7 @@ function AgentChart({ chart }) {
                   key={`${s.key}-${idx}`}
                   dataKey={s.key}
                   name={s.label || s.key}
-                  fill={s.color || "#378ADD"}
+                  fill={s.color || "var(--color-accent-primary)"}
                   stackId={s.stackId || "total"}
                   radius={[4, 4, 0, 0]}
                 />
@@ -146,7 +186,7 @@ function AgentChart({ chart }) {
                   key={`${s.key}-${idx}`}
                   dataKey={s.key}
                   name={s.label || s.key}
-                  fill={s.color || "#378ADD"}
+                  fill={s.color || "var(--color-accent-primary)"}
                   radius={[4, 4, 0, 0]}
                 />
               ))}
@@ -158,30 +198,164 @@ function AgentChart({ chart }) {
   );
 }
 
+// ── Markdown rendering ─────────────────────────────────────────────────────
+// The assistant's real answers (backend/agent/prompts.py's system prompt asks
+// for structured markdown) come back with headings, bold, tables and lists —
+// render them properly instead of dumping raw "**"/"|"/"#" characters as
+// plain text.
+
+const markdownComponents = {
+  h1: ({ children }) => (
+    <div style={{ fontSize: 15, fontWeight: 700, margin: "2px 0 8px", color: "var(--color-text-primary)" }}>{children}</div>
+  ),
+  h2: ({ children }) => (
+    <div style={{ fontSize: 13.5, fontWeight: 700, margin: "14px 0 6px", color: "var(--color-text-primary)" }}>{children}</div>
+  ),
+  h3: ({ children }) => (
+    <div style={{ fontSize: 13, fontWeight: 600, margin: "10px 0 4px", color: "var(--color-text-primary)" }}>{children}</div>
+  ),
+  p: ({ children }) => <p style={{ margin: "0 0 8px", lineHeight: 1.6 }}>{children}</p>,
+  ul: ({ children }) => <ul style={{ margin: "0 0 8px", paddingLeft: 18, lineHeight: 1.6 }}>{children}</ul>,
+  ol: ({ children }) => <ol style={{ margin: "0 0 8px", paddingLeft: 18, lineHeight: 1.6 }}>{children}</ol>,
+  li: ({ children }) => <li style={{ marginBottom: 2 }}>{children}</li>,
+  strong: ({ children }) => <strong style={{ fontWeight: 700, color: "var(--color-text-primary)" }}>{children}</strong>,
+  em: ({ children }) => <em style={{ color: "var(--color-text-secondary)" }}>{children}</em>,
+  a: ({ children, href }) => (
+    <a href={href} target="_blank" rel="noreferrer" style={{ color: "var(--color-accent-primary)", textDecoration: "underline" }}>
+      {children}
+    </a>
+  ),
+  hr: () => <hr style={{ border: "none", borderTop: "1px solid var(--color-border-secondary)", margin: "10px 0" }} />,
+  blockquote: ({ children }) => (
+    <div
+      style={{
+        borderLeft: "3px solid var(--color-accent-primary)",
+        paddingLeft: 10,
+        margin: "6px 0",
+        color: "var(--color-text-secondary)",
+      }}
+    >
+      {children}
+    </div>
+  ),
+  code: ({ inline, children }) =>
+    inline ? (
+      <code
+        style={{
+          background: "var(--color-background-tertiary)",
+          padding: "1px 5px",
+          borderRadius: 4,
+          fontFamily: "var(--font-mono)",
+          fontSize: 12,
+        }}
+      >
+        {children}
+      </code>
+    ) : (
+      <pre
+        style={{
+          background: "var(--color-background-tertiary)",
+          padding: 10,
+          borderRadius: "var(--border-radius-sm)",
+          overflowX: "auto",
+          fontFamily: "var(--font-mono)",
+          fontSize: 12,
+          margin: "6px 0",
+        }}
+      >
+        <code>{children}</code>
+      </pre>
+    ),
+  table: ({ children }) => (
+    <div style={{ overflowX: "auto", margin: "6px 0 10px", border: "1px solid var(--color-border-secondary)", borderRadius: "var(--border-radius-sm)" }}>
+      <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12 }}>{children}</table>
+    </div>
+  ),
+  thead: ({ children }) => <thead style={{ background: "var(--color-background-tertiary)" }}>{children}</thead>,
+  th: ({ children }) => (
+    <th
+      style={{
+        textAlign: "left",
+        padding: "6px 10px",
+        fontWeight: 700,
+        color: "var(--color-text-primary)",
+        borderBottom: "1px solid var(--color-border-secondary)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td style={{ padding: "6px 10px", borderTop: "1px solid var(--color-border-tertiary)", verticalAlign: "top" }}>{children}</td>
+  ),
+};
+
+function Markdown({ content }) {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      {content}
+    </ReactMarkdown>
+  );
+}
+
+// ── Avatars ─────────────────────────────────────────────────────────────
+
+function Avatar({ isUser }) {
+  return (
+    <div
+      style={{
+        flexShrink: 0,
+        width: 26,
+        height: 26,
+        borderRadius: "50%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: isUser ? "var(--color-text-primary)" : "var(--color-accent-primary)",
+        color: "#fff",
+        fontSize: 11,
+        fontWeight: 700,
+      }}
+    >
+      {isUser ? "U" : <BotAvatarIcon />}
+    </div>
+  );
+}
+
 function Message({ msg }) {
   const isUser = msg.role === "user";
   return (
     <div
       style={{
         display: "flex",
-        justifyContent: isUser ? "flex-end" : "flex-start",
-        marginBottom: 12,
+        flexDirection: isUser ? "row-reverse" : "row",
+        gap: 8,
+        alignItems: "flex-start",
+        marginBottom: 14,
       }}
     >
+      <Avatar isUser={isUser} />
       <div
         style={{
-          maxWidth: "80%",
-          padding: "10px 14px",
-          borderRadius: isUser ? "12px 12px 4px 12px" : "12px 12px 12px 4px",
-          background: isUser ? "#378ADD" : "var(--color-background-secondary)",
+          maxWidth: "78%",
+          padding: isUser ? "9px 14px" : "12px 15px",
+          borderRadius: isUser ? "14px 14px 3px 14px" : "14px 14px 14px 3px",
+          background: isUser ? "var(--color-accent-primary)" : "var(--color-background-primary)",
+          border: isUser ? "none" : "1px solid var(--color-border-secondary)",
+          boxShadow: isUser ? "none" : "var(--shadow-xs)",
           color: isUser ? "#fff" : "var(--color-text-primary)",
           fontSize: 13,
-          lineHeight: 1.6,
-          whiteSpace: "pre-wrap",
         }}
       >
-        {msg.content}
-        {msg.streaming && <span style={{ opacity: 0.5 }}>▌</span>}
+        {isUser ? (
+          <div style={{ lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{msg.content}</div>
+        ) : (
+          <>
+            <Markdown content={msg.content || (msg.streaming ? "" : "")} />
+            {msg.streaming && <span style={{ opacity: 0.5 }}>▌</span>}
+          </>
+        )}
         {!isUser && msg.answerQuality && <QualityBadge quality={msg.answerQuality} />}
         {!isUser && Array.isArray(msg.charts) && msg.charts.length > 0 && (
           <div style={{ display: "grid", gap: 8 }}>
@@ -202,10 +376,10 @@ function ToolBadge({ tool }) {
         display: "inline-block",
         padding: "2px 8px",
         borderRadius: 12,
-        background: "var(--color-background-secondary)",
+        background: "var(--color-background-tertiary)",
         fontSize: 10,
         color: "var(--color-text-secondary)",
-        border: "0.5px solid var(--color-border-tertiary)",
+        border: "1px solid var(--color-border-tertiary)",
         marginRight: 4,
       }}
     >
@@ -215,9 +389,9 @@ function ToolBadge({ tool }) {
 }
 
 function qualityColor(level) {
-  if (level === "high") return "#2DA44E";
-  if (level === "medium") return "#D97706";
-  return "#D85A30";
+  if (level === "high") return "var(--color-green)";
+  if (level === "medium") return "var(--color-amber)";
+  return "var(--color-red)";
 }
 
 function QualityBadge({ quality }) {
@@ -235,16 +409,15 @@ function QualityBadge({ quality }) {
       style={{
         marginTop: 8,
         padding: "8px 10px",
-        borderRadius: 8,
+        borderRadius: "var(--border-radius-sm)",
         border: `1px solid ${color}33`,
-        background: `${color}12`,
-        color: "var(--color-text-primary)",
+        background: `${color}0f`,
       }}
     >
       <div style={{ fontSize: 11, fontWeight: 700, color }}>
         Trust {level.toUpperCase()} · {score}/100
       </div>
-      <div style={{ fontSize: 11, marginTop: 4 }}>
+      <div style={{ fontSize: 11, marginTop: 4, color: "var(--color-text-secondary)" }}>
         Coverage {coverage}/100 · Confidence {confidence}/100 · Freshness {freshness}/100
       </div>
       {quality.summary && (
@@ -269,6 +442,17 @@ export default function AgentPage({ activeCompany, userRole } = {}) {
 
   const scrollToBottom = () => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+  };
+
+  const resetConversation = () => {
+    abortRef.current?.abort();
+    setMessages([{ id: "welcome", role: "assistant", content: WELCOME }]);
+    setInput("");
+    setLoading(false);
+    setToolsUsed([]);
+    setIntent("");
+    setAnswerQuality(null);
+    setStreamError(null);
   };
 
   const sendMessage = useCallback(async () => {
@@ -368,7 +552,7 @@ export default function AgentPage({ activeCompany, userRole } = {}) {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId
-              ? { ...m, content: "[Cancelled]", streaming: false }
+              ? { ...m, content: "_Cancelled._", streaming: false }
               : m
           )
         );
@@ -406,7 +590,7 @@ export default function AgentPage({ activeCompany, userRole } = {}) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
-                ? { ...m, content: "[Connection error — see error banner]", streaming: false }
+                ? { ...m, content: "_Connection error — see banner above._", streaming: false }
                 : m
             )
           );
@@ -440,26 +624,62 @@ export default function AgentPage({ activeCompany, userRole } = {}) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 120px)", maxHeight: 700 }}>
-      {/* Tool badge bar */}
-      {(toolsUsed.length > 0 || intent || answerQuality) && (
-        <div style={{ padding: "6px 0 10px", display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+      <style>{`
+        @keyframes agent-bounce {
+          0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+          30% { transform: translateY(-3px); opacity: 1; }
+        }
+      `}</style>
+
+      {/* Header row: title + metadata badges + clear */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 0 10px", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           {intent && (
-            <span style={{ fontSize: 10, color: "var(--color-text-secondary)", marginRight: 4 }}>
-              Intent: <strong>{intent}</strong>
+            <span style={{ fontSize: 10, color: "var(--color-text-secondary)", marginRight: 2 }}>
+              Intent: <strong style={{ color: "var(--color-text-primary)" }}>{intent}</strong>
             </span>
           )}
           {answerQuality && (
-            <span style={{ fontSize: 10, color: qualityColor(answerQuality.level), marginRight: 6, fontWeight: 700 }}>
+            <span style={{ fontSize: 10, color: qualityColor(answerQuality.level), fontWeight: 700 }}>
               Trust: {String(answerQuality.level || "medium").toUpperCase()} {Number(answerQuality.score || 0)}/100
             </span>
           )}
           {toolsUsed.map((t) => <ToolBadge key={t} tool={t} />)}
         </div>
-      )}
+        {messages.length > 1 && (
+          <button
+            onClick={resetConversation}
+            title="Clear conversation"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "4px 9px",
+              borderRadius: "var(--border-radius-sm)",
+              border: "1px solid var(--color-border-secondary)",
+              background: "var(--color-background-primary)",
+              color: "var(--color-text-secondary)",
+              fontSize: 11,
+            }}
+          >
+            <TrashIcon /> Clear
+          </button>
+        )}
+      </div>
 
       {/* Error banner */}
       {streamError && (
-        <div style={{ padding: "8px 12px", background: "#fdf2f2", borderRadius: 6, color: "#c0392b", fontSize: 12, marginBottom: 8 }}>
+        <div
+          style={{
+            padding: "8px 12px",
+            background: "var(--color-red-light)",
+            border: "1px solid var(--color-red)33",
+            borderRadius: "var(--border-radius-sm)",
+            color: "var(--color-red)",
+            fontSize: 12,
+            marginBottom: 8,
+          }}
+        >
           {streamError}
         </div>
       )}
@@ -469,11 +689,12 @@ export default function AgentPage({ activeCompany, userRole } = {}) {
         style={{
           flex: 1,
           overflowY: "auto",
-          border: "0.5px solid var(--color-border-tertiary)",
+          border: "1px solid var(--color-border-secondary)",
           borderRadius: "var(--border-radius-lg)",
           padding: 16,
           marginBottom: 12,
-          background: "var(--color-background-primary)",
+          background: "var(--color-background-secondary)",
+          boxShadow: "var(--shadow-sm)",
         }}
       >
         {messages.map((m) => <Message key={m.id} msg={m} />)}
@@ -491,10 +712,9 @@ export default function AgentPage({ activeCompany, userRole } = {}) {
               style={{
                 padding: "5px 12px",
                 borderRadius: 20,
-                border: "1px solid var(--color-border-tertiary)",
-                background: "transparent",
+                border: "1px solid var(--color-border-secondary)",
+                background: "var(--color-background-primary)",
                 color: "var(--color-text-secondary)",
-                cursor: "pointer",
                 fontSize: 11,
               }}
             >
@@ -515,9 +735,9 @@ export default function AgentPage({ activeCompany, userRole } = {}) {
           style={{
             flex: 1,
             padding: "10px 12px",
-            borderRadius: 8,
-            border: "1px solid var(--color-border-tertiary)",
-            background: "var(--color-background-secondary)",
+            borderRadius: "var(--border-radius-md)",
+            border: "1px solid var(--color-border-secondary)",
+            background: "var(--color-background-primary)",
             color: "var(--color-text-primary)",
             fontSize: 13,
             resize: "none",
@@ -528,35 +748,40 @@ export default function AgentPage({ activeCompany, userRole } = {}) {
           <button
             onClick={handleStop}
             style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
               padding: "10px 16px",
-              borderRadius: 8,
-              border: "1px solid #D85A30",
+              borderRadius: "var(--border-radius-md)",
+              border: "1px solid var(--color-red)",
               background: "transparent",
-              color: "#D85A30",
-              cursor: "pointer",
+              color: "var(--color-red)",
               fontSize: 12,
               whiteSpace: "nowrap",
             }}
           >
-            Stop
+            <StopIcon /> Stop
           </button>
         ) : (
           <button
             onClick={sendMessage}
             disabled={!input.trim()}
             style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
               padding: "10px 20px",
-              borderRadius: 8,
+              borderRadius: "var(--border-radius-md)",
               border: "none",
-              background: input.trim() ? "#378ADD" : "var(--color-border-tertiary)",
+              background: input.trim() ? "var(--color-accent-primary)" : "var(--color-border-secondary)",
               color: "#fff",
               cursor: input.trim() ? "pointer" : "default",
               fontSize: 13,
-              fontWeight: 500,
+              fontWeight: 600,
               whiteSpace: "nowrap",
             }}
           >
-            Send
+            Send <SendIcon />
           </button>
         )}
       </div>

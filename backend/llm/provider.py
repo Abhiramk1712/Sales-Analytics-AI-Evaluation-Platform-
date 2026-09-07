@@ -181,13 +181,19 @@ class AnthropicProvider(BaseLLMProvider):
         max_tokens: Optional[int] = None,
     ) -> str:
         """Execute Anthropic chat completion."""
-        response = await self.client.messages.create(
+        kwargs = dict(
             model=self.DEFAULT_MODEL,
             max_tokens=max_tokens or 1024,
             system=system_prompt or "",
             messages=messages,
-            temperature=temperature,
         )
+        try:
+            response = await self.client.messages.create(temperature=temperature, **kwargs)
+        except TypeError:
+            # Some installed anthropic SDK builds don't expose `temperature`
+            # on messages.create() -- degrade to the API's own default rather
+            # than failing the whole call over a sampling knob.
+            response = await self.client.messages.create(**kwargs)
         return "".join(block.text for block in response.content if block.type == "text")
 
     async def stream_complete(
@@ -198,15 +204,22 @@ class AnthropicProvider(BaseLLMProvider):
         max_tokens: Optional[int] = None,
     ) -> AsyncGenerator[str, None]:
         """Stream tokens from an Anthropic chat completion."""
-        async with self.client.messages.stream(
+        kwargs = dict(
             model=self.DEFAULT_MODEL,
             max_tokens=max_tokens or 1024,
             system=system_prompt or "",
             messages=messages,
-            temperature=temperature,
-        ) as stream:
-            async for text in stream.text_stream:
-                yield text
+        )
+        try:
+            stream_ctx = self.client.messages.stream(temperature=temperature, **kwargs)
+            async with stream_ctx as stream:
+                async for text in stream.text_stream:
+                    yield text
+        except TypeError:
+            # Same temperature-kwarg fallback as chat_completion above.
+            async with self.client.messages.stream(**kwargs) as stream:
+                async for text in stream.text_stream:
+                    yield text
 
 
 def get_llm_provider(

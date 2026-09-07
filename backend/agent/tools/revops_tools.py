@@ -29,7 +29,12 @@ def _as_tool_result(tool_name: str, status: str, data: Any, warnings: list[str],
 
 async def get_quota_risk_summary(db: AsyncSession) -> dict[str, Any]:
     """Identify reps at quota risk: low attainment + thin pipeline + recent inactivity."""
+    from backend.routers.analytics import _selling_rep_ids
+
     rep_rows = (await db.execute(select(Rep))).scalars().all()
+    selling_ids = await _selling_rep_ids(db)
+    if selling_ids:
+        rep_rows = [r for r in rep_rows if str(r.id) in selling_ids]
     at_risk = []
 
     for rep in rep_rows:
@@ -775,8 +780,12 @@ async def get_rep_ramp_status(db: AsyncSession) -> dict[str, Any]:
     """Return ramp status for all reps based on hire date and attainment trajectory."""
     from datetime import date
     from backend.data_generator import _ramp_factor
+    from backend.routers.analytics import _selling_rep_ids
 
     rep_rows = (await db.execute(select(Rep))).scalars().all()
+    selling_ids = await _selling_rep_ids(db)
+    if selling_ids:
+        rep_rows = [r for r in rep_rows if str(r.id) in selling_ids]
     today = date.today()
     ramping = []
     fully_ramped = []

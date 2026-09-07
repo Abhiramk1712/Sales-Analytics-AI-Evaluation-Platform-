@@ -24,14 +24,14 @@ from backend.agent.tools.payout_tools import (
     get_rep_quota_bonus_what_if,
 )
 from backend.database import get_session_factory
-from backend.models import Deal, Quota, Rep, Revenue
+from backend.models import Deal, Position, Quota, Rep, Revenue, UserProfile
 from backend.tenancy import tenant_scope
 from backend.tenant_guard import unscoped
 
 COMPANY = f"test-whatif-{uuid.uuid4().hex[:8]}"
 PERIOD = "2026-03"
 
-CLEANUP_MODELS = [Deal, Quota, Revenue, Rep]
+CLEANUP_MODELS = [Deal, Quota, Revenue, UserProfile, Position, Rep]
 
 
 @pytest.fixture(autouse=True)
@@ -204,6 +204,44 @@ async def test_payout_summary_flags_fallback_reps(cleanup):
 
     assert result["data"]["summary"]["fallback_count"] >= 1
     assert any("fallback" in w for w in result["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_payout_summary_excludes_executive(cleanup):
+    """get_payout_summary is reachable directly from the AI Agent chat
+    ("give me the payout summary") -- it pulled every Rep row with no
+    filter for whether that person is actually a quota-carrying seller,
+    unlike /payout/team-summary, /payout/quota-fairness, and
+    /payout/forecast, which already exclude Executive/Leadership
+    positions via _selling_rep_ids(). Confirmed live: techo-solutions'
+    CRO carries a $803K personal quota and was rolled into the team
+    total_payout/total_quota/rep_count the agent reports."""
+    factory = get_session_factory()
+    async with factory() as db, tenant_scope(COMPANY):
+        ic_rep = await _make_rep(db, name="IC Rep", email="ic-payoutsum@example.com")
+        exec_rep = await _make_rep(db, name="Exec Rep", email="exec-payoutsum@example.com")
+        await _make_revenue(db, rep=ic_rep, amount=100_000)
+        await _make_quota(db, rep=ic_rep, amount=100_000)
+        await _make_revenue(db, rep=exec_rep, amount=200_000)
+        await _make_quota(db, rep=exec_rep, amount=1_000_000)
+
+        ic_position = Position(name="Account Executive", level="Individual Contributor", rank=5)
+        exec_position = Position(name="Chief Revenue Officer", level="Executive", rank=1)
+        db.add_all([ic_position, exec_position])
+        await db.flush()
+        db.add_all([
+            UserProfile(name="IC Rep", email="ic-payoutsum@example.com", position_id=ic_position.id),
+            UserProfile(name="Exec Rep", email="exec-payoutsum@example.com", position_id=exec_position.id),
+        ])
+        await db.commit()
+
+        result = await get_payout_summary(db)
+
+    names = [r["name"] for r in result["data"]["rows"]]
+    assert names == ["IC Rep"]
+    assert result["data"]["summary"]["rep_count"] == 1
+    assert result["data"]["summary"]["total_revenue"] == 100_000.0
+    assert result["data"]["summary"]["total_quota"] == 100_000.0
 
 
 # ── get_rep_quota_bonus_what_if: no rep identified ────────────────────────

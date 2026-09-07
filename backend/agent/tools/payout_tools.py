@@ -850,7 +850,12 @@ async def get_rep_quota_bonus_what_if(
 async def get_payout_summary(db: AsyncSession, period_prefix: str | None = None) -> dict[str, Any]:
     """Compute payout for all reps and return a summary with explainability fields."""
     try:
+        from backend.routers.analytics import _selling_rep_ids
+
         reps = (await db.execute(select(Rep))).scalars().all()
+        selling_ids = await _selling_rep_ids(db)
+        if selling_ids:
+            reps = [r for r in reps if str(r.id) in selling_ids]
         rows: list[dict[str, Any]] = []
         total_payout = 0.0
         total_revenue = 0.0
