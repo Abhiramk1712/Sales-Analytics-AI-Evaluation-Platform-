@@ -106,6 +106,88 @@ async def test_model_runs_endpoint_fallback_does_not_cross_companies(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_model_runs_endpoint_merges_db_and_fallback_history(monkeypatch, db_schema):
+    """_save_run() (backend/routers/forecasting.py) writes every run to BOTH
+    ModelRunRecord (DB) and the JSON fallback file, unconditionally -- so
+    the two are not alternatives, they're the same history recorded twice.
+    The endpoint's old "if rows: DB only, else: fallback only" logic meant
+    a company's *entire* prior run history (JSON-only, from before that
+    company had its first DB-backed row) vanished from GET /ml/model-runs
+    the instant one real DB row appeared for it.
+
+    Confirmed live: techo-solutions showed 11 runs (DB empty, all
+    JSON-fallback); one /ml/cluster/reps call inserted a single DB row, and
+    the count dropped to 1 -- the other 10 were still in the JSON file,
+    just no longer shown. This seeds one run only in the JSON file (as if
+    it predated any DB-backed run for this company) and one run present in
+    BOTH (as _save_run actually produces), then asserts both distinct runs
+    show up, not just the DB one, and the duplicate isn't double-counted."""
+    import backend.database as database
+    database._engine = None
+    database._async_session_factory = None
+
+    from backend.database import get_session_factory
+    from backend.models import ModelRunRecord
+    from backend.routers import forecasting
+    from backend.tenancy import tenant_scope
+    from backend.tenant_guard import unscoped
+    from datetime import datetime
+    from sqlalchemy import delete
+
+    company = f"test-model-runs-merge-{uuid.uuid4().hex[:8]}"
+    # Nonzero microseconds deliberately -- datetime.isoformat() omits a
+    # trailing ".000000", so a round-trip through the DB dedup path would
+    # falsely "clean up" a zero-microsecond value regardless of whether the
+    # dedup logic itself is correct. This keeps the test's own expected
+    # strings unambiguous.
+    older_trained_at = "2026-01-01T00:00:00.111111"
+    newer_trained_at = "2026-02-01T00:00:00.222222"
+
+    test_store = ModelStore(path=str(__import__("pathlib").Path(__file__).parent / f"_tmp_model_runs_merge_{uuid.uuid4().hex[:8]}.json"))
+    monkeypatch.setattr(forecasting, "store", test_store)
+    try:
+        # JSON-only: a run from "before" this company had any DB row.
+        test_store.append_run(
+            {"model_name": "rep_clustering", "trained_at": older_trained_at, "metrics": {}},
+            company_id=company,
+        )
+        # In both DB and JSON: exactly what _save_run() itself produces.
+        test_store.append_run(
+            {"model_name": "revenue_forecast", "trained_at": newer_trained_at, "metrics": {"mape": 0.05}},
+            company_id=company,
+        )
+
+        factory = get_session_factory()
+        async with factory() as db, tenant_scope(company):
+            db.add(ModelRunRecord(
+                model_name="revenue_forecast",
+                model_version="v1",
+                trained_at=datetime.fromisoformat(newer_trained_at),
+                training_rows=10,
+                metrics={"mape": 0.05},
+            ))
+            await db.commit()
+
+            result = await forecasting.model_runs(db=db, company_id=company)
+
+        names_and_times = {(r["model_name"], r["trained_at"]) for r in result["model_runs"]}
+        assert names_and_times == {
+            ("rep_clustering", older_trained_at),
+            ("revenue_forecast", newer_trained_at),
+        }
+        assert len(result["model_runs"]) == 2, (
+            f"expected the JSON-only and DB+JSON runs exactly once each, got: {result['model_runs']}"
+        )
+    finally:
+        test_store.path.unlink(missing_ok=True)
+        async with factory() as db, unscoped():
+            await db.execute(delete(ModelRunRecord).where(ModelRunRecord.company_id == company))
+            await db.commit()
+        database._engine = None
+        database._async_session_factory = None
+
+
+@pytest.mark.asyncio
 async def test_drift_baseline_does_not_cross_companies(monkeypatch, db_schema):
     """GET /ml/drift's baseline lookup must not fall back to a different
     company's training run just because it's the most recent one globally."""

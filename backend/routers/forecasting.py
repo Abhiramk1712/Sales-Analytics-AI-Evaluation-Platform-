@@ -1353,47 +1353,71 @@ async def model_runs(
             .limit(100)
         )
     ).scalars().all()
-    if rows:
-        return {
-            "model_runs": [
-                {
-                    "model_run_id": str(row.id),
-                    "company_id": company_id,
-                    "model_name": row.model_name,
-                    "model_version": row.model_version,
-                    "task_type": _task_type(row.model_name),
-                    "train_period_start": None,
-                    "train_period_end": None,
-                    "test_period_start": None,
-                    "test_period_end": None,
-                    "feature_set_version": row.model_version,
-                    "dataset_hash": row.data_hash,
-                    "algorithm": _algorithm(row.model_name),
-                    "hyperparameters_json": {},
-                    "metrics_json": row.metrics or {},
-                    "drift_status": "unknown",
-                    "confidence_label": _confidence(row.metrics or {}),
-                    "created_at": row.trained_at.isoformat() if row.trained_at else None,
-                    "approved_for_demo": True,
-                    "approved_for_production": False,
-                    "trained_at": row.trained_at.isoformat() if row.trained_at else None,
-                    "training_rows": row.training_rows,
-                    "feature_names": row.feature_names or [],
-                    "target": row.target_name,
-                    "metrics": row.metrics or {},
-                    "limitations": row.limitations or [],
-                    "artifact_path": row.artifact_path,
-                    "data_hash": row.data_hash,
-                    "notes": row.notes,
-                }
-                for row in rows
-            ],
-            "active_company": get_active_company(),
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+    db_runs = [
+        {
+            "model_run_id": str(row.id),
+            "company_id": company_id,
+            "model_name": row.model_name,
+            "model_version": row.model_version,
+            "task_type": _task_type(row.model_name),
+            "train_period_start": None,
+            "train_period_end": None,
+            "test_period_start": None,
+            "test_period_end": None,
+            "feature_set_version": row.model_version,
+            "dataset_hash": row.data_hash,
+            "algorithm": _algorithm(row.model_name),
+            "hyperparameters_json": {},
+            "metrics_json": row.metrics or {},
+            "drift_status": "unknown",
+            "confidence_label": _confidence(row.metrics or {}),
+            "created_at": row.trained_at.isoformat() if row.trained_at else None,
+            "approved_for_demo": True,
+            "approved_for_production": False,
+            "trained_at": row.trained_at.isoformat() if row.trained_at else None,
+            "training_rows": row.training_rows,
+            "feature_names": row.feature_names or [],
+            "target": row.target_name,
+            "metrics": row.metrics or {},
+            "limitations": row.limitations or [],
+            "artifact_path": row.artifact_path,
+            "data_hash": row.data_hash,
+            "notes": row.notes,
         }
+        for row in rows
+    ]
 
+    # _save_run() writes every run to BOTH the DB table and the JSON
+    # fallback file unconditionally, so the two aren't alternatives -- the
+    # file also carries whatever ran before this endpoint (or this specific
+    # tenant) had its first DB-backed row. Treating "DB has anything" as
+    # "ignore the file entirely" meant a company's *entire* prior run
+    # history vanished from Model Monitoring the moment its first real DB
+    # row appeared. Confirmed live: techo-solutions showed 11 runs (all
+    # JSON-fallback, DB empty); one /ml/cluster/reps call added a single DB
+    # row, and the count dropped to 1 -- the other 10 were still sitting in
+    # the JSON file, just no longer shown. Same anti-pattern GET
+    # /payout-audit's "if not rows" fallback had (#47) -- merge instead of
+    # choosing one source.
+    def _normalize_trained_at(value: Any) -> str | None:
+        # datetime.isoformat() omits trailing zero microseconds
+        # (".000000" vs nothing), so comparing raw strings between the DB
+        # row's isoformat() and the JSON file's own stored string can
+        # miss an exact match by formatting alone. Round-tripping both
+        # sides through fromisoformat -> isoformat guarantees the same
+        # canonical form regardless of which one originally had them.
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(str(value)).isoformat()
+        except ValueError:
+            return str(value)
+
+    db_keys = {(r["model_name"], _normalize_trained_at(r["trained_at"])) for r in db_runs}
     fallback_runs = []
     for run in store.load_runs(company_id=company_id):
+        if (run.get("model_name"), _normalize_trained_at(run.get("trained_at"))) in db_keys:
+            continue  # this exact run already has a DB row -- don't double-count it
         metrics_json = run.get("metrics") or {}
         fallback_runs.append(
             {
@@ -1420,8 +1444,10 @@ async def model_runs(
             }
         )
 
+    merged = sorted(db_runs + fallback_runs, key=lambda r: r.get("trained_at") or "", reverse=True)[:100]
+
     return {
-        "model_runs": fallback_runs,
+        "model_runs": merged,
         "active_company": get_active_company(),
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
