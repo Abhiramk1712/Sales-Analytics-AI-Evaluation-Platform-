@@ -220,6 +220,7 @@ def _set_state(
     state: str,
     actor: str,
     *,
+    company_id: str,
     approval_status: str | None = None,
     lock_record: bool = False,
 ) -> dict[str, Any]:
@@ -228,7 +229,14 @@ def _set_state(
 
     with _store_lock:
         record = _store.get(payout_id)
-        if not record:
+        # Same "not found" KeyError for a missing id and for an id that
+        # belongs to a different company -- a mismatch here used to go
+        # unchecked entirely, so any authenticated session could review,
+        # approve, lock, or mark paid *any other company's* payout just by
+        # knowing its payout_id (GET /{payout_id} already checked this;
+        # every mutating action did not). Raising the same exception as
+        # "missing" avoids leaking which payout_ids exist for other tenants.
+        if not record or record.get("company_id") != company_id:
             raise KeyError(payout_id)
 
         if record.get("is_locked") and state not in {"paid", "adjusted"}:
@@ -248,26 +256,26 @@ def _set_state(
         return record
 
 
-def mark_reviewed(payout_id: str, actor: str) -> dict[str, Any]:
-    return _set_state(payout_id, "reviewed", actor, approval_status="reviewed")
+def mark_reviewed(payout_id: str, actor: str, company_id: str) -> dict[str, Any]:
+    return _set_state(payout_id, "reviewed", actor, company_id=company_id, approval_status="reviewed")
 
 
-def approve_payout(payout_id: str, actor: str) -> dict[str, Any]:
-    return _set_state(payout_id, "approved", actor, approval_status="approved")
+def approve_payout(payout_id: str, actor: str, company_id: str) -> dict[str, Any]:
+    return _set_state(payout_id, "approved", actor, company_id=company_id, approval_status="approved")
 
 
-def lock_payout(payout_id: str, actor: str) -> dict[str, Any]:
-    return _set_state(payout_id, "locked", actor, approval_status="locked", lock_record=True)
+def lock_payout(payout_id: str, actor: str, company_id: str) -> dict[str, Any]:
+    return _set_state(payout_id, "locked", actor, company_id=company_id, approval_status="locked", lock_record=True)
 
 
-def mark_paid(payout_id: str, actor: str) -> dict[str, Any]:
+def mark_paid(payout_id: str, actor: str, company_id: str) -> dict[str, Any]:
     """
     "paid" is a valid lifecycle_state (VALID_LIFECYCLE_STATES) and _set_state's
     own lock guard already allows locked -> paid, but nothing called this
     transition — a payout could reach "locked" through the API and then had
     no path to "paid" at all. Mirrors approve_payout/lock_payout exactly.
     """
-    return _set_state(payout_id, "paid", actor, approval_status="paid")
+    return _set_state(payout_id, "paid", actor, company_id=company_id, approval_status="paid")
 
 
 def adjust_payout(
@@ -275,10 +283,12 @@ def adjust_payout(
     actor: str,
     adjustment_amount: float,
     reason: str,
+    company_id: str,
 ) -> dict[str, Any]:
     with _store_lock:
         record = _store.get(payout_id)
-        if not record:
+        # See _set_state's comment above -- same cross-tenant gap existed here.
+        if not record or record.get("company_id") != company_id:
             raise KeyError(payout_id)
 
         adjusted = dict(record)

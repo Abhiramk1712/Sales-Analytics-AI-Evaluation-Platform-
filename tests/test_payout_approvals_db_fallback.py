@@ -30,18 +30,23 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import delete
 
 from backend.database import get_session_factory
 from backend.models import Account, Deal, PayoutRecord, Plan, Quota, Rep, Revenue, UserProfile
 from backend.routers.payout import team_payout_summary
 from backend.routers.payout_audit import (
+    adjust_payout_record,
     approve_payout_record,
     list_payout_records,
+    lock_payout_record,
     mark_payout_paid,
     review_payout_record,
+    AdjustPayoutRequest,
     ApprovePayoutRequest,
 )
+from backend.payout.audit_trail_service import get_payout
 from backend.auth.models import UserContext
 from backend.tenancy import tenant_scope
 from backend.tenant_guard import unscoped
@@ -136,11 +141,11 @@ async def test_db_fallback_payout_row_is_actually_actionable(cleanup):
 
         # This is the exact call the "Mark reviewed" button makes with the
         # exact payout_id the list just returned -- must resolve, not 404.
-        reviewed = await review_payout_record(payout_id, ctx=_finance_admin_ctx())
+        reviewed = await review_payout_record(payout_id, ctx=_finance_admin_ctx(), company_id=COMPANY)
         assert reviewed["lifecycle_state"] == "reviewed"
 
         approved = await approve_payout_record(
-            payout_id, ApprovePayoutRequest(note="looks right"), db=db, ctx=_finance_admin_ctx()
+            payout_id, ApprovePayoutRequest(note="looks right"), db=db, ctx=_finance_admin_ctx(), company_id=COMPANY
         )
         assert approved["lifecycle_state"] == "approved"
         assert approved["approval_status"] == "approved"
@@ -172,7 +177,7 @@ async def test_other_periods_stay_listed_after_one_period_is_seeded(cleanup):
 
         # Act on just the Q3 record.
         q3_id = next(r["payout_id"] for r in first["rows"] if r["period"] == "2026-Q3")
-        await review_payout_record(q3_id, ctx=_finance_admin_ctx())
+        await review_payout_record(q3_id, ctx=_finance_admin_ctx(), company_id=COMPANY)
 
         # Q2's record must still be listed -- not silently dropped.
         second = await list_payout_records(lifecycle_state=None, company_id=COMPANY, db=db)
@@ -201,7 +206,7 @@ async def test_pay_action_on_a_never_computed_payout_does_not_404(cleanup):
         payout_id = str(payout.id)
 
         await list_payout_records(lifecycle_state=None, company_id=COMPANY, db=db)
-        paid = await mark_payout_paid(payout_id, ctx=_finance_admin_ctx())
+        paid = await mark_payout_paid(payout_id, ctx=_finance_admin_ctx(), company_id=COMPANY)
         assert paid["lifecycle_state"] == "paid"
 
 
@@ -328,3 +333,71 @@ async def test_team_summary_before_list_does_not_duplicate_the_payout(cleanup):
         )
         assert matching[0]["payout_id"] == real_payout_id
         assert matching[0]["final_payout"] == pytest.approx(77_777.77)
+
+
+@pytest.mark.asyncio
+async def test_lifecycle_actions_reject_a_payout_from_a_different_company(cleanup):
+    """review/approve/lock/pay/adjust looked payout_id up in the in-memory
+    store with no check that it belongs to the caller's own company --
+    GET /{payout_id} and GET /{payout_id}/trace already refused a
+    cross-company id (404), but every *mutating* action skipped that check
+    entirely. Confirmed live: an authenticated techo-solutions session
+    successfully approved, then marked paid, a real insurex payout it had
+    never even listed -- just by knowing its payout_id.
+
+    One payout seeded under COMPANY; every mutating action attempted with
+    a different company_id must 404, not silently succeed."""
+    factory = get_session_factory()
+    email = "cross-tenant-rep@example.com"
+    other_company = f"other-{COMPANY}"
+
+    async with factory() as db, tenant_scope(COMPANY):
+        rep = Rep(name="Cross Tenant Rep", email=email)
+        user = UserProfile(name="Cross Tenant Rep", email=email)
+        db.add_all([rep, user])
+        await db.flush()
+
+        # approve_payout_record's own critical-data-quality gate runs before
+        # the cross-tenant check under test here -- satisfied minimally
+        # (same as test_db_fallback_payout_row_is_actually_actionable above)
+        # so a real 409 from that unrelated gate can't masquerade as this
+        # test's expected 404.
+        account = Account(name="Quality Gate Account")
+        db.add(account)
+        await db.flush()
+        db.add(Deal(rep_id=rep.id, account_id=account.id, name="Quality Gate Deal", stage="Closed Won", amount=100))
+        db.add(Revenue(rep_id=rep.id, period="2026-05", amount=100))
+
+        payout = PayoutRecord(
+            user_id=user.id, plan_id=None, period="2026-Q2",
+            payout_amount=1234.56, fallback_used=False, confidence=1.0,
+        )
+        db.add(payout)
+        await db.commit()
+        payout_id = str(payout.id)
+
+        listing = await list_payout_records(lifecycle_state=None, company_id=COMPANY, db=db)
+        assert any(r["payout_id"] == payout_id for r in listing["rows"])
+
+        for action in (
+            lambda: review_payout_record(payout_id, ctx=_finance_admin_ctx(), company_id=other_company),
+            lambda: approve_payout_record(
+                payout_id, ApprovePayoutRequest(), db=db, ctx=_finance_admin_ctx(), company_id=other_company
+            ),
+            lambda: lock_payout_record(payout_id, ctx=_finance_admin_ctx(), company_id=other_company),
+            lambda: mark_payout_paid(payout_id, ctx=_finance_admin_ctx(), company_id=other_company),
+            lambda: adjust_payout_record(
+                payout_id, AdjustPayoutRequest(adjustment_amount=-1.0, reason="test"),
+                ctx=_finance_admin_ctx(), company_id=other_company,
+            ),
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await action()
+            assert exc_info.value.status_code == 404
+
+        # Untouched by every rejected attempt above -- still draft, still
+        # the original amount, under the real company.
+        row = get_payout(payout_id)
+        assert row["lifecycle_state"] == "draft"
+        assert row["final_payout"] == pytest.approx(1234.56)
+        assert row["company_id"] == COMPANY

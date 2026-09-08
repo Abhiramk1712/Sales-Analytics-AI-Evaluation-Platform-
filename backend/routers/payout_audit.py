@@ -140,10 +140,11 @@ async def get_payout_trace(
 async def review_payout_record(
     payout_id: str,
     ctx: UserContext = Depends(get_user_context),
+    company_id: str = Depends(get_current_company_id),
     _: Any = Depends(require_permission("approve_payouts")),
 ) -> dict[str, Any]:
     try:
-        return mark_reviewed(payout_id, actor=ctx.user_id or "revops-admin")
+        return mark_reviewed(payout_id, actor=ctx.user_id or "revops-admin", company_id=company_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Payout record not found")
     except ValueError as exc:
@@ -156,6 +157,7 @@ async def approve_payout_record(
     payload: ApprovePayoutRequest,
     db: AsyncSession = Depends(get_db),
     ctx: UserContext = Depends(get_user_context),
+    company_id: str = Depends(get_current_company_id),
     _: Any = Depends(require_permission("approve_payouts")),
 ) -> dict[str, Any]:
     critical = await get_critical_issues(db)
@@ -169,7 +171,7 @@ async def approve_payout_record(
         )
 
     try:
-        record = approve_payout(payout_id, actor=ctx.user_id or "finance-admin")
+        record = approve_payout(payout_id, actor=ctx.user_id or "finance-admin", company_id=company_id)
         if payload.note:
             trace = dict(record.get("calculation_trace_json") or {})
             trace["approval_note"] = payload.note
@@ -185,10 +187,11 @@ async def approve_payout_record(
 async def lock_payout_record(
     payout_id: str,
     ctx: UserContext = Depends(get_user_context),
+    company_id: str = Depends(get_current_company_id),
     _: Any = Depends(require_permission("approve_payouts")),
 ) -> dict[str, Any]:
     try:
-        return lock_payout(payout_id, actor=ctx.user_id or "finance-admin")
+        return lock_payout(payout_id, actor=ctx.user_id or "finance-admin", company_id=company_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Payout record not found")
     except ValueError as exc:
@@ -199,10 +202,11 @@ async def lock_payout_record(
 async def mark_payout_paid(
     payout_id: str,
     ctx: UserContext = Depends(get_user_context),
+    company_id: str = Depends(get_current_company_id),
     _: Any = Depends(require_permission("approve_payouts")),
 ) -> dict[str, Any]:
     try:
-        return mark_paid(payout_id, actor=ctx.user_id or "finance-admin")
+        return mark_paid(payout_id, actor=ctx.user_id or "finance-admin", company_id=company_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Payout record not found")
     except ValueError as exc:
@@ -214,6 +218,7 @@ async def adjust_payout_record(
     payout_id: str,
     payload: AdjustPayoutRequest,
     ctx: UserContext = Depends(get_user_context),
+    company_id: str = Depends(get_current_company_id),
     _: Any = Depends(require_permission("approve_payouts")),
 ) -> dict[str, Any]:
     try:
@@ -222,6 +227,7 @@ async def adjust_payout_record(
             actor=ctx.user_id or "finance-admin",
             adjustment_amount=payload.adjustment_amount,
             reason=payload.reason,
+            company_id=company_id,
         )
     except KeyError:
         raise HTTPException(status_code=404, detail="Payout record not found")
