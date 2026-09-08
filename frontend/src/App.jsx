@@ -1769,9 +1769,14 @@ function ReportsTab({ activeCompany, userRole } = {}) {
     setLoading(false);
   };
 
+  // Re-generate on company switch too, not just on mount -- otherwise the
+  // panel keeps showing the previous company's report (numbers and all)
+  // with no indication it's stale. Uses the currently-selected report
+  // type/period (not hardcoded defaults) so switching company refreshes
+  // the data without discarding what the user picked.
   useEffect(() => {
-    generateReport("executive_weekly", `${defaultYear}-${defaultMonth}`);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    generateReport();
+  }, [activeCompany]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openKnowledgeDoc = async (source) => {
     if (!source || !String(source).endsWith(".md")) return;

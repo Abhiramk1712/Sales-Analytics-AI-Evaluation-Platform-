@@ -152,9 +152,10 @@ def test_review_endpoint_calls_mark_reviewed(monkeypatch) -> None:
 
     calls = {}
 
-    def fake_mark_reviewed(payout_id, actor):
+    def fake_mark_reviewed(payout_id, actor, company_id):
         calls["payout_id"] = payout_id
         calls["actor"] = actor
+        calls["company_id"] = company_id
         return {"payout_id": payout_id, "lifecycle_state": "reviewed"}
 
     monkeypatch.setattr(payout_audit_router, "mark_reviewed", fake_mark_reviewed)
@@ -174,7 +175,7 @@ def test_pay_endpoint_calls_mark_paid(monkeypatch) -> None:
     monkeypatch.setattr(
         payout_audit_router,
         "mark_paid",
-        lambda payout_id, actor: {"payout_id": payout_id, "lifecycle_state": "paid"},
+        lambda payout_id, actor, company_id: {"payout_id": payout_id, "lifecycle_state": "paid"},
     )
 
     client = TestClient(app)
@@ -224,7 +225,10 @@ def test_full_lifecycle_against_the_real_service_not_a_mock(monkeypatch) -> None
     monkeypatch.setattr(payout_audit_router, "get_critical_issues", no_critical_issues)
 
     client = TestClient(app)
-    headers = {"X-User-Role": "revops_admin"}
+    # X-Company-Id must match the payout's own company_id below -- every
+    # lifecycle mutation now checks the two agree (see
+    # backend/payout/audit_trail_service.py's cross-tenant fix).
+    headers = {"X-User-Role": "revops_admin", "X-Company-Id": "test-co"}
 
     clear_store()
     try:
