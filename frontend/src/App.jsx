@@ -113,8 +113,9 @@ function DashboardTab({ refreshKey, period, userRole, activeCompany }) {
   const company = activeCompany || "";
   const kpisUrl = withPeriod(withRefresh("/analytics/kpis", refreshKey), period);
   const { data: kpis, loading: kLoading }   = useFetch(kpisUrl, { role, company });
-  // D1: wire period to revenue/monthly chart
-  const monthlyUrl = withPeriod(withRefresh("/analytics/revenue/monthly?months=12", refreshKey), period);
+  // Always the trailing 12 months, independent of the period selector — the card
+  // is a fixed 12-month trend, not a view of the selected window.
+  const monthlyUrl = withRefresh("/analytics/revenue/monthly?months=12", refreshKey);
   const { data: monthly, loading: mLoading } = useFetch(monthlyUrl, { role, company });
   const repsUrl = withPeriod(withRefresh("/analytics/reps/performance", refreshKey), period);
   const { data: stages, loading: sLoading }  = useFetch(withRefresh("/analytics/pipeline/stages", refreshKey), { role, company });
