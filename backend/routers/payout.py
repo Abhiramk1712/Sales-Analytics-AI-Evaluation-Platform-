@@ -29,7 +29,7 @@ from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
-from backend.auth.dependencies import get_user_context, require_permission
+from backend.auth.dependencies import get_user_context, require_permission, require_any_permission
 from backend.auth.models import UserContext
 from backend.auth.tenant import get_current_company_id, get_tenant_context
 from backend.models import Rep, Revenue, Quota, Deal, Rule as RuleModel, PlanAssignment, UserProfile, PayoutRecord
@@ -49,6 +49,23 @@ router = APIRouter(
     prefix="/payout",
     tags=["Payout"],
     dependencies=[Depends(require_permission("view_payouts")), Depends(get_tenant_context)],
+)
+
+# GET /statements/{rep_id} is a single-rep, read-only "show me my own
+# statement" endpoint -- view_own_payout (which sales_rep and sales_manager
+# both hold) is exactly the permission that exists for this, but the main
+# router above gates everything (team-summary, config, quota-fairness, rule
+# management, ...) behind the broader view_payouts, which sales_rep does
+# not have. A router-level dependency runs for every route on that router
+# with no per-route override, so the only way to admit view_own_payout on
+# this one endpoint without loosening the other 15 is a second router
+# sharing the same prefix. Confirmed live: a sales_rep session got 403
+# "does not have permission 'view_payouts'" on their own rep_id here, even
+# though PERM_VIEW_OWN_PAYOUT exists specifically for this.
+statements_router = APIRouter(
+    prefix="/payout",
+    tags=["Payout"],
+    dependencies=[Depends(get_tenant_context)],
 )
 
 # ── Module-level config singleton (session-scoped override) ──────────────
@@ -666,11 +683,12 @@ async def _quarterly_payout_baseline(
     }
 
 
-@router.get("/statements/{rep_id}")
+@statements_router.get("/statements/{rep_id}")
 async def rep_payout_statements(
     rep_id: uuid.UUID,
     periods: int = Query(6, ge=1, le=24, description="Number of recent months"),
     db: AsyncSession = Depends(get_db),
+    _: UserContext = Depends(require_any_permission("view_payouts", "view_own_payout")),
 ) -> dict[str, Any]:
     """Return last N monthly payout periods for a rep.
 
