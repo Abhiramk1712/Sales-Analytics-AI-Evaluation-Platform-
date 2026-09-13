@@ -6,11 +6,11 @@ Implemented roles:
 
 - executive
 - revops_admin
-- finance_admin
 - sales_manager
 - sales_rep
-- data_scientist
-- auditor
+
+finance_admin, data_scientist, and auditor were removed and folded into
+revops_admin, which already had a superset of each role's permissions.
 
 ## Key Permissions
 

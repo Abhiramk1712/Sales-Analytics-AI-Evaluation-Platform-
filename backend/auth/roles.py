@@ -12,22 +12,21 @@ from typing import Set
 from backend.auth.permissions import ROLE_PERMISSIONS
 
 # ── Role constants ─────────────────────────────────────────────────────────
+# finance_admin, data_scientist, and auditor were removed: revops_admin was
+# already a strict superset of each of their permission sets, so folding
+# them in loses no capability -- it just means the platform's payout-
+# approval, ML-monitoring, and read-only-audit functions are reached through
+# revops_admin instead of a role scoped to only one of them.
 ROLE_EXECUTIVE    = "executive"
 ROLE_REVOPS_ADMIN = "revops_admin"
-ROLE_FINANCE_ADMIN = "finance_admin"
 ROLE_SALES_MANAGER = "sales_manager"
 ROLE_SALES_REP = "sales_rep"
-ROLE_DATA_SCIENTIST = "data_scientist"
-ROLE_AUDITOR = "auditor"
 
 ALL_ROLES: Set[str] = {
     ROLE_EXECUTIVE,
     ROLE_REVOPS_ADMIN,
-    ROLE_FINANCE_ADMIN,
     ROLE_SALES_MANAGER,
     ROLE_SALES_REP,
-    ROLE_DATA_SCIENTIST,
-    ROLE_AUDITOR,
 }
 
 # ── Position rank → role mapping (for auto-detection) ─────────────────────
@@ -52,10 +51,7 @@ def role_display_name(role: str) -> str:
     _names = {
         ROLE_EXECUTIVE:    "Executive",
         ROLE_REVOPS_ADMIN: "RevOps Admin",
-        ROLE_FINANCE_ADMIN: "Finance Admin",
         ROLE_SALES_MANAGER: "Sales Manager",
         ROLE_SALES_REP: "Sales Rep",
-        ROLE_DATA_SCIENTIST: "Data Scientist",
-        ROLE_AUDITOR: "Auditor",
     }
     return _names.get(role, role.title())

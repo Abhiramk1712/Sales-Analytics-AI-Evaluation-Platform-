@@ -89,10 +89,13 @@ async def cleanup():
         await db.commit()
 
 
-def _finance_admin_ctx() -> UserContext:
+def _admin_ctx() -> UserContext:
+    """finance_admin was removed as a standalone role (folded into
+    revops_admin, which already had approve_payouts); this test double
+    just needs a role with that permission."""
     return UserContext(
-        user_id="test-finance-admin",
-        role="finance_admin",
+        user_id="test-revops-admin",
+        role="revops_admin",
         team_id=None,
         territory_id=None,
         company_id=None,
@@ -141,11 +144,11 @@ async def test_db_fallback_payout_row_is_actually_actionable(cleanup):
 
         # This is the exact call the "Mark reviewed" button makes with the
         # exact payout_id the list just returned -- must resolve, not 404.
-        reviewed = await review_payout_record(payout_id, ctx=_finance_admin_ctx(), company_id=COMPANY)
+        reviewed = await review_payout_record(payout_id, ctx=_admin_ctx(), company_id=COMPANY)
         assert reviewed["lifecycle_state"] == "reviewed"
 
         approved = await approve_payout_record(
-            payout_id, ApprovePayoutRequest(note="looks right"), db=db, ctx=_finance_admin_ctx(), company_id=COMPANY
+            payout_id, ApprovePayoutRequest(note="looks right"), db=db, ctx=_admin_ctx(), company_id=COMPANY
         )
         assert approved["lifecycle_state"] == "approved"
         assert approved["approval_status"] == "approved"
@@ -177,7 +180,7 @@ async def test_other_periods_stay_listed_after_one_period_is_seeded(cleanup):
 
         # Act on just the Q3 record.
         q3_id = next(r["payout_id"] for r in first["rows"] if r["period"] == "2026-Q3")
-        await review_payout_record(q3_id, ctx=_finance_admin_ctx(), company_id=COMPANY)
+        await review_payout_record(q3_id, ctx=_admin_ctx(), company_id=COMPANY)
 
         # Q2's record must still be listed -- not silently dropped.
         second = await list_payout_records(lifecycle_state=None, company_id=COMPANY, db=db)
@@ -206,7 +209,7 @@ async def test_pay_action_on_a_never_computed_payout_does_not_404(cleanup):
         payout_id = str(payout.id)
 
         await list_payout_records(lifecycle_state=None, company_id=COMPANY, db=db)
-        paid = await mark_payout_paid(payout_id, ctx=_finance_admin_ctx(), company_id=COMPANY)
+        paid = await mark_payout_paid(payout_id, ctx=_admin_ctx(), company_id=COMPANY)
         assert paid["lifecycle_state"] == "paid"
 
 
@@ -288,7 +291,7 @@ async def test_team_summary_after_list_does_not_duplicate_the_payout(cleanup):
         assert len(matching) == 1
         assert matching[0]["payout_id"] == real_payout_id
 
-        await team_payout_summary(period="2026-Q3", db=db, company_id=COMPANY, ctx=_finance_admin_ctx())
+        await team_payout_summary(period="2026-Q3", db=db, company_id=COMPANY, ctx=_admin_ctx())
 
         after = await list_payout_records(lifecycle_state=None, company_id=COMPANY, db=db)
         matching_after = [r for r in after["rows"] if r["period"] == "2026-Q3"]
@@ -324,7 +327,7 @@ async def test_team_summary_before_list_does_not_duplicate_the_payout(cleanup):
         await db.commit()
         real_payout_id = str(real_payout.id)
 
-        await team_payout_summary(period="2026-Q3", db=db, company_id=COMPANY, ctx=_finance_admin_ctx())
+        await team_payout_summary(period="2026-Q3", db=db, company_id=COMPANY, ctx=_admin_ctx())
 
         listing = await list_payout_records(lifecycle_state=None, company_id=COMPANY, db=db)
         matching = [r for r in listing["rows"] if r["period"] == "2026-Q3"]
@@ -380,15 +383,15 @@ async def test_lifecycle_actions_reject_a_payout_from_a_different_company(cleanu
         assert any(r["payout_id"] == payout_id for r in listing["rows"])
 
         for action in (
-            lambda: review_payout_record(payout_id, ctx=_finance_admin_ctx(), company_id=other_company),
+            lambda: review_payout_record(payout_id, ctx=_admin_ctx(), company_id=other_company),
             lambda: approve_payout_record(
-                payout_id, ApprovePayoutRequest(), db=db, ctx=_finance_admin_ctx(), company_id=other_company
+                payout_id, ApprovePayoutRequest(), db=db, ctx=_admin_ctx(), company_id=other_company
             ),
-            lambda: lock_payout_record(payout_id, ctx=_finance_admin_ctx(), company_id=other_company),
-            lambda: mark_payout_paid(payout_id, ctx=_finance_admin_ctx(), company_id=other_company),
+            lambda: lock_payout_record(payout_id, ctx=_admin_ctx(), company_id=other_company),
+            lambda: mark_payout_paid(payout_id, ctx=_admin_ctx(), company_id=other_company),
             lambda: adjust_payout_record(
                 payout_id, AdjustPayoutRequest(adjustment_amount=-1.0, reason="test"),
-                ctx=_finance_admin_ctx(), company_id=other_company,
+                ctx=_admin_ctx(), company_id=other_company,
             ),
         ):
             with pytest.raises(HTTPException) as exc_info:
