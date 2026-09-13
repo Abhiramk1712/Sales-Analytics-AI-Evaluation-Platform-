@@ -151,6 +151,28 @@ def require_permission(permission: str):
     return _check
 
 
+def require_any_permission(*permissions: str):
+    """FastAPI dependency factory: passes if the role has ANY one of the
+    given permissions -- for a route a broad permission and a narrower
+    "your own" permission should both unlock (e.g. view_payouts OR
+    view_own_payout on a single-rep statement endpoint), where
+    require_permission's single-string check can only ever enforce one of
+    them.
+    """
+    if not permissions:
+        raise ValueError("require_any_permission expects at least one permission")
+
+    def _check(ctx: UserContext = Depends(get_user_context)) -> UserContext:
+        if not any(has_permission(ctx.role, p) for p in permissions):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Role '{ctx.role}' has none of the required permissions: {sorted(permissions)}",
+            )
+        return ctx
+
+    return _check
+
+
 def require_role(*required_roles: str):
     """
     FastAPI dependency factory.
