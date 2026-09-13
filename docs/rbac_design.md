@@ -16,17 +16,21 @@ For tenant scoping (as opposed to role permissions), see
 
 ## Roles
 
-Seven roles, defined in `backend/auth/roles.py` (`ALL_ROLES`):
+Four roles, defined in `backend/auth/roles.py` (`ALL_ROLES`):
 
 | Role | Display name |
 |---|---|
 | `executive` | Executive |
 | `revops_admin` | RevOps Admin |
-| `finance_admin` | Finance Admin |
 | `sales_manager` | Sales Manager |
 | `sales_rep` | Sales Rep |
-| `data_scientist` | Data Scientist |
-| `auditor` | Auditor |
+
+`finance_admin`, `data_scientist`, and `auditor` were removed and folded into
+`revops_admin`: each of their permission sets was already a strict subset of
+`revops_admin`'s, so nothing that used to be reachable stopped being
+reachable — payout approval, ML/model monitoring, and read-only audit
+oversight are all still there, just reached through `revops_admin` instead
+of a role scoped to only one of them.
 
 In demo mode (`DEMO_MODE=true`) a role is asserted via the `X-User-Role` header — that's
 the point of the persona switcher. In production mode it comes from a verified JWT's
@@ -40,35 +44,38 @@ bypass.
 
 Generated from `ROLE_PERMISSIONS` in `backend/auth/permissions.py`:
 
-| Permission | Executive | RevOps Admin | Finance Admin | Sales Manager | Sales Rep | Data Scientist | Auditor |
-|---|---|---|---|---|---|---|---|
-| `admin` |  | ✅ |  |  |  |  |  |
-| `approve_payouts` |  | ✅ | ✅ |  |  |  |  |
-| `edit_plans` |  | ✅ |  |  |  |  |  |
-| `generate_reports` | ✅ | ✅ | ✅ | ✅ |  | ✅ | ✅ |
-| `manage_plans` |  | ✅ |  |  |  |  |  |
-| `manage_rules` |  | ✅ |  |  |  |  |  |
-| `manage_tenant_data` |  | ✅ |  |  |  |  |  |
-| `run_agent_workflow` | ✅ | ✅ |  |  |  |  |  |
-| `run_ingestion` |  | ✅ |  |  |  |  |  |
-| `run_model_training` |  | ✅ |  |  |  | ✅ |  |
-| `switch_company` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `view_all_payouts` | ✅ | ✅ | ✅ |  |  |  |  |
-| `view_all_reps` | ✅ | ✅ |  |  |  |  |  |
-| `view_audit_logs` | ✅ | ✅ | ✅ | ✅ |  | ✅ | ✅ |
-| `view_company_metrics` | ✅ | ✅ |  |  |  |  |  |
-| `view_dashboard` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `view_data_quality` | ✅ | ✅ |  |  |  | ✅ | ✅ |
-| `view_forecasts` | ✅ | ✅ |  | ✅ | ✅ | ✅ |  |
-| `view_model_monitoring` | ✅ | ✅ |  |  |  | ✅ | ✅ |
-| `view_own_metrics` | ✅ | ✅ |  | ✅ | ✅ |  |  |
-| `view_own_payout` | ✅ | ✅ | ✅ | ✅ | ✅ |  |  |
-| `view_payouts` | ✅ | ✅ | ✅ | ✅ |  |  | ✅ |
-| `view_plans` | ✅ | ✅ |  |  |  |  |  |
+| Permission | Executive | RevOps Admin | Sales Manager | Sales Rep |
+|---|---|---|---|---|
+| `admin` |  | ✅ |  |  |
+| `approve_payouts` |  | ✅ |  |  |
+| `edit_plans` |  | ✅ |  |  |
+| `generate_reports` | ✅ | ✅ | ✅ |  |
+| `manage_plans` |  | ✅ |  |  |
+| `manage_rules` |  | ✅ |  |  |
+| `manage_tenant_data` |  | ✅ |  |  |
+| `run_agent_workflow` | ✅ | ✅ |  |  |
+| `run_ingestion` |  | ✅ |  |  |
+| `run_model_training` |  | ✅ |  |  |
+| `switch_company` | ✅ | ✅ | ✅ | ✅ |
+| `view_all_payouts` | ✅ | ✅ |  |  |
+| `view_all_reps` | ✅ | ✅ |  |  |
+| `view_audit_logs` | ✅ | ✅ | ✅ |  |
+| `view_company_metrics` | ✅ | ✅ |  |  |
+| `view_dashboard` | ✅ | ✅ | ✅ | ✅ |
+| `view_data_quality` | ✅ | ✅ |  |  |
+| `view_forecasts` | ✅ | ✅ | ✅ | ✅ |
+| `view_model_monitoring` | ✅ | ✅ |  |  |
+| `view_own_metrics` | ✅ | ✅ | ✅ | ✅ |
+| `view_own_payout` | ✅ | ✅ | ✅ | ✅ |
+| `view_payouts` | ✅ | ✅ | ✅ |  |
+| `view_plans` | ✅ | ✅ |  |  |
 
-`revops_admin` and `executive` are the two broad roles; every other role is scoped to
-one functional area (finance to payouts, data_scientist to ML, auditor to read-only
-oversight, sales_manager/sales_rep to their own numbers).
+`revops_admin` runs the platform (every operational permission, including
+the payout-approval, plan-admin, and ML/model-monitoring ground that
+finance_admin, data_scientist, and auditor used to each hold one piece of
+alone); `executive` is broad read access without the write/admin
+permissions; `sales_manager` and `sales_rep` are scoped to their own
+numbers and their team's.
 
 ---
 

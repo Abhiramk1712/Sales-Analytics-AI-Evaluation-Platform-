@@ -316,7 +316,7 @@ const ghostBtnStyle = {
 export default function PayoutAuditPage({ refreshKey, activeCompany, userRole }) {
   const role = userRole || "executive";
   const company = activeCompany || "";
-  const canAct = role === "revops_admin" || role === "finance_admin";
+  const canAct = role === "revops_admin";
 
   const [filterState, setFilterState] = useUrlState({ approvalFilter: "" });
   const stateFilter = filterState.approvalFilter;

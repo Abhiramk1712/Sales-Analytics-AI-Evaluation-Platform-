@@ -42,11 +42,11 @@ def production_auth():
 
 
 def test_valid_token_round_trips(production_auth):
-    token = issue_token(user_id="u-1", role="finance_admin", company_id="techo-solutions")
+    token = issue_token(user_id="u-1", role="sales_manager", company_id="techo-solutions")
     claims = decode_token(token)
 
     assert claims["sub"] == "u-1"
-    assert claims["role"] == "finance_admin"
+    assert claims["role"] == "sales_manager"
     assert claims["company_id"] == "techo-solutions"
 
 
@@ -171,8 +171,8 @@ def test_demo_mode_still_uses_headers():
     try:
         settings.DEMO_MODE = True
         settings.DEMO_DEFAULT_ROLE = "executive"
-        ctx = get_user_context(x_user_role="data_scientist", x_company_id="insurex")
-        assert ctx.role == "data_scientist"
+        ctx = get_user_context(x_user_role="sales_rep", x_company_id="insurex")
+        assert ctx.role == "sales_rep"
         assert ctx.company_id == "insurex"
         assert ctx.is_demo is True
     finally:

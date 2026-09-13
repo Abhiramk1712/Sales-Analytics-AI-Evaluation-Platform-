@@ -100,7 +100,7 @@ export default function PlansPage({ refreshKey, userRole, activeCompany }) {
     }
   }, [activePlanId, selectedPlan]);
 
-  const canEdit = ["revops_admin", "finance_admin"].includes(userRole);
+  const canEdit = userRole === "revops_admin";
   const planNameById = useMemo(() => {
     const map = {};
     planRows.forEach((p) => {

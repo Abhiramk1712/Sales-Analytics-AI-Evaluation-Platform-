@@ -21,11 +21,8 @@ import MLInsightsPage from "./pages/MLInsightsPage";
 const ROLES = [
   { value: "executive",    label: "Executive" },
   { value: "revops_admin", label: "RevOps Admin" },
-  { value: "finance_admin", label: "Finance Admin" },
   { value: "sales_manager", label: "Sales Manager" },
   { value: "sales_rep", label: "Sales Rep" },
-  { value: "data_scientist", label: "Data Scientist" },
-  { value: "auditor", label: "Auditor" },
 ];
 
 const PERIOD_OPTIONS = [
@@ -3090,14 +3087,14 @@ const NAV_MODULES = [
 
 const ALL_TABS = NAV_MODULES.flatMap((module) => module.tabs);
 const PERIOD_AWARE_TABS = new Set(["Dashboard", "RevOps Control Center", "ARR Health", "Pipeline Health", "Forecast", "Reps", "Rep Scorecard", "Territories", "Payouts"]);
+// finance_admin, data_scientist, and auditor were removed as standalone
+// roles -- revops_admin already had full access, so folding their users
+// into revops_admin loses no tab they could previously reach.
 const ROLE_TAB_ACCESS = {
   executive: new Set(ALL_TABS.filter((t) => !["Data Quality", "Model Monitoring", "Enterprise Grade", "Ingestion"].includes(t))),
   revops_admin: new Set(ALL_TABS),
-  finance_admin: new Set(["Dashboard", "RevOps Control Center", "Payouts", "Payout Approvals", "Plans", "Reports", "AI Agent", "Data Quality"]),
   sales_manager: new Set(["Dashboard", "Forecast", "ARR Health", "Pipeline Health", "Reps", "Rep Scorecard", "Reports", "AI Agent"]),
   sales_rep: new Set(["Dashboard", "Rep Scorecard", "Forecast", "AI Agent"]),
-  data_scientist: new Set(["Forecast", "ML Insights", "Model Monitoring", "Data Quality", "Reports", "AI Agent"]),
-  auditor: new Set(["Dashboard", "Payouts", "Payout Approvals", "Reports", "Data Quality", "Model Monitoring", "Enterprise Grade"]),
 };
 
 export default function App() {
@@ -3146,11 +3143,9 @@ export default function App() {
   );
   const roleBadgeText = (ROLES.find((r) => r.value === userRole)?.label || userRole).toUpperCase();
   const roleBadgeColor = (
-    userRole === "revops_admin" || userRole === "finance_admin"
+    userRole === "revops_admin"
       ? { bg: "#FEE2E2", fg: "#B91C1C" }
-      : userRole === "data_scientist"
-        ? { bg: "#DBEAFE", fg: "#1D4ED8" }
-        : { bg: "#DCFCE7", fg: "#166534" }
+      : { bg: "#DCFCE7", fg: "#166534" }
   );
 
   // When role changes, reset to first visible tab if current tab is hidden

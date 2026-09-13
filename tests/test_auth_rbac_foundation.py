@@ -13,11 +13,8 @@ def test_required_roles_present() -> None:
     expected = {
         "executive",
         "revops_admin",
-        "finance_admin",
         "sales_manager",
         "sales_rep",
-        "data_scientist",
-        "auditor",
     }
     assert expected.issubset(ALL_ROLES)
 
@@ -60,7 +57,7 @@ def test_production_mode_rejects_the_unsigned_demo_token() -> None:
         settings.AUTH_JWT_SECRET = "test-secret-not-for-production"
         with pytest.raises(HTTPException) as exc:
             get_user_context(
-                authorization="Bearer demo:user_id=u-1;role=finance_admin;company_id=techo-solutions"
+                authorization="Bearer demo:user_id=u-1;role=revops_admin;company_id=techo-solutions"
             )
         assert exc.value.status_code == 401
     finally:

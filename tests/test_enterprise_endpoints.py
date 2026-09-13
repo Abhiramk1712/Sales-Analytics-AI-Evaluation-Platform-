@@ -179,7 +179,7 @@ def test_pay_endpoint_calls_mark_paid(monkeypatch) -> None:
     )
 
     client = TestClient(app)
-    res = client.post("/payout-audit/p-1/pay", headers={"X-User-Role": "finance_admin"})
+    res = client.post("/payout-audit/p-1/pay", headers={"X-User-Role": "revops_admin"})
 
     assert res.status_code == 200
     assert res.json()["lifecycle_state"] == "paid"
