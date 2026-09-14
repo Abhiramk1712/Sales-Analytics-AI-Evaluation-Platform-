@@ -10,8 +10,19 @@ from typing import Optional, Dict, Any, List
 @dataclass
 class AgentState:
     """Tracks the state of an agent conversation."""
-    
+
     user_message: str
+    # Caller identity, threaded from get_user_context() through the router
+    # handler. Previously absent entirely -- the agent had zero role
+    # awareness anywhere in its pipeline, confirmed by identical evidence
+    # for the same question asked as executive vs. revops_admin. role
+    # drives ToolExecutor's routing (backend/agent/executor.py); rep_id /
+    # rep_ids_scope (resolved from the caller-supplied rep/team picker
+    # selection, never parsed from free text) scope a sales_rep's or
+    # sales_manager's evidence to their own data.
+    role: str = "executive"
+    rep_id: Optional[str] = None
+    rep_ids_scope: Optional[List[str]] = None
     intent: Optional[str] = None
     tools_called: List[str] = field(default_factory=list)
     evidence: Dict[str, Any] = field(default_factory=dict)

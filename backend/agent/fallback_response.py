@@ -154,6 +154,31 @@ def _collect_key_metrics(evidence: list[dict[str, Any]]) -> list[str]:
             rep_count = int(summary.get("rep_count", 0) or 0)
             if rep_count > 0:
                 lines.append(f"team payout is {_format_currency(total)} across {rep_count} reps")
+        elif tool_name == "get_my_performance_summary" and isinstance(data, dict):
+            attainment = float(data.get("attainment_pct", 0.0) or 0.0)
+            revenue = float(data.get("revenue", 0.0) or 0.0)
+            quota = float(data.get("quota", 0.0) or 0.0)
+            lines.append(
+                f"your revenue is {_format_currency(revenue)} against a quota of {_format_currency(quota)} ({attainment:.1f}% attainment)"
+            )
+        elif tool_name == "get_my_payout_summary" and isinstance(data, dict):
+            payout = float(data.get("payout", 0.0) or 0.0)
+            rate = float(data.get("commission_rate", 0.0) or 0.0)
+            lines.append(f"your payout this period is {_format_currency(payout)} at a {rate:.1%} commission rate")
+        elif tool_name == "get_team_performance_summary" and isinstance(data, dict):
+            revenue = float(data.get("total_revenue", 0.0) or 0.0)
+            quota = float(data.get("total_quota", 0.0) or 0.0)
+            attainment = float(data.get("team_attainment_pct", 0.0) or 0.0)
+            team_size = int(data.get("team_size", 0) or 0)
+            lines.append(
+                f"your team's revenue is {_format_currency(revenue)} against a quota of {_format_currency(quota)} "
+                f"({attainment:.1f}% attainment across {team_size} reps)"
+            )
+        elif tool_name == "get_team_payout_summary" and isinstance(data, dict):
+            total = float(data.get("total_payout", 0.0) or 0.0)
+            team_size = int(data.get("team_size", 0) or 0)
+            if team_size > 0:
+                lines.append(f"your team's payout is {_format_currency(total)} across {team_size} reps")
         elif tool_name == "get_pipeline_coverage_check":
             weighted = float(data.get("weighted_coverage_ratio", 0.0) or 0.0)
             unweighted = float(data.get("unweighted_coverage_ratio", 0.0) or 0.0)

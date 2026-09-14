@@ -423,9 +423,18 @@ async def get_pipeline_rescue_what_if(db: AsyncSession, message: str) -> dict[st
         default_value=1.0,
     )
 
+    # Same selling-rep filter as get_top_reps/get_pipeline_rescue callers
+    # elsewhere in this file: an Executive with an open deal would otherwise
+    # be eligible to appear in the priority-reps/priority-deals rescue list
+    # alongside real quota-carrying reps.
+    from backend.routers.analytics import _selling_rep_ids
+
     deal_rows = (await db.execute(select(Deal))).scalars().all()
     activity_rows = (await db.execute(select(Activity))).scalars().all()
     rep_rows = (await db.execute(select(Rep))).scalars().all()
+    selling_ids = await _selling_rep_ids(db)
+    if selling_ids:
+        rep_rows = [r for r in rep_rows if str(r.id) in selling_ids]
     rep_name_by_id = {str(r.id): (r.name or "Unknown") for r in rep_rows}
 
     if not deal_rows:

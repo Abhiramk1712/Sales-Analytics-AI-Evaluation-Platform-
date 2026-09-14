@@ -380,9 +380,25 @@ async def get_rep_performance(
 
 
 async def get_top_reps(db: AsyncSession, limit: int = 5, filters: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    # Deferred import: backend.routers.analytics imports this module at load
+    # time, so a top-level import here would be circular. This mirrors the
+    # same deferred-import pattern already used at every other agent-tool
+    # call site that needs this filter (backend/agent/tools/payout_tools.py,
+    # revops_tools.py, workflows/sales_performance_pipeline.py).
+    #
+    # Without it, get_top_reps/get_underperforming_reps rank Leadership
+    # positions (CROs, VPs) alongside quota-carrying reps -- confirmed live:
+    # "which reps are underperforming?" (a first-click agent suggestion
+    # chip) returned the company's own CRO as the #1 "underperforming rep"
+    # at 19.79% attainment, ahead of every real underperforming IC.
+    from backend.routers.analytics import _selling_rep_ids
+
     filters = _normalize_filters(filters)
     warnings: list[str] = []
+    selling_ids = await _selling_rep_ids(db)
     reps = (await db.execute(select(Rep))).scalars().all()
+    if selling_ids:
+        reps = [r for r in reps if str(r.id) in selling_ids]
 
     rows = []
     for rep in reps:

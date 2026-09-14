@@ -24,14 +24,14 @@ from backend.agent.tools.payout_tools import (
     get_rep_quota_bonus_what_if,
 )
 from backend.database import get_session_factory
-from backend.models import Deal, Position, Quota, Rep, Revenue, UserProfile
+from backend.models import Deal, Plan, PlanAssignment, Position, Quota, Rep, Revenue, Rule, UserProfile
 from backend.tenancy import tenant_scope
 from backend.tenant_guard import unscoped
 
 COMPANY = f"test-whatif-{uuid.uuid4().hex[:8]}"
 PERIOD = "2026-03"
 
-CLEANUP_MODELS = [Deal, Quota, Revenue, UserProfile, Position, Rep]
+CLEANUP_MODELS = [Deal, PlanAssignment, Rule, Plan, Quota, Revenue, UserProfile, Position, Rep]
 
 
 @pytest.fixture(autouse=True)
@@ -153,6 +153,44 @@ async def test_find_rep_no_reps_in_company_returns_empty(cleanup):
     assert candidates == []
 
 
+@pytest.mark.asyncio
+async def test_find_rep_excludes_executive_named_by_the_caller(cleanup):
+    """_find_rep_from_message backs get_rep_quota_bonus_what_if, reachable
+    from the AI Agent chat by asking "what if <name> hits 100% of quota" --
+    it matched any Rep row by name with no exclusion for Executive/
+    Leadership positions, unlike get_payout_summary and every other
+    rep-aggregate tool. Confirmed live: "what if Caitlin Brown hits 100% of
+    quota" (techo-solutions' own CRO) returned a full personalized
+    commission projection using her real $803,994.10 quota, treating her
+    exactly like an IC."""
+    # _selling_rep_ids() treats an *empty* result as "no position data,
+    # include everyone" (the same safety fallback used everywhere else in
+    # this codebase) -- a company with only the Executive and no real IC
+    # would make that fallback kick in and defeat the exclusion this test
+    # is checking, so an IC rep must be present too, exactly like the
+    # working test_payout_summary_excludes_executive fixture above.
+    factory = get_session_factory()
+    async with factory() as db, tenant_scope(COMPANY):
+        await _make_rep(db, name="IC Findrep", email="ic-findrep@example.com")
+        exec_rep = await _make_rep(db, name="Exec Findrep", email="exec-findrep@example.com")
+        await db.flush()
+
+        ic_position = Position(name="Account Executive", level="Individual Contributor", rank=5)
+        exec_position = Position(name="Chief Revenue Officer", level="Executive", rank=1)
+        db.add_all([ic_position, exec_position])
+        await db.flush()
+        db.add_all([
+            UserProfile(name="IC Findrep", email="ic-findrep@example.com", position_id=ic_position.id),
+            UserProfile(name="Exec Findrep", email="exec-findrep@example.com", position_id=exec_position.id),
+        ])
+        await db.commit()
+
+        rep, candidates, requested = await _find_rep_from_message(db, "If Exec Findrep hits 100% quota, what's the bonus?")
+
+    assert rep is None
+    assert requested == "exec findrep"
+
+
 # ── get_payout_summary ────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -242,6 +280,77 @@ async def test_payout_summary_excludes_executive(cleanup):
     assert result["data"]["summary"]["rep_count"] == 1
     assert result["data"]["summary"]["total_revenue"] == 100_000.0
     assert result["data"]["summary"]["total_quota"] == 100_000.0
+
+
+@pytest.mark.asyncio
+async def test_payout_summary_uses_reps_own_plan_not_default_spiffs(cleanup):
+    """get_payout_summary called compute_payout() with no config argument,
+    which always falls back to DEFAULT_PAYOUT_CONFIG (backend/payout/
+    engine.py) -- two synthetic SPIFF rules ("Quarterly overachiever" $1500
+    at >=120% attainment, "High win rate" $750 at >=75% win rate) that exist
+    to exercise code paths in tests, not to represent any tenant's real comp
+    plan. /payout/team-summary instead resolves each rep's own assigned
+    Plan/Rule via PlanAssignment, which never produces spiff_rules
+    (build_payout_config_from_rules). Confirmed live: same company/rep/
+    period, the agent's payout total was $7,500 higher than
+    /payout/team-summary's -- exactly 10 reps x a $750 SPIFF none of them
+    are actually enrolled in.
+
+    This rep is well past both fallback SPIFF thresholds (150% attainment,
+    100% win rate) but is assigned a real single-tier 10% plan -- if
+    get_payout_summary is still using the default engine, its payout will
+    include a $750 SPIFF on top; fixed, the payout is exactly the plan's
+    own tier rate (10% of $150K = $15,000) plus the accelerator every
+    config carries on revenue above quota (build_payout_config_from_rules'
+    own 2% default on the $50K overage = $1,000), with no SPIFF line at all.
+    """
+    factory = get_session_factory()
+    async with factory() as db, tenant_scope(COMPANY):
+        rep = await _make_rep(db, name="Planned Rep", email="planned@example.com")
+        await _make_revenue(db, rep=rep, amount=150_000)
+        await _make_quota(db, rep=rep, amount=100_000)
+        await _make_deal(db, rep=rep, stage="Closed Won", amount=150_000)
+
+        plan = Plan(name="Flat 10% Plan", scope="individual")
+        db.add(plan)
+        await db.flush()
+        db.add(Rule(plan_id=plan.id, name="Flat tier", threshold_min=0, threshold_max=999, rate=0.10, bonus_amount=0))
+        await db.flush()
+
+        user = UserProfile(name="Planned Rep", email="planned@example.com")
+        db.add(user)
+        await db.flush()
+        db.add(PlanAssignment(user_id=user.id, plan_id=plan.id))
+        await db.commit()
+
+        result = await get_payout_summary(db)
+
+    row = result["data"]["rows"][0]
+    assert row["name"] == "Planned Rep"
+    assert row["payout"] == 16_000.0, "must use the rep's real 10% plan rate + accelerator, not the default engine + a SPIFF"
+    assert not any("SPIFF" in r for r in row["rules_applied"])
+
+
+@pytest.mark.asyncio
+async def test_payout_summary_falls_back_to_default_engine_when_rep_has_no_plan(cleanup):
+    """A rep with no PlanAssignment at all has no real plan to resolve --
+    the default-engine fallback (including its SPIFFs) must still apply,
+    unchanged, exactly as before this fix. Same attainment/win-rate shape
+    as the plan-assigned case above, deliberately, to isolate the one
+    variable (plan assignment) that should change the outcome."""
+    factory = get_session_factory()
+    async with factory() as db, tenant_scope(COMPANY):
+        rep = await _make_rep(db, name="Unplanned Rep", email="unplanned@example.com")
+        await _make_revenue(db, rep=rep, amount=150_000)
+        await _make_quota(db, rep=rep, amount=100_000)
+        await _make_deal(db, rep=rep, stage="Closed Won", amount=150_000)
+        await db.commit()
+
+        result = await get_payout_summary(db)
+
+    row = result["data"]["rows"][0]
+    assert row["name"] == "Unplanned Rep"
+    assert any("SPIFF" in r for r in row["rules_applied"]), "unassigned reps should keep the pre-fix default-engine behavior"
 
 
 # ── get_rep_quota_bonus_what_if: no rep identified ────────────────────────
