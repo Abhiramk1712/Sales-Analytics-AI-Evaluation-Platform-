@@ -219,20 +219,40 @@ def _period_to_months(period: str | None) -> list[str]:
     return []
 
 
-async def _load_revenue_history(db: AsyncSession) -> dict[str, float]:
-    rows = (
-        await db.execute(
-            select(Revenue.period, func.sum(Revenue.amount).label("total"))
-            .group_by(Revenue.period)
-            .order_by(Revenue.period)
-        )
-    ).all()
+async def _resolve_scope_rep_ids(
+    db: AsyncSession, rep_id: str | None, team_id: str | None
+) -> list[uuid.UUID] | None:
+    """Resolve a rep_id/team_id query pair to a concrete rep_id list.
+
+    Returns None for "unscoped" (executive/revops_admin, or no picker
+    selection yet) rather than an empty list, so callers can tell "don't
+    filter" apart from "filter to zero reps" -- an empty team roster should
+    still 404 as "no data for this scope", not silently fall back to
+    company-wide.
+    """
+    if rep_id:
+        try:
+            return [uuid.UUID(rep_id)]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid rep_id UUID")
+    if team_id:
+        rows = (await db.execute(select(Rep.id).where(Rep.team_id == team_id))).all()
+        return [r[0] for r in rows]
+    return None
+
+
+async def _load_revenue_history(db: AsyncSession, rep_ids: list[uuid.UUID] | None = None) -> dict[str, float]:
+    q = select(Revenue.period, func.sum(Revenue.amount).label("total")).group_by(Revenue.period).order_by(Revenue.period)
+    if rep_ids is not None:
+        q = q.where(Revenue.rep_id.in_(rep_ids))
+    rows = (await db.execute(q)).all()
     return {str(r.period): float(r.total or 0.0) for r in rows}
 
 
 async def _load_history_for_forecast_type(
     db: AsyncSession,
     forecast_type: str,
+    rep_ids: list[uuid.UUID] | None = None,
 ) -> tuple[list[float], list[str], str, list[str]]:
     warnings: list[str] = []
     ft = forecast_type if forecast_type in FORECAST_TYPES else "revenue"
@@ -243,10 +263,17 @@ async def _load_history_for_forecast_type(
     source = "revenue"
 
     if ft == "revenue":
-        series = await _load_revenue_history(db)
+        series = await _load_revenue_history(db, rep_ids=rep_ids)
         source = "revenue"
 
-    elif ft == "ARR":
+    elif rep_ids is not None:
+        # Only the "revenue" type is wired for rep/team scoping today -- the
+        # ForecastTab's only caller of this path always requests "revenue".
+        # Every other forecast_type still runs company-wide rather than
+        # silently mis-scoping ARR/pipeline/booking/payout history.
+        warnings.append(f"forecast_type '{ft}' does not support rep/team scoping; showing company-wide history.")
+
+    if ft == "ARR":
         rows = (
             await db.execute(
                 select(ArrWaterfallEntry.period, func.sum(ArrWaterfallEntry.arr_end).label("total"))
@@ -463,6 +490,8 @@ async def forecast_lab(
     confidence_interval: float = 0.8,
     include_multi_scenario: bool = False,
     strategy_override: str | None = None,
+    rep_id: str | None = None,
+    team_id: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -470,13 +499,21 @@ async def forecast_lab(
 
     Supports the forecasting_engine strategy selector, per-type history loaders,
     and optional multi-scenario output (base / optimistic / conservative).
+
+    rep_id/team_id scope the "revenue" forecast_type to one rep or a team's
+    roster (see _load_history_for_forecast_type) -- other forecast_types
+    still run company-wide and say so in warnings.
     """
     if horizon < 1 or horizon > 24:
         raise HTTPException(status_code=400, detail="horizon must be between 1 and 24")
     if confidence_interval not in {0.8, 0.9, 0.95}:
         raise HTTPException(status_code=400, detail="confidence_interval must be one of: 0.8, 0.9, 0.95")
 
-    history, history_periods, source, source_warnings = await _load_history_for_forecast_type(db, forecast_type)
+    rep_ids = await _resolve_scope_rep_ids(db, rep_id, team_id)
+    if (rep_id or team_id) and rep_ids is not None and not rep_ids:
+        raise HTTPException(status_code=404, detail="No reps found for the selected team")
+
+    history, history_periods, source, source_warnings = await _load_history_for_forecast_type(db, forecast_type, rep_ids=rep_ids)
     if not history:
         raise HTTPException(status_code=404, detail=f"No historical data available for forecast_type '{forecast_type}'")
 
@@ -513,6 +550,7 @@ async def forecast_lab(
         "warnings": warnings,
         "generated_from": {"history_source": source},
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "scope": {"type": "rep" if rep_id else "team" if team_id else "company", "rep_id": rep_id, "team_id": team_id, "rep_count": len(rep_ids) if rep_ids is not None else None},
     }
 
     if include_multi_scenario:
@@ -530,7 +568,7 @@ async def forecast_lab(
         await _persist_prediction(
             db=db,
             model_name=f"forecast_lab_{payload['forecast_type']}",
-            entity_type="company",
+            entity_type=payload["scope"]["type"],
             prediction={
                 "periods": payload["periods"],
                 "values": payload["values"],
@@ -543,7 +581,7 @@ async def forecast_lab(
             },
             confidence=confidence_num,
             model_version=f"lab_{payload['strategy_used']}",
-            entity_id=None,
+            entity_id=(rep_id or team_id),
         )
     except Exception:
         payload["warnings"] = sorted(set(payload["warnings"] + ["Prediction persistence failed for forecast lab output."]))
@@ -713,14 +751,22 @@ async def forecast_lstm(
 
 
 @router.get("/forecast/revenue")
-async def revenue_forecast(horizon: int = 6, db: AsyncSession = Depends(get_db)):
-    rows = (
-        await db.execute(
-            select(Revenue.period, func.sum(Revenue.amount).label("total"))
-            .group_by(Revenue.period)
-            .order_by(Revenue.period)
-        )
-    ).all()
+async def revenue_forecast(
+    horizon: int = 6,
+    rep_id: str | None = None,
+    team_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    rep_ids = await _resolve_scope_rep_ids(db, rep_id, team_id)
+    if (rep_id or team_id) and rep_ids is not None and not rep_ids:
+        raise HTTPException(status_code=404, detail="No reps found for the selected team")
+
+    q = select(Revenue.period, func.sum(Revenue.amount).label("total")).group_by(Revenue.period).order_by(Revenue.period)
+    if rep_ids is not None:
+        q = q.where(Revenue.rep_id.in_(rep_ids))
+    rows = (await db.execute(q)).all()
+
+    scope = {"type": "rep" if rep_id else "team" if team_id else "company", "rep_id": rep_id, "team_id": team_id, "rep_count": len(rep_ids) if rep_ids is not None else None}
 
     if not rows:
         return {
@@ -741,6 +787,7 @@ async def revenue_forecast(horizon: int = 6, db: AsyncSession = Depends(get_db))
             "generated_from": {"revenue": "missing"},
             "fallback_used": True,
             "warnings": ["No historical revenue data available. Load revenue records to enable forecasting."],
+            "scope": scope,
         }
 
     revenue_by_period = {r.period: float(r.total) for r in rows}
@@ -776,8 +823,8 @@ async def revenue_forecast(horizon: int = 6, db: AsyncSession = Depends(get_db))
         await _persist_prediction(
             db=db,
             model_name=MODEL_REVENUE_FORECAST,
-            entity_type="company",
-            entity_id=None,
+            entity_type=scope["type"],
+            entity_id=(rep_id or team_id),
             prediction=forecast_payload,
             confidence=confidence_num,
             model_version=model_run.model_version,
@@ -794,6 +841,7 @@ async def revenue_forecast(horizon: int = 6, db: AsyncSession = Depends(get_db))
     result["generated_from"] = {"revenue": "source" if len(rows) > 0 else "missing"}
     result["fallback_used"] = result["metadata"]["forecast_mode"] != "model"
     result["warnings"] = warnings
+    result["scope"] = scope
     return result
 
 
@@ -1631,13 +1679,31 @@ async def arr_waterfall(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/score/deal-slip")
-async def deal_slip_risk(db: AsyncSession = Depends(get_db)):
-    """Identify open deals at risk of slipping past their expected close date."""
+async def deal_slip_risk(
+    rep_id: str | None = None,
+    team_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Identify open deals at risk of slipping past their expected close date.
+
+    rep_id/team_id scope which deals are RETURNED, not what the model is
+    TRAINED on -- fitting only on one rep's (often <10) closed deals produces
+    an uncalibrated model (confirmed: a uniform synthesized label across a
+    tiny sample yields a non-discriminating classifier). The model always
+    fits on the full company's deals, then predicts on just the scoped
+    subset, so a single rep's risk read is still backed by company-wide
+    calibration.
+    """
     deal_rows = (await db.execute(select(Deal))).scalars().all()
     activity_rows = (await db.execute(select(Activity))).scalars().all()
 
     if not deal_rows:
         raise HTTPException(status_code=404, detail="No deals found")
+
+    rep_ids = await _resolve_scope_rep_ids(db, rep_id, team_id)
+    if (rep_id or team_id) and rep_ids is not None and not rep_ids:
+        raise HTTPException(status_code=404, detail="No reps found for the selected team")
+    rep_id_strs = {str(rid) for rid in rep_ids} if rep_ids is not None else None
 
     import pandas as pd
     deals_df = pd.DataFrame([{
@@ -1653,15 +1719,30 @@ async def deal_slip_risk(db: AsyncSession = Depends(get_db)):
         "rep_id": str(d.rep_id),
     } for d in deal_rows])
 
+    # Explicit columns= so an empty activity_rows list still produces a
+    # frame with a "deal_id" column -- pd.DataFrame([]) has zero columns,
+    # and indexing activities_df["deal_id"] below would KeyError on a
+    # company with deals but no logged activities yet.
     activities_df = pd.DataFrame([{
         "id": str(a.id),
         "deal_id": str(a.deal_id),
         "activity_date": str(a.activity_date) if a.activity_date else None,
-    } for a in activity_rows])
+    } for a in activity_rows], columns=["id", "deal_id", "activity_date"])
 
     model = DealSlipModel()
     model.fit(deals_df, activities_df)
-    results = model.predict(deals_df, activities_df)
+
+    if rep_id_strs is not None:
+        scoped_deals_df = deals_df[deals_df["rep_id"].isin(rep_id_strs)]
+        if scoped_deals_df.empty:
+            raise HTTPException(status_code=404, detail="No deals found for the selected scope")
+        scoped_deal_ids = set(scoped_deals_df["deal_id"])
+        scoped_activities_df = activities_df[activities_df["deal_id"].isin(scoped_deal_ids)]
+    else:
+        scoped_deals_df = deals_df
+        scoped_activities_df = activities_df
+
+    results = model.predict(scoped_deals_df, scoped_activities_df)
 
     slip_count = sum(1 for r in results if r.slip_flag)
     return {
@@ -1683,6 +1764,7 @@ async def deal_slip_risk(db: AsyncSession = Depends(get_db)):
             for r in results[:20]  # top 20 at-risk
         ],
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "scope": {"type": "rep" if rep_id else "team" if team_id else "company", "rep_id": rep_id, "team_id": team_id, "rep_count": len(rep_ids) if rep_ids is not None else None},
     }
 
 

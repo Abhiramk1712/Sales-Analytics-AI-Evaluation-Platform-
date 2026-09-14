@@ -54,6 +54,19 @@ export const withPeriod = (url, period) => {
   return `${url}${sep}period=${encodeURIComponent(period)}`;
 };
 
+// Appends rep_id/team_id scope params (see useRoleScope). scopeQuery is
+// null while a role-scoped picker hasn't resolved a selection yet -- pass
+// null through untouched so callers can gate their fetch on it instead of
+// firing an unscoped, wrong-audience request in the gap.
+export const withScope = (url, scopeQuery) => {
+  if (scopeQuery === null) return null;
+  if (!scopeQuery) return url;
+  const entries = Object.entries(scopeQuery).filter(([, v]) => v);
+  if (!entries.length) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}${entries.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&")}`;
+};
+
 export const STAGE_COLORS = {
   Prospecting: "#B5D4F4",
   Qualification: "#85B7EB",
