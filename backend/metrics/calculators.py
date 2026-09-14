@@ -71,6 +71,8 @@ def _rep_filters(filters: dict[str, Any], warnings: list[str]) -> list[Any]:
         clauses.append(Rep.team_id == filters["team_id"])
     if filters.get("rep_id"):
         clauses.append(Rep.id == filters["rep_id"])
+    if filters.get("rep_ids") is not None:
+        clauses.append(Rep.id.in_(filters["rep_ids"]))
     if filters.get("stage"):
         warnings.append("Filter 'stage' is not applicable to rep-level scope and was ignored")
     return clauses
@@ -85,6 +87,8 @@ def _deal_filters(filters: dict[str, Any], warnings: list[str]) -> list[Any]:
         clauses.append(Deal.product == filters["product"])
     if filters.get("rep_id"):
         clauses.append(Deal.rep_id == filters["rep_id"])
+    if filters.get("rep_ids") is not None:
+        clauses.append(Deal.rep_id.in_(filters["rep_ids"]))
     start_date = filters.get("start_date")
     end_date = filters.get("end_date")
     if start_date:
@@ -449,6 +453,8 @@ async def get_nrr(db: AsyncSession, filters: Optional[dict[str, Any]] = None) ->
         q = q.where(Revenue.period >= start_period)
     if end_period:
         q = q.where(Revenue.period <= end_period)
+    if filters.get("rep_ids") is not None:
+        q = q.where(Revenue.rep_id.in_(filters["rep_ids"]))
 
     rows = (await db.execute(q)).all()
     if not rows:
@@ -522,6 +528,8 @@ async def get_arr_growth_rate(db: AsyncSession, filters: Optional[dict[str, Any]
 
     # Aggregate monthly revenue → compute rolling 12-month ARR windows
     q = select(Revenue.period, func.sum(Revenue.amount).label("monthly_rev")).group_by(Revenue.period).order_by(Revenue.period)
+    if filters.get("rep_ids") is not None:
+        q = q.where(Revenue.rep_id.in_(filters["rep_ids"]))
     rows = (await db.execute(q)).all()
     if len(rows) < 13:
         warnings.append(f"Only {len(rows)} periods available; need ≥ 13 for YoY ARR growth")
@@ -594,13 +602,16 @@ async def get_activity_ratio(db: AsyncSession, filters: Optional[dict[str, Any]]
 
     OPEN_STAGES = ("Prospecting", "Qualification", "Proposal", "Negotiation")
     open_count_q = select(func.count(Deal.id)).where(Deal.stage.in_(OPEN_STAGES))
+    activity_count_q = select(func.count(Activity.id)).join(Deal, Activity.deal_id == Deal.id).where(Deal.stage.in_(OPEN_STAGES))
+    if filters.get("rep_ids") is not None:
+        open_count_q = open_count_q.where(Deal.rep_id.in_(filters["rep_ids"]))
+        activity_count_q = activity_count_q.where(Deal.rep_id.in_(filters["rep_ids"]))
     open_count = (await db.execute(open_count_q)).scalar() or 0
 
     if open_count == 0:
         warnings.append("No open deals found for activity ratio")
         return {"value": 0.0, "ratio": 0.0, "open_deals": 0, "warnings": warnings, "sources": ["deals", "activities"]}
 
-    activity_count_q = select(func.count(Activity.id)).join(Deal, Activity.deal_id == Deal.id).where(Deal.stage.in_(OPEN_STAGES))
     activity_count = (await db.execute(activity_count_q)).scalar() or 0
 
     ratio = round(activity_count / open_count, 2)
@@ -621,6 +632,8 @@ async def get_weighted_pipeline_coverage(db: AsyncSession, filters: Optional[dic
 
     OPEN_STAGES = ("Prospecting", "Qualification", "Proposal", "Negotiation")
     q = select(Deal.amount, Deal.close_probability).where(Deal.stage.in_(OPEN_STAGES))
+    if filters.get("rep_ids") is not None:
+        q = q.where(Deal.rep_id.in_(filters["rep_ids"]))
     rows = (await db.execute(q)).all()
 
     weighted = sum(
@@ -653,13 +666,20 @@ async def get_quota_attainment_distribution(db: AsyncSession, filters: Optional[
     filters = _normalize_filters(filters)
     warnings: list[str] = []
 
-    reps = (await db.execute(select(Rep))).scalars().all()
+    reps_q = select(Rep)
+    if filters.get("rep_ids") is not None:
+        reps_q = reps_q.where(Rep.id.in_(filters["rep_ids"]))
+    reps = (await db.execute(reps_q)).scalars().all()
     if not reps:
         return {"data": {}, "warnings": ["No reps found"], "sources": ["reps"]}
 
     tiers: dict[str, int] = {"below_50": 0, "50_to_75": 0, "75_to_100": 0, "100_to_120": 0, "above_120": 0}
     for rep in reps:
-        scoped = {**filters, "rep_id": rep.id}
+        # Per-rep singular rep_id, not the outer rep_ids -- each iteration
+        # already narrows to exactly one rep drawn from the (already-scoped)
+        # `reps` list above.
+        scoped = {k: v for k, v in filters.items() if k != "rep_ids"}
+        scoped["rep_id"] = rep.id
         rev = await get_total_revenue(db, scoped)
         quota = await get_total_quota(db, scoped)
         if quota["value"] <= 0:
@@ -695,15 +715,32 @@ async def get_quota_attainment_distribution(db: AsyncSession, filters: Optional[
 async def calc_arr_waterfall(
     db: AsyncSession,
     period: str,
+    rep_ids: Optional[list[Any]] = None,
 ) -> dict[str, Any]:
-    """Aggregate ARR waterfall components for a single period across all reps."""
-    rows = (
-        await db.execute(
-            select(ArrWaterfallEntry).where(ArrWaterfallEntry.period == period)
-        )
-    ).scalars().all()
+    """Aggregate ARR waterfall components for a single period across all reps
+    (or, when rep_ids is given, just that rep/team's own rows).
+
+    Each arr_waterfall row already carries its own rep-level arr_start/arr_end
+    (confirmed populated for every row in seed data), computed as a running
+    balance -- arr_start(period) == arr_end(prior period) -- per rep. Summing
+    a fixed subset of reps' rows preserves that continuity at the scoped
+    level, since the same subset filters every period consistently.
+    """
+    q = select(ArrWaterfallEntry).where(ArrWaterfallEntry.period == period)
+    if rep_ids is not None:
+        q = q.where(ArrWaterfallEntry.rep_id.in_(rep_ids))
+    rows = (await db.execute(q)).scalars().all()
 
     if not rows:
+        if rep_ids is not None:
+            # Scoped queries must never silently fall back to the
+            # company-wide derived path -- that would leak unscoped numbers
+            # into what's supposed to be a rep/team-only view.
+            return {
+                "period": period, "new_logo": 0.0, "expansion": 0.0, "contraction": 0.0,
+                "churn": 0.0, "renewal": 0.0, "net_new_arr": 0.0, "arr_start": 0.0, "arr_end": 0.0,
+                "data_source": "no_data_for_scope",
+            }
         # Fallback: derive from bookings + churn_events if waterfall table is empty
         return await _derive_waterfall_for_period(db, period)
 
@@ -829,20 +866,21 @@ async def _derive_waterfall_for_period(
 async def calc_arr_waterfall_series(
     db: AsyncSession,
     months: int = 12,
+    rep_ids: Optional[list[Any]] = None,
 ) -> list[dict[str, Any]]:
     """Return waterfall data for the last N months, ascending by period."""
     # Get available periods from arr_waterfall table
+    periods_q = select(ArrWaterfallEntry.period).distinct()
+    if rep_ids is not None:
+        periods_q = periods_q.where(ArrWaterfallEntry.rep_id.in_(rep_ids))
     periods_in_db = (
-        await db.execute(
-            select(ArrWaterfallEntry.period)
-            .distinct()
-            .order_by(ArrWaterfallEntry.period.desc())
-            .limit(months)
-        )
+        await db.execute(periods_q.order_by(ArrWaterfallEntry.period.desc()).limit(months))
     ).scalars().all()
 
-    # If arr_waterfall table has no data, fall back to computing periods from Revenue
-    if not periods_in_db:
+    # If arr_waterfall table has no data, fall back to computing periods from
+    # Revenue -- but only when unscoped; a scoped rep/team with no waterfall
+    # rows should show no data, not company-wide Revenue periods.
+    if not periods_in_db and rep_ids is None:
         periods_in_db = (
             await db.execute(
                 select(Revenue.period)
@@ -856,7 +894,7 @@ async def calc_arr_waterfall_series(
 
     results = []
     for period in periods_in_db:
-        entry = await calc_arr_waterfall(db, period)
+        entry = await calc_arr_waterfall(db, period, rep_ids=rep_ids)
         results.append(entry)
 
     return results

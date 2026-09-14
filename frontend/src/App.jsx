@@ -2286,12 +2286,44 @@ function IngestionTab({ refreshKey, activeCompany, onCompanyLoaded }) {
 function ArrHealthTab({ refreshKey, period, userRole, activeCompany }) {
   const role = userRole || "executive";
   const company = activeCompany || "";
-  const { data, loading, error } = useFetch(withRefresh("/analytics/revops-kpis", refreshKey), { role, company });
-  const { data: waterfall, loading: wLoading } = useFetch(withRefresh("/ml/forecast/arr-waterfall", refreshKey), { role, company });
+  const scope = useRoleScope({ role, company, refreshKey });
+  const { data, loading, error } = useFetch(
+    withScope(withRefresh("/analytics/revops-kpis", refreshKey), scope.scopeQuery),
+    { role, company }
+  );
+  const { data: waterfall, loading: wLoading } = useFetch(
+    withScope(withRefresh("/ml/forecast/arr-waterfall", refreshKey), scope.scopeQuery),
+    { role, company }
+  );
 
-  if (loading) return <Skeleton h={300} />;
-  if (error) return <div style={{ color: "#D85A30", padding: 16 }}>RevOps KPIs unavailable: {error}</div>;
-  if (!data) return <div style={{ padding: 16 }}>No RevOps data available.</div>;
+  const scopePicker = scope.isScoped && (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+      <div style={{ fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>
+        {scope.isRepScoped ? "ARR health for" : "ARR health for team"}
+      </div>
+      {scope.isRepScoped ? (
+        <select
+          value={scope.selectedRepId || ""}
+          onChange={(e) => scope.setSelectedRepId(e.target.value)}
+          style={{ padding: "7px 10px", borderRadius: "var(--border-radius-md)", border: "1px solid var(--color-border-secondary)", background: "var(--color-background-primary)", fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}
+        >
+          {scope.sortedReps.map((r) => <option key={r.rep_id} value={r.rep_id}>{r.name}</option>)}
+        </select>
+      ) : (
+        <select
+          value={scope.selectedTeamId || ""}
+          onChange={(e) => scope.setSelectedTeamId(e.target.value)}
+          style={{ padding: "7px 10px", borderRadius: "var(--border-radius-md)", border: "1px solid var(--color-border-secondary)", background: "var(--color-background-primary)", fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}
+        >
+          {scope.teams.map((t) => <option key={t.team_id} value={t.team_id}>{t.team_name}</option>)}
+        </select>
+      )}
+    </div>
+  );
+
+  if (loading) return <div>{scopePicker}<Skeleton h={300} /></div>;
+  if (error) return <div>{scopePicker}<div style={{ color: "#D85A30", padding: 16 }}>RevOps KPIs unavailable: {error}</div></div>;
+  if (!data) return <div>{scopePicker}<div style={{ padding: 16 }}>No RevOps data available.</div></div>;
 
   const nrr = data.nrr_pct ?? 0;
   const grr = data.grr_pct ?? 0;
@@ -2340,6 +2372,12 @@ function ArrHealthTab({ refreshKey, period, userRole, activeCompany }) {
 
   return (
     <div>
+      {scopePicker}
+      {scope.isScoped && (
+        <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 10 }}>
+          Showing ARR health for <strong>{scope.scopeLabel || "…"}</strong>
+        </div>
+      )}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: "1rem" }}>
         <MetricCard label="Net Revenue Retention" value={pct(nrr)} sub="Benchmark ≥ 110%" color={nrrColor} />
         <MetricCard label="Gross Revenue Retention" value={pct(grr)} sub="Benchmark ≥ 85%" color={grrColor} />
