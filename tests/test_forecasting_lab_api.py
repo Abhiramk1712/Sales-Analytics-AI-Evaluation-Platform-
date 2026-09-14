@@ -12,7 +12,7 @@ def test_forecasting_lab_single_scenario(monkeypatch):
     app = FastAPI()
     app.include_router(forecasting_router.router)
 
-    async def fake_history_loader(db, forecast_type):
+    async def fake_history_loader(db, forecast_type, rep_ids=None):
         return [100000.0, 110000.0, 120000.0], ["2025-01", "2025-02", "2025-03"], "synthetic", []
 
     async def fake_persist(**kwargs):
@@ -47,7 +47,7 @@ def test_forecasting_lab_multi_scenario(monkeypatch):
     app = FastAPI()
     app.include_router(forecasting_router.router)
 
-    async def fake_history_loader(db, forecast_type):
+    async def fake_history_loader(db, forecast_type, rep_ids=None):
         return [200000.0, 210000.0, 220000.0, 230000.0], ["2025-01", "2025-02", "2025-03", "2025-04"], "synthetic", []
 
     async def fake_persist(**kwargs):

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, ScatterChart, Scatter, Cell } from "recharts";
 import { PaginationControls } from "./components/shared";
 import { useFetch } from "./hooks/useFetch";
+import { useRoleScope } from "./hooks/useRoleScope";
 import { setRequestContext, apiGet, apiPost } from "./api/client";
 import { useUrlState } from "./hooks/useUrlState";
 
@@ -57,6 +58,18 @@ const withPeriod = (url, period) => {
   if (!period) return url;
   const sep = url.includes("?") ? "&" : "?";
   return `${url}${sep}period=${encodeURIComponent(period)}`;
+};
+
+// Appends rep_id/team_id scope params from useRoleScope's scopeQuery. null
+// means the picker hasn't resolved a selection yet -- pass it through so
+// useFetch skips the request instead of firing one unscoped in the gap.
+const withScope = (url, scopeQuery) => {
+  if (scopeQuery === null) return null;
+  if (!scopeQuery) return url;
+  const entries = Object.entries(scopeQuery).filter(([, v]) => v);
+  if (!entries.length) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}${entries.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&")}`;
 };
 
 const STAGE_COLORS = {
@@ -271,12 +284,29 @@ function forecastContext(metric, value) {
 function ForecastTab({ refreshKey, activeCompany, period, userRole }) {
   const role = userRole || "executive";
   const company = activeCompany || "";
+  const scope = useRoleScope({ role, company, refreshKey });
   const companyParam = activeCompany ? `&company=${encodeURIComponent(activeCompany)}` : "";
-  const { data, loading, error } = useFetch(withRefresh(`/ml/forecast/revenue?horizon=6${companyParam}`, refreshKey), { role, company });
-  const { data: labData, loading: labLoading, error: labError } = useFetch(
-    withRefresh(`/ml/forecast/lab?forecast_type=revenue&horizon=6&include_multi_scenario=true${companyParam}`, refreshKey),
+  const { data, loading, error } = useFetch(
+    withScope(withRefresh(`/ml/forecast/revenue?horizon=6${companyParam}`, refreshKey), scope.scopeQuery),
     { role, company }
   );
+  const { data: labData, loading: labLoading, error: labError } = useFetch(
+    withScope(withRefresh(`/ml/forecast/lab?forecast_type=revenue&horizon=6&include_multi_scenario=true${companyParam}`, refreshKey), scope.scopeQuery),
+    { role, company }
+  );
+  // Team members' own attainment forecasts -- /ml/forecast/rep-attainment is
+  // already per-rep and unscoped; filtering to the team's roster client-side
+  // (same pattern as TeamCommandCenterPage) is the "individual" half of
+  // "individual and team members data" for sales_manager, alongside the
+  // team-aggregate revenue forecast above.
+  const { data: attainData } = useFetch(
+    scope.isTeamScoped ? withRefresh("/ml/forecast/rep-attainment", refreshKey) : null,
+    { role, company }
+  );
+  const teamForecastRows = useMemo(() => {
+    if (!scope.isTeamScoped) return [];
+    return (attainData?.reps || []).filter((r) => scope.rosterIds.has(r.rep_id));
+  }, [scope.isTeamScoped, scope.rosterIds, attainData]);
   const historical = data?.historical || {};
   const forecastPeriods = data?.forecast_periods || [];
   const forecastValues = data?.forecast_values || [];
@@ -330,6 +360,30 @@ function ForecastTab({ refreshKey, activeCompany, period, userRole }) {
 
   return (
     <div>
+      {scope.isScoped && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+          <div style={{ fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>
+            {scope.isRepScoped ? "Forecasting for" : "Forecasting for team"}
+          </div>
+          {scope.isRepScoped ? (
+            <select
+              value={scope.selectedRepId || ""}
+              onChange={(e) => scope.setSelectedRepId(e.target.value)}
+              style={{ padding: "7px 10px", borderRadius: "var(--border-radius-md)", border: "1px solid var(--color-border-secondary)", background: "var(--color-background-primary)", fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}
+            >
+              {scope.sortedReps.map((r) => <option key={r.rep_id} value={r.rep_id}>{r.name}</option>)}
+            </select>
+          ) : (
+            <select
+              value={scope.selectedTeamId || ""}
+              onChange={(e) => scope.setSelectedTeamId(e.target.value)}
+              style={{ padding: "7px 10px", borderRadius: "var(--border-radius-md)", border: "1px solid var(--color-border-secondary)", background: "var(--color-background-primary)", fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}
+            >
+              {scope.teams.map((t) => <option key={t.team_id} value={t.team_id}>{t.team_name}</option>)}
+            </select>
+          )}
+        </div>
+      )}
       {loading ? <Skeleton h={300} /> : error ? (
         <div style={{ border: "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-lg)", padding: 16, color: "#D85A30" }}>
           Forecast unavailable: {error}
@@ -339,7 +393,9 @@ function ForecastTab({ refreshKey, activeCompany, period, userRole }) {
       ) : (
         <>
           <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 10 }}>
-            Showing forecast for selected company: <strong>{activeCompany || "N/A"}</strong>
+            {scope.isScoped
+              ? <>Showing forecast for <strong>{scope.scopeLabel || "…"}</strong></>
+              : <>Showing forecast for selected company: <strong>{activeCompany || "N/A"}</strong></>}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: "1.5rem" }}>
             {forecastMode === "model" ? (
@@ -395,6 +451,42 @@ function ForecastTab({ refreshKey, activeCompany, period, userRole }) {
               </LineChart>
             </ResponsiveContainer>
           </div>
+
+          {scope.isTeamScoped && (
+            <div style={{ border: "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-lg)", padding: 16, marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Individual forecasts — this team</div>
+              <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 10 }}>
+                Each rep's own paced quota-attainment projection for the current quarter, alongside the team-aggregate revenue forecast above.
+              </div>
+              {teamForecastRows.length === 0 ? (
+                <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>No per-rep forecast data available for this team yet.</div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      {["Rep", "Paced Attainment", "Commit (p20)", "Base (p50)", "Upside (p80)", "Momentum"].map((h) => (
+                        <th key={h} style={{ textAlign: "left", fontWeight: 500, fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px", padding: "8px 12px", borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {teamForecastRows.map((r) => (
+                      <tr key={r.rep_id}>
+                        <td style={{ padding: "9px 12px", borderBottom: "0.5px solid var(--color-border-tertiary)", fontWeight: 500 }}>{r.rep_name}</td>
+                        <td style={{ padding: "9px 12px", borderBottom: "0.5px solid var(--color-border-tertiary)" }}>{r.paced_attainment_pct != null ? pct(r.paced_attainment_pct) : "n/a"}</td>
+                        <td style={{ padding: "9px 12px", color: "#185FA5", borderBottom: "0.5px solid var(--color-border-tertiary)" }}>{r.forecast?.commit_pct != null ? pct(r.forecast.commit_pct) : "n/a"}</td>
+                        <td style={{ padding: "9px 12px", fontWeight: 500, borderBottom: "0.5px solid var(--color-border-tertiary)" }}>{r.forecast?.base_pct != null ? pct(r.forecast.base_pct) : "n/a"}</td>
+                        <td style={{ padding: "9px 12px", color: "#EF9F27", borderBottom: "0.5px solid var(--color-border-tertiary)" }}>{r.forecast?.upside_pct != null ? pct(r.forecast.upside_pct) : "n/a"}</td>
+                        <td style={{ padding: "9px 12px", borderBottom: "0.5px solid var(--color-border-tertiary)", textTransform: "capitalize" }}>{(r.motivation_label || "").replace(/_/g, " ") || "n/a"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
 
           <div style={{ border: "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-lg)", padding: 16, marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Forecast lab — scenario matrix</div>
@@ -2377,10 +2469,14 @@ function ArrHealthTab({ refreshKey, period, userRole, activeCompany }) {
 function PipelineHealthTab({ refreshKey, period, userRole, activeCompany }) {
   const role = userRole || "executive";
   const company = activeCompany || "";
+  const scope = useRoleScope({ role, company, refreshKey });
   const kpisUrl = withPeriod(withRefresh("/analytics/kpis", refreshKey), period);
   const { data: revops, loading } = useFetch(withRefresh("/analytics/revops-kpis", refreshKey), { role, company });
   const { data: kpis, loading: kLoading } = useFetch(kpisUrl, { role, company });
-  const { data: slipData, loading: sLoading } = useFetch(withRefresh("/ml/score/deal-slip", refreshKey), { role, company });
+  const { data: slipData, loading: sLoading } = useFetch(
+    withScope(withRefresh("/ml/score/deal-slip", refreshKey), scope.scopeQuery),
+    { role, company }
+  );
 
   if (loading || kLoading) return <Skeleton h={300} />;
 
@@ -2394,16 +2490,50 @@ function PipelineHealthTab({ refreshKey, period, userRole, activeCompany }) {
   const weightedColor = weighted >= 3 ? "#1D9E75" : weighted >= 2 ? "#EF9F27" : "#D85A30";
   const activityColor = activity >= 3 ? "#1D9E75" : activity >= 2 ? "#EF9F27" : "#D85A30";
 
-  const topSlips = (slipData?.at_risk_deals || []).slice(0, 10);
+  // Was slipData?.at_risk_deals / d.slip_score -- neither key exists on the
+  // /ml/score/deal-slip response (deals_at_risk / slip_risk_score). This
+  // table has rendered "No at-risk deals identified" regardless of real
+  // data for every role since the endpoint's own fields never matched.
+  const topSlips = (slipData?.deals_at_risk || []).slice(0, 10);
 
   return (
     <div>
+      {scope.isScoped && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+          <div style={{ fontSize: 11, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>
+            {scope.isRepScoped ? "Deal risk for" : "Deal risk for team"}
+          </div>
+          {scope.isRepScoped ? (
+            <select
+              value={scope.selectedRepId || ""}
+              onChange={(e) => scope.setSelectedRepId(e.target.value)}
+              style={{ padding: "7px 10px", borderRadius: "var(--border-radius-md)", border: "1px solid var(--color-border-secondary)", background: "var(--color-background-primary)", fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}
+            >
+              {scope.sortedReps.map((r) => <option key={r.rep_id} value={r.rep_id}>{r.name}</option>)}
+            </select>
+          ) : (
+            <select
+              value={scope.selectedTeamId || ""}
+              onChange={(e) => scope.setSelectedTeamId(e.target.value)}
+              style={{ padding: "7px 10px", borderRadius: "var(--border-radius-md)", border: "1px solid var(--color-border-secondary)", background: "var(--color-background-primary)", fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}
+            >
+              {scope.teams.map((t) => <option key={t.team_id} value={t.team_id}>{t.team_name}</option>)}
+            </select>
+          )}
+        </div>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: "1.5rem" }}>
         <MetricCard label="Raw Coverage" value={`${rawCoverage.toFixed(2)}×`} sub="Benchmark ≥ 4×" color={rawColor} />
         <MetricCard label="Weighted Coverage" value={`${Number(weighted).toFixed(2)}×`} sub="Benchmark ≥ 3×" color={weightedColor} />
         <MetricCard label="Activity Ratio" value={`${Number(activity).toFixed(1)}`} sub="Activities per deal" color={activityColor} />
         <MetricCard label="Open Pipeline" value={fmt(openPipeline)} sub={`vs ${fmt(quota)} quota`} />
       </div>
+      {scope.isScoped && (
+        <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: -10, marginBottom: 16 }}>
+          Coverage metrics above are company-wide · deal risk below is scoped to {scope.scopeLabel || "…"}
+        </div>
+      )}
 
       <div style={{ border: "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-lg)", padding: 16, marginBottom: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>Top Deal Slip Risks</div>
@@ -2413,7 +2543,7 @@ function PipelineHealthTab({ refreshKey, period, userRole, activeCompany }) {
           <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ color: "var(--color-text-secondary)", borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
-                  <th style={{ textAlign: "left", padding: "4px 8px" }}>Deal ID</th>
+                  <th style={{ textAlign: "left", padding: "4px 8px" }}>Deal</th>
                   <th style={{ textAlign: "right", padding: "4px 8px" }}>Amount</th>
                   <th style={{ textAlign: "right", padding: "4px 8px" }}>Slip Risk</th>
                   <th style={{ textAlign: "left", padding: "4px 8px" }}>Stage</th>
@@ -2422,9 +2552,9 @@ function PipelineHealthTab({ refreshKey, period, userRole, activeCompany }) {
               <tbody>
                 {topSlips.map((d, i) => (
                   <tr key={i} style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
-                    <td style={{ padding: "4px 8px" }}>{d.deal_id}</td>
+                    <td style={{ padding: "4px 8px" }}>{d.deal_name || d.deal_id}</td>
                     <td style={{ padding: "4px 8px", textAlign: "right" }}>{fmt(d.amount ?? 0)}</td>
-                    <td style={{ padding: "4px 8px", textAlign: "right", color: d.slip_score > 0.7 ? "#D85A30" : "#EF9F27" }}>{pct((d.slip_score ?? 0) * 100)}</td>
+                    <td style={{ padding: "4px 8px", textAlign: "right", color: d.slip_risk_score > 0.7 ? "#D85A30" : "#EF9F27" }}>{pct((d.slip_risk_score ?? 0) * 100)}</td>
                     <td style={{ padding: "4px 8px" }}>{d.stage || "—"}</td>
                   </tr>
                 ))}
