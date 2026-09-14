@@ -15,6 +15,13 @@ from typing import Any
 
 import numpy as np
 
+# Heuristic-fallback-only: how much pipeline coverage the un-fitted predict()
+# path will credit toward attainment before treating the rest as redundancy
+# rather than additional expected revenue. Matches this project's own
+# "strong coverage" band (backend/statistics/pipeline_health.py), computed
+# against the same grain -- open pipeline over one quarter's own quota.
+PIPELINE_COVERAGE_CEILING = 3.0
+
 
 # ── Feature extraction ────────────────────────────────────────────────────
 
@@ -121,13 +128,36 @@ class AttainmentForecaster:
         """
         if not self._fitted:
             warning_msg = getattr(self, "_warning", "Model not fitted.")
-            # Heuristic: rev already booked + expected from Q-dated pipeline
+            # Heuristic: rev already booked + expected from Q-dated pipeline.
+            #
+            # The pipeline term is deliberately NOT `pc * wr` uncapped and
+            # undiscounted by time. Confirmed live: a rep at 60.5% actual QTD
+            # attainment with 12.7x pipeline coverage and a 100%-from-one-deal
+            # win rate forecast a flat base=500% -- the same cap a rep who had
+            # *already closed* 500% of quota would hit, indistinguishable from
+            # someone genuinely on pace. Two real effects were missing:
+            #   - pipeline_coverage beyond what's needed to comfortably hit
+            #     quota doesn't linearly add more expected revenue -- past
+            #     PIPELINE_COVERAGE_CEILING (this project's own "strong
+            #     coverage" band, backend/statistics/pipeline_health.py) the
+            #     excess is redundancy/optionality, not more attainment;
+            #   - pipeline still open late in the quarter is increasingly
+            #     likely to slip past it, so its contribution is discounted
+            #     by the fraction of the quarter still remaining.
+            # days_in_quarter isn't in the signal dict the router builds
+            # (only days_into_quarter is); 91.0 mirrors _extract_features()'s
+            # own hardcoded quarter-length assumption above, for consistency
+            # within this file rather than introducing a second constant.
             results = []
             for sig in rep_signals:
                 qtd  = float(sig.get("qtd_attainment") or 0.0)          # fraction already booked
                 pc   = float(sig.get("pipeline_coverage") or 0.0)       # Q-dated pipe / quota
                 wr   = float(sig.get("win_rate_ytd") or 0.25)
-                attain = round(min(qtd + pc * wr, 5.0), 4)              # cap at 500%
+                days_into_quarter = float(sig.get("days_into_quarter") or 45.0)
+                days_in_quarter = 91.0
+                time_remaining_fraction = max(0.0, min(1.0, (days_in_quarter - days_into_quarter) / days_in_quarter))
+                pipe_contribution = min(pc, PIPELINE_COVERAGE_CEILING) * wr * time_remaining_fraction
+                attain = round(min(qtd + pipe_contribution, 5.0), 4)    # cap at 500%
                 results.append({
                     "rep_id":   sig.get("rep_id", "?"),
                     "commit":   round(min(attain * 0.75, 5.0), 4),
