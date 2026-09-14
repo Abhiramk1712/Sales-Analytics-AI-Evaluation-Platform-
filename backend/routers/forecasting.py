@@ -1616,7 +1616,11 @@ async def predictions_summary(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/forecast/arr-waterfall")
-async def arr_waterfall(db: AsyncSession = Depends(get_db)):
+async def arr_waterfall(
+    rep_id: str | None = None,
+    team_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
     """ARR waterfall decomposition: new logo, expansion, contraction, churn, renewal per month.
 
     Sourced from the canonical `arr_waterfall` table via
@@ -1629,11 +1633,20 @@ async def arr_waterfall(db: AsyncSession = Depends(get_db)):
     and never carrying arr_end forward as the next period's arr_start. Confirmed
     live: April 2026 showed $2.8M "net new ARR" against a $4.7M ARR base in a
     single month, and May's arr_start didn't match April's arr_end.
+
+    rep_id/team_id scope the waterfall to one rep or a team's roster --
+    each arr_waterfall row already carries its own rep-level running balance,
+    so summing a fixed rep subset across periods preserves the
+    arr_start(period) == arr_end(prior period) continuity at that scope.
     """
+    rep_ids = await _resolve_scope_rep_ids(db, rep_id, team_id)
+    if (rep_id or team_id) and rep_ids is not None and not rep_ids:
+        raise HTTPException(status_code=404, detail="No reps found for the selected team")
+
     # No `months` param on this endpoint historically -- it always returns
     # every available period. calc_arr_waterfall_series's `months` is a
     # `.limit()`, so a generous constant preserves that "all periods" behavior.
-    series = await calculators.calc_arr_waterfall_series(db, months=9999)
+    series = await calculators.calc_arr_waterfall_series(db, months=9999, rep_ids=rep_ids)
     if not series:
         raise HTTPException(status_code=404, detail="No revenue data available")
 
@@ -1675,6 +1688,7 @@ async def arr_waterfall(db: AsyncSession = Depends(get_db)):
     return {
         "waterfall": waterfall,
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "scope": {"type": "rep" if rep_id else "team" if team_id else "company", "rep_id": rep_id, "team_id": team_id, "rep_count": len(rep_ids) if rep_ids is not None else None},
     }
 
 

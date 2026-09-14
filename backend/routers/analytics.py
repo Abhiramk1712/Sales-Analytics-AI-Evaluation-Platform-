@@ -83,6 +83,25 @@ def _period_to_filters(period: str | None) -> dict | None:
     return {"start_date": period_range.start_date, "end_date": period_range.end_date}
 
 
+async def _resolve_scope_rep_ids(db: AsyncSession, rep_id: str | None, team_id: str | None) -> list | None:
+    """Resolve a rep_id/team_id query pair to a concrete rep_id list.
+
+    None means unscoped (executive/revops_admin keep seeing company-wide
+    combined data) rather than an empty list, so callers can tell "don't
+    filter" apart from "filter to zero reps".
+    """
+    if rep_id:
+        import uuid as _uuid
+        try:
+            return [_uuid.UUID(rep_id)]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid rep_id UUID")
+    if team_id:
+        rows = (await db.execute(select(Rep.id).where(Rep.team_id == team_id))).all()
+        return [r[0] for r in rows]
+    return None
+
+
 def _confidence_label(coverage: float) -> str:
     if coverage >= 0.95:
         return "high"
@@ -1063,10 +1082,17 @@ async def rep_profile(
 @router.get("/revops-kpis")
 async def get_revops_kpis(
     period: str = Query(None, description="e.g. '2025-04' or '2025-Q2'"),
+    rep_id: str | None = None,
+    team_id: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     """RevOps KPI panel: NRR, GRR, ARR growth, sales cycle, activity ratio, weighted pipeline coverage, attainment distribution."""
-    filters = _period_to_filters(period)
+    filters = _period_to_filters(period) or {}
+    rep_ids = await _resolve_scope_rep_ids(db, rep_id, team_id)
+    if (rep_id or team_id) and rep_ids is not None and not rep_ids:
+        raise HTTPException(status_code=404, detail="No reps found for the selected team")
+    if rep_ids is not None:
+        filters["rep_ids"] = rep_ids
 
     nrr = await calculators.get_nrr(db, filters)
     grr = await calculators.get_grr(db, filters)
@@ -1099,6 +1125,7 @@ async def get_revops_kpis(
         "attainment_distribution": attainment_dist["data"],
         "nrr_components": nrr.get("components", {}),
         "warnings": all_warnings,
+        "scope": {"type": "rep" if rep_id else "team" if team_id else "company", "rep_id": rep_id, "team_id": team_id, "rep_count": len(rep_ids) if rep_ids is not None else None},
     }
 
 
