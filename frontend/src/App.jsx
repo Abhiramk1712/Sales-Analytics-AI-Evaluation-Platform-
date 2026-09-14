@@ -9,6 +9,7 @@ import { useUrlState } from "./hooks/useUrlState";
 // ── New page imports (Sprint 2) ───────────────────────────────────────────
 import PayoutsPage from "./pages/PayoutsPage";
 import RepHomePage from "./pages/RepHomePage";
+import TeamCommandCenterPage from "./pages/TeamCommandCenterPage";
 import PayoutAuditPage from "./pages/PayoutAuditPage";
 import ARRWaterfallPage from "./pages/ARRWaterfallPage";
 import RepScorecardPage from "./pages/RepScorecardPage";
@@ -3078,7 +3079,7 @@ function RevOpsControlCenterTab({ refreshKey, activeCompany, period, userRole })
 }
 
 const NAV_MODULES = [
-  { label: "Executive Overview", tabs: ["My Performance", "Dashboard", "RevOps Control Center", "Reports"] },
+  { label: "Executive Overview", tabs: ["My Performance", "Team Command Center", "Dashboard", "RevOps Control Center", "Reports"] },
   { label: "Revenue Intelligence", tabs: ["Forecast", "ARR Health", "ARR Waterfall", "Pipeline Health"] },
   { label: "People & Territory", tabs: ["Reps", "Rep Scorecard", "Org Hierarchy", "Territories"] },
   { label: "Compensation", tabs: ["Payouts", "Payout Approvals", "Plans"] },
@@ -3087,14 +3088,14 @@ const NAV_MODULES = [
 ];
 
 const ALL_TABS = NAV_MODULES.flatMap((module) => module.tabs);
-const PERIOD_AWARE_TABS = new Set(["My Performance", "Dashboard", "RevOps Control Center", "ARR Health", "Pipeline Health", "Forecast", "Reps", "Rep Scorecard", "Territories", "Payouts"]);
+const PERIOD_AWARE_TABS = new Set(["My Performance", "Team Command Center", "Dashboard", "RevOps Control Center", "ARR Health", "Pipeline Health", "Forecast", "Reps", "Rep Scorecard", "Territories", "Payouts"]);
 // finance_admin, data_scientist, and auditor were removed as standalone
 // roles -- revops_admin already had full access, so folding their users
 // into revops_admin loses no tab they could previously reach.
 const ROLE_TAB_ACCESS = {
   executive: new Set(ALL_TABS.filter((t) => !["Data Quality", "Model Monitoring", "Enterprise Grade", "Ingestion"].includes(t))),
   revops_admin: new Set(ALL_TABS),
-  sales_manager: new Set(["Dashboard", "Forecast", "ARR Health", "Pipeline Health", "Reps", "Rep Scorecard", "Reports", "AI Agent"]),
+  sales_manager: new Set(["Team Command Center", "Forecast", "ARR Health", "Pipeline Health", "Reps", "Rep Scorecard", "Reports", "AI Agent"]),
   sales_rep: new Set(["My Performance", "Rep Scorecard", "Forecast", "AI Agent"]),
 };
 
@@ -3414,6 +3415,7 @@ export default function App() {
       {/* ── Page content with fade-in ─────────────────────────────────────── */}
       <div key={tab} className="fade-in">
       {tab === "My Performance" && <RepHomePage refreshKey={refreshKey} period={period} userRole={userRole} activeCompany={activeCompany} />}
+      {tab === "Team Command Center" && <TeamCommandCenterPage refreshKey={refreshKey} period={period} userRole={userRole} activeCompany={activeCompany} />}
       {tab === "Dashboard" && <DashboardTab refreshKey={refreshKey} period={period} userRole={userRole} activeCompany={activeCompany} />}
       {tab === "RevOps Control Center" && <RevOpsControlCenterTab refreshKey={refreshKey} activeCompany={activeCompany} period={period} userRole={userRole} />}
       {tab === "ARR Health" && <ArrHealthTab refreshKey={refreshKey} period={period} userRole={userRole} activeCompany={activeCompany} />}
