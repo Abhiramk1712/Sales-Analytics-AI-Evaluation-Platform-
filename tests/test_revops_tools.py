@@ -347,6 +347,65 @@ async def test_pipeline_rescue_rolls_selected_deals_up_by_rep(cleanup):
         assert data["priority_reps"][0]["rep_name"] == "Rescue Rep"
 
 
+@pytest.mark.asyncio
+async def test_pipeline_rescue_does_not_name_an_executives_deal(cleanup):
+    """rep_name_by_id was built from every Rep row with no selling-rep
+    filter, unlike every other rep-aggregate tool in this file -- an
+    Executive with an open at-risk deal would be named in
+    priority_deals/priority_reps exactly like a real IC. Confirmed live on
+    techo-solutions' own CRO (didn't reproduce there only because her real
+    deals happen to all be Closed Won already, not because the code
+    guards against it). One badly-overdue deal plus one healthy, on-
+    schedule deal for contrast -- empirically, the real slip model needs
+    both classes present to reliably flag the overdue one (a company with
+    only uniformly-overdue deals produced slip_risk_count=0 here, same as
+    this file's other pipeline-rescue tests only assert conditionally)."""
+    # _selling_rep_ids() treats an *empty* result as "no position data,
+    # include everyone" (the same fallback used everywhere else in this
+    # codebase) -- a company with only the Executive and no real IC would
+    # make that fallback kick in and defeat the exclusion this test checks.
+    factory = get_session_factory()
+    async with factory() as db, tenant_scope(COMPANY):
+        ic_rep = await _make_rep(db, name="IC Rescue Rep", email="ic-rescue@example.com")
+        await _make_quota(db, rep=ic_rep, amount=100_000)
+        await _make_revenue(db, rep=ic_rep, amount=40_000)
+
+        exec_rep = await _make_rep(db, name="Exec Rescue Rep", email="exec-rescue@example.com")
+        await _make_quota(db, rep=exec_rep, amount=500_000)
+        await _make_revenue(db, rep=exec_rep, amount=100_000)
+        await _make_deal(
+            db, rep=exec_rep, stage="Proposal", amount=30_000,
+            created_at=datetime.utcnow() - timedelta(days=120),
+            expected_close_date=date.today() - timedelta(days=90),
+            close_probability=10,
+        )
+        await _make_deal(
+            db, rep=exec_rep, stage="Negotiation", amount=30_000,
+            created_at=datetime.utcnow() - timedelta(days=5),
+            expected_close_date=date.today() + timedelta(days=20),
+            close_probability=80,
+        )
+
+        ic_position = Position(name="Account Executive", level="Individual Contributor", rank=5)
+        exec_position = Position(name="Chief Revenue Officer", level="Executive", rank=1)
+        db.add_all([ic_position, exec_position])
+        await db.flush()
+        db.add_all([
+            UserProfile(name="IC Rescue Rep", email="ic-rescue@example.com", position_id=ic_position.id),
+            UserProfile(name="Exec Rescue Rep", email="exec-rescue@example.com", position_id=exec_position.id),
+        ])
+        await db.commit()
+
+        result = await get_pipeline_rescue_what_if(db, "rescue the top 5 at-risk deals")
+
+    data = result["data"]
+    assert data["slip_universe"]["slip_risk_count"] >= 1, "the overdue deal should have been flagged"
+    rep_names_seen = {r.get("rep_name") for r in data.get("priority_reps", [])}
+    deal_rep_names_seen = {d.get("rep_name") for d in data.get("priority_deals", [])}
+    assert "Exec Rescue Rep" not in rep_names_seen
+    assert "Exec Rescue Rep" not in deal_rep_names_seen
+
+
 # ── get_arr_trajectory ─────────────────────────────────────────────────────
 
 @pytest.mark.asyncio

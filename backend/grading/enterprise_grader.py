@@ -344,7 +344,16 @@ class EnterpriseGrader:
             elif check_name == "workflow_pipeline":
                 return hasattr(mod, "run_sales_performance_pipeline")
             elif check_name == "agent_sse_streaming":
+                # /agent/chat and /agent/chat/stream moved to their own
+                # chat_router (view_own_metrics-gated, for sales_rep/
+                # sales_manager access) so admitting that permission
+                # wouldn't also loosen /agent/ml-evidence and
+                # /agent/workflows/sales-performance, which stay on the
+                # stricter run_agent_workflow-only router -- both routers
+                # need checking now, not just the original one.
                 paths = [r.path for r in mod.router.routes]
+                if hasattr(mod, "chat_router"):
+                    paths += [r.path for r in mod.chat_router.routes]
                 return "/agent/chat/stream" in paths
             elif check_name == "rag_service_exists":
                 return hasattr(mod, "RAGService")

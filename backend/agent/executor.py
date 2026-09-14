@@ -30,6 +30,12 @@ from backend.agent.tools.report_tools import (
     generate_manager_summary_text,
     generate_rep_summary_text,
 )
+from backend.agent.tools.self_service_tools import (
+    get_my_payout_summary,
+    get_my_performance_summary,
+    get_team_payout_summary,
+    get_team_performance_summary,
+)
 
 
 from backend.agent.tools.ingestion_tools import discover_sources, check_data_quality, execute_ingestion
@@ -148,6 +154,10 @@ class ToolExecutor:
         if db_session is None:
             state.warnings.append("Database session missing; cannot execute DB-backed tools")
             return state
+
+        role = (state.role or "executive").lower()
+        if role in ("sales_rep", "sales_manager"):
+            return await self._execute_self_service(state, db_session, role)
 
         intent = state.intent or "unknown"
         message = state.user_message
@@ -393,4 +403,68 @@ class ToolExecutor:
         for result in results:
             state.warnings.extend(result.get("warnings", []))
 
+        return state
+
+    async def _execute_self_service(self, state: AgentState, db_session: Any, role: str) -> AgentState:
+        """sales_rep and sales_manager get a curated, identity-scoped
+        subset of the agent's tools -- their own (or their team's)
+        performance and payout data, always, regardless of what intent
+        the planner detected. Confirmed live: the planner's own catch-all
+        fallback (any message starting with "how"/"what"/etc. that
+        matches no more specific pattern) classifies an ordinary "how am
+        I doing this quarter?" as definition_question -- treating that as
+        an exclusive branch would have answered a rep's most natural
+        question with metric definitions and no actual numbers.
+
+        This is deliberately NOT an intent-by-intent allowlist layered
+        over the full company-wide tool surface. The evidence pool built
+        for these two roles never contains anything beyond the caller's
+        own scope, so correctness doesn't depend on the LLM choosing to
+        decline an out-of-scope request, or on the planner classifying
+        intent correctly -- data for anyone else's numbers, or
+        company-wide aggregates, is simply never fetched to answer from
+        in the first place.
+        """
+        intent = state.intent or "unknown"
+        message = state.user_message
+        results: list[dict[str, Any]] = []
+
+        if role == "sales_rep":
+            if not state.rep_id:
+                state.warnings.append("No rep selected — choose who you are from the picker above the chat.")
+                state.evidence_results, state.tools_called, state.evidence = [], [], {}
+                return state
+            results.append(await get_my_performance_summary(db_session, state.rep_id))
+            results.append(await get_my_payout_summary(db_session, state.rep_id))
+        else:  # sales_manager
+            if not state.rep_ids_scope:
+                state.warnings.append("No team selected — choose your team from the picker above the chat.")
+                state.evidence_results, state.tools_called, state.evidence = [], [], {}
+                return state
+            results.append(await get_team_performance_summary(db_session, state.rep_ids_scope))
+            results.append(await get_team_payout_summary(db_session, state.rep_ids_scope))
+
+        if intent == "definition_question":
+            # Deliberately NOT the full list_metrics() catalog the
+            # executive/revops_admin path uses (~11KB, 18 metrics) --
+            # confirmed live: combined with this role's own performance/
+            # payout evidence, the total prompt pushed the LLM into
+            # returning zero text-type content blocks within the (then
+            # 700, now 2048 -- see routers/agent.py) max_tokens budget,
+            # silently falling back to a deterministic reply. A specific
+            # metric definition plus a short RAG lookup
+            # is what a "what does X mean" question actually needs; the
+            # full catalog is for "what metrics exist" questions, which
+            # aren't the self-service audience's typical ask anyway.
+            for candidate in ["quota_attainment", "pipeline_coverage", "win_rate", "total_revenue"]:
+                if candidate.replace("_", " ") in message.lower() or candidate in message.lower():
+                    results.append(get_metric_definition(candidate))
+                    break
+            results.append(retrieve_knowledge_context(message, top_k=3))
+
+        state.evidence_results = results
+        state.tools_called = [r.get("tool_name", "unknown") for r in results]
+        state.evidence = {r.get("tool_name", "unknown"): r.get("data") for r in results}
+        for result in results:
+            state.warnings.extend(result.get("warnings", []))
         return state

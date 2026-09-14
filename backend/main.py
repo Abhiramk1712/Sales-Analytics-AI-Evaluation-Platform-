@@ -76,6 +76,7 @@ app.add_middleware(
 app.include_router(analytics.router)
 app.include_router(forecasting.router)
 app.include_router(agent.router)
+app.include_router(agent.chat_router)
 app.include_router(reports.router)
 app.include_router(grading.router)
 app.include_router(ingestion.router)

@@ -59,3 +59,35 @@ Guidelines:
 
 Remember: Accuracy over confidence. Missing data is better than wrong data.
 """
+
+
+def role_addendum(role: str) -> str:
+    """Role-aware framing appended to AGENT_SYSTEM_PROMPT. Previously the
+    agent had no role awareness anywhere in its pipeline -- confirmed live,
+    the same question asked as executive vs. revops_admin produced
+    byte-identical evidence. For sales_rep/sales_manager this addendum is
+    the ONLY thing telling the LLM who it's talking to; the actual safety
+    boundary is structural, not prompt-based -- backend/agent/executor.py's
+    _execute_self_service never fetches anyone else's data for these two
+    roles in the first place, so this framing shapes tone and scope of the
+    answer, it doesn't gate what the model can see."""
+    role = (role or "executive").lower()
+    if role == "sales_rep":
+        return (
+            "AUDIENCE: You are talking to an individual sales rep about their own performance. "
+            "The evidence provided is scoped to this rep only -- there is no other rep's or the "
+            "company's data available. Answer in first-person-addressed terms ('you', 'your quota'), "
+            "not third-person ('this rep'). If the question is about something outside personal "
+            "performance, quota, payout, or forecast (e.g. company-wide metrics, other reps, "
+            "administrative actions), say plainly that's available to their manager or above."
+        )
+    if role == "sales_manager":
+        return (
+            "AUDIENCE: You are talking to a sales manager about their own team's performance. "
+            "The evidence provided is scoped to this team only -- there is no company-wide or "
+            "other-team data available. Answer in terms of 'your team', not the whole company. "
+            "If the question is about something outside this team's performance, quota, or payout "
+            "(e.g. company-wide financials, other teams, administrative actions), say plainly "
+            "that's available to an executive or RevOps admin."
+        )
+    return "AUDIENCE: You are talking to a RevOps/executive user with full company-wide access."

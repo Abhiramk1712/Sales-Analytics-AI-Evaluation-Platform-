@@ -2,7 +2,7 @@
  * AgentPage.jsx — AI chat with SSE streaming via /agent/chat/stream
  * Sprint 2.4
  */
-import { useState, useRef, useCallback } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -21,6 +21,7 @@ import {
   YAxis,
 } from "recharts";
 import { API } from "../utils/format";
+import { useFetch } from "../hooks/useFetch";
 
 const WELCOME = "Hi! I'm your sales intelligence assistant. Ask me about pipeline health, forecast accuracy, quota attainment, rep performance, or ARR trends.";
 
@@ -440,6 +441,66 @@ export default function AgentPage({ activeCompany, userRole } = {}) {
   const abortRef = useRef(null);
   const bottomRef = useRef(null);
 
+  // sales_rep and sales_manager have zero role awareness anywhere in the
+  // agent's pipeline unless the backend knows WHICH rep or team is asking
+  // -- and, same reason as RepHomePage/TeamCommandCenterPage, there's no
+  // per-user login in this demo, so a picker is how the caller's identity
+  // gets established at all. Confirmed live: without rep_id/team_id, the
+  // backend's self-service tier can't answer anything (its evidence pool
+  // is scoped to exactly the id it's given, never inferred from role
+  // alone). executive/revops_admin need no picker -- their chat already
+  // reaches the full company-wide tool surface.
+  const isRepScoped = userRole === "sales_rep";
+  const isTeamScoped = userRole === "sales_manager";
+  const [selectedRepId, setSelectedRepId] = useState(null);
+  const [selectedTeamId, setSelectedTeamId] = useState(null);
+
+  const { data: repsData } = useFetch(
+    isRepScoped ? "/analytics/reps/performance" : null,
+    { role: userRole, company: activeCompany }
+  );
+  const sortedReps = useMemo(() => {
+    if (!Array.isArray(repsData)) return [];
+    return [...repsData].sort((a, b) => Number(b.revenue || 0) - Number(a.revenue || 0));
+  }, [repsData]);
+
+  const { data: orgData } = useFetch(
+    isTeamScoped ? "/analytics/org-structure" : null,
+    { role: userRole, company: activeCompany }
+  );
+  // org-structure buckets a team's roster by each member's own territory
+  // assignment, not by team -- the same team_id can appear under several
+  // territory buckets, each holding only a slice of the roster (confirmed
+  // live while building TeamCommandCenterPage.jsx). Aggregating by
+  // team_id here avoids the same bug: a naive flatten would silently
+  // undercount a team when picking its default.
+  const teams = useMemo(() => {
+    const territories = orgData?.territories || [];
+    const byId = new Map();
+    for (const t of territories) {
+      for (const team of t.teams || []) {
+        const existing = byId.get(team.team_id);
+        if (existing) {
+          existing.memberCount += (team.members || []).length;
+        } else {
+          byId.set(team.team_id, { team_id: team.team_id, team_name: team.team_name, memberCount: (team.members || []).length });
+        }
+      }
+    }
+    return [...byId.values()];
+  }, [orgData]);
+
+  useEffect(() => {
+    if (isRepScoped && !selectedRepId && sortedReps.length) {
+      setSelectedRepId(sortedReps[0].rep_id);
+    }
+  }, [isRepScoped, selectedRepId, sortedReps]);
+  useEffect(() => {
+    if (isTeamScoped && !selectedTeamId && teams.length) {
+      setSelectedTeamId(teams[0].team_id);
+    }
+  }, [isTeamScoped, selectedTeamId, teams]);
+
   const scrollToBottom = () => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
   };
@@ -454,6 +515,16 @@ export default function AgentPage({ activeCompany, userRole } = {}) {
     setAnswerQuality(null);
     setStreamError(null);
   };
+
+  // A company or role switch invalidates whatever rep/team was selected
+  // (and any conversation held with that prior identity) -- without this,
+  // switching from sales_rep to sales_manager left a stale "Seth Silva"
+  // conversation on screen under the new team-scoped picker, confirmed live.
+  useEffect(() => {
+    setSelectedRepId(null);
+    setSelectedTeamId(null);
+    resetConversation();
+  }, [activeCompany, userRole]);
 
   const sendMessage = useCallback(async () => {
     if (!input.trim() || loading) return;
@@ -490,7 +561,12 @@ export default function AgentPage({ activeCompany, userRole } = {}) {
           ...(userRole ? { "X-User-Role": userRole } : {}),
           ...(activeCompany ? { "X-Company-Id": activeCompany } : {}),
         },
-        body: JSON.stringify({ message: userMsg.content, history }),
+        body: JSON.stringify({
+          message: userMsg.content,
+          history,
+          ...(isRepScoped ? { rep_id: selectedRepId } : {}),
+          ...(isTeamScoped ? { team_id: selectedTeamId } : {}),
+        }),
         signal: controller.signal,
       });
 
@@ -566,9 +642,24 @@ export default function AgentPage({ activeCompany, userRole } = {}) {
               ...(userRole ? { "X-User-Role": userRole } : {}),
               ...(activeCompany ? { "X-Company-Id": activeCompany } : {}),
             },
-            body: JSON.stringify({ message: userMsg.content, history }),
+            body: JSON.stringify({
+          message: userMsg.content,
+          history,
+          ...(isRepScoped ? { rep_id: selectedRepId } : {}),
+          ...(isTeamScoped ? { team_id: selectedTeamId } : {}),
+        }),
           });
-          const fallbackData = await fallbackRes.json();
+          const fallbackData = await fallbackRes.json().catch(() => ({}));
+          // A non-2xx response (e.g. a 403 permission error) still parses as
+          // valid JSON -- {"detail": "..."} -- so without this check the
+          // error silently became `fallbackData.reply || "No response"`,
+          // rendering the literal words "No response" with no error banner
+          // and no indication anything went wrong. Confirmed live: a
+          // sales_rep/sales_manager session (locked out of the agent by a
+          // permission gate) saw every message answered "No response".
+          if (!fallbackRes.ok) {
+            throw new Error(fallbackData.detail || `Request failed (${fallbackRes.status})`);
+          }
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
@@ -585,8 +676,8 @@ export default function AgentPage({ activeCompany, userRole } = {}) {
           setToolsUsed(fallbackData.tools_used || []);
           setIntent(fallbackData.intent || "");
           setAnswerQuality(fallbackData.answer_quality || null);
-        } catch {
-          setStreamError("Unable to reach AI agent. Check that the backend is running.");
+        } catch (fallbackErr) {
+          setStreamError(fallbackErr.message || "Unable to reach AI agent. Check that the backend is running.");
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
@@ -600,7 +691,7 @@ export default function AgentPage({ activeCompany, userRole } = {}) {
       setLoading(false);
       scrollToBottom();
     }
-  }, [input, loading, messages, userRole, activeCompany]);
+  }, [input, loading, messages, userRole, activeCompany, isRepScoped, selectedRepId, isTeamScoped, selectedTeamId]);
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -614,13 +705,20 @@ export default function AgentPage({ activeCompany, userRole } = {}) {
     setLoading(false);
   };
 
-  const SUGGESTIONS = [
-    "What's our current pipeline health?",
-    "Which reps are underperforming?",
-    "Show me deal velocity trends",
-    "Forecast accuracy for Q3?",
-    "Which deals are at risk of slipping?",
-  ];
+  // Company-wide suggestions (deal velocity, other reps, ARR) would just
+  // hit the self-service tier's graceful decline for these two roles --
+  // their evidence is scoped to their own (or their team's) data only.
+  const SUGGESTIONS = isRepScoped
+    ? ["How am I pacing against quota this quarter?", "What's my payout looking like this period?", "What does pipeline coverage mean?"]
+    : isTeamScoped
+      ? ["How is my team doing this quarter?", "What's my team's payout looking like?", "What does quota attainment mean?"]
+      : [
+          "What's our current pipeline health?",
+          "Which reps are underperforming?",
+          "Show me deal velocity trends",
+          "Forecast accuracy for Q3?",
+          "Which deals are at risk of slipping?",
+        ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 120px)", maxHeight: 700 }}>
@@ -630,6 +728,40 @@ export default function AgentPage({ activeCompany, userRole } = {}) {
           30% { transform: translateY(-3px); opacity: 1; }
         }
       `}</style>
+
+      {/* Identity picker — no per-user login in this demo, same reason
+          RepHomePage/TeamCommandCenterPage need one, and the backend's
+          self-service tier can't answer anything without knowing which
+          rep or team is asking. */}
+      {(isRepScoped || isTeamScoped) && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            Chatting as
+          </span>
+          {isRepScoped && (
+            <select
+              value={selectedRepId || ""}
+              onChange={(e) => { setSelectedRepId(e.target.value); resetConversation(); }}
+              style={{ padding: "6px 10px", borderRadius: "var(--border-radius-sm)", border: "1px solid var(--color-border-secondary)", fontSize: 12, fontWeight: 500, background: "var(--color-background-primary)", color: "var(--color-text-primary)" }}
+            >
+              {sortedReps.map((r) => (
+                <option key={r.rep_id} value={r.rep_id}>{r.name}</option>
+              ))}
+            </select>
+          )}
+          {isTeamScoped && (
+            <select
+              value={selectedTeamId || ""}
+              onChange={(e) => { setSelectedTeamId(e.target.value); resetConversation(); }}
+              style={{ padding: "6px 10px", borderRadius: "var(--border-radius-sm)", border: "1px solid var(--color-border-secondary)", fontSize: 12, fontWeight: 500, background: "var(--color-background-primary)", color: "var(--color-text-primary)" }}
+            >
+              {teams.map((t) => (
+                <option key={t.team_id} value={t.team_id}>{t.team_name}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
 
       {/* Header row: title + metadata badges + clear */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 0 10px", gap: 8, flexWrap: "wrap" }}>

@@ -253,7 +253,17 @@ async def _find_rep_from_message(
     db: AsyncSession,
     message: str,
 ) -> tuple[Rep | None, list[dict[str, Any]], str | None]:
+    # Same fix as get_top_reps in backend/metrics/calculators.py: without
+    # this filter, a message naming an Executive by name (e.g. "what if
+    # Caitlin Brown hits 100% of quota") resolves to that Executive and
+    # produces a full personalized commission projection for them --
+    # confirmed live on techo-solutions' own CRO.
+    from backend.routers.analytics import _selling_rep_ids
+
     reps = (await db.execute(select(Rep))).scalars().all()
+    selling_ids = await _selling_rep_ids(db)
+    if selling_ids:
+        reps = [r for r in reps if str(r.id) in selling_ids]
     requested_name = _extract_requested_rep_name(message)
     if not reps:
         return None, [], requested_name
@@ -851,11 +861,39 @@ async def get_payout_summary(db: AsyncSession, period_prefix: str | None = None)
     """Compute payout for all reps and return a summary with explainability fields."""
     try:
         from backend.routers.analytics import _selling_rep_ids
+        # Without this, compute_payout() falls back to DEFAULT_PAYOUT_CONFIG
+        # (backend/payout/engine.py), which carries two synthetic SPIFF rules
+        # that exist to exercise code paths in tests, not to represent any
+        # tenant's real comp plan (see that module's own comment). Confirmed
+        # live: same company/rep/period, the agent's total_payout was $7,500
+        # higher than the real /payout/team-summary figure -- exactly
+        # 10 reps x a $750 "high win rate" SPIFF none of them are actually
+        # enrolled in. This resolves each rep's own assigned Plan/Rule
+        # config the same way /payout/team-summary does (backend/routers/
+        # payout.py's _load_plan_configs + PlanAssignment/UserProfile
+        # lookup) -- read-only; deliberately NOT calling upsert_payout_trace
+        # or preferring a persisted PayoutRecord the way that endpoint does,
+        # since a passive summary question shouldn't have a side effect and
+        # this endpoint's period model (a prefix match, not a resolved
+        # quarter label) doesn't line up cleanly with a period-keyed record
+        # lookup -- that's a real, smaller residual gap, not this one.
+        from backend.routers.payout import _load_plan_configs
+        from backend.models import PlanAssignment, UserProfile
 
         reps = (await db.execute(select(Rep))).scalars().all()
         selling_ids = await _selling_rep_ids(db)
         if selling_ids:
             reps = [r for r in reps if str(r.id) in selling_ids]
+
+        plan_configs = await _load_plan_configs(db)
+        pa_rows = (await db.execute(select(PlanAssignment))).scalars().all()
+        user_to_plan: dict[Any, Any] = {}
+        for pa in pa_rows:
+            if pa.user_id not in user_to_plan:
+                user_to_plan[pa.user_id] = pa.plan_id
+        user_rows_all = (await db.execute(select(UserProfile.email, UserProfile.id))).all()
+        email_to_user_id = {(u.email or "").lower(): u.id for u in user_rows_all}
+
         rows: list[dict[str, Any]] = []
         total_payout = 0.0
         total_revenue = 0.0
@@ -873,12 +911,16 @@ async def get_payout_summary(db: AsyncSession, period_prefix: str | None = None)
             rep_revenue = float((await db.execute(revenue_q)).scalar() or 0.0)
             rep_quota = float((await db.execute(quota_q)).scalar() or 0.0)
 
+            uid = email_to_user_id.get((rep.email or "").lower())
+            plan_id = user_to_plan.get(uid) if uid else None
+            rep_cfg = plan_configs.get(plan_id) if plan_id else None
+
             won_q = select(func.count(Deal.id)).where(Deal.rep_id == rep.id, Deal.stage == "Closed Won")
             lost_q = select(func.count(Deal.id)).where(Deal.rep_id == rep.id, Deal.stage == "Closed Lost")
             deals_won = int((await db.execute(won_q)).scalar() or 0)
             deals_lost = int((await db.execute(lost_q)).scalar() or 0)
 
-            result = compute_payout(rep_revenue, rep_quota, deals_won, deals_lost)
+            result = compute_payout(rep_revenue, rep_quota, deals_won, deals_lost, rep_cfg)
             total_payout += result["payout"]
             total_revenue += rep_revenue
             total_quota += rep_quota

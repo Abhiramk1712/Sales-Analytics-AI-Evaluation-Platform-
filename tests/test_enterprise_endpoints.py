@@ -269,6 +269,7 @@ def test_full_lifecycle_against_the_real_service_not_a_mock(monkeypatch) -> None
 def test_agent_sensitive_action_guardrail_contract() -> None:
     app = FastAPI()
     app.include_router(agent_router.router)
+    app.include_router(agent_router.chat_router)
 
     async def fake_db():
         yield object()

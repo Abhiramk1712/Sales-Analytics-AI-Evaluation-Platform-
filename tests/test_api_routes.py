@@ -104,6 +104,7 @@ def test_grading_route():
 def test_agent_chat_route_structured_response(monkeypatch):
     app = FastAPI()
     app.include_router(agent_router.router)
+    app.include_router(agent_router.chat_router)
 
     class StubPlanner:
         def plan(self, message):
@@ -425,6 +426,7 @@ def test_analytics_plans_governance_route(monkeypatch):
 def test_agent_chat_uses_deterministic_fallback_when_llm_unavailable(monkeypatch):
     app = FastAPI()
     app.include_router(agent_router.router)
+    app.include_router(agent_router.chat_router)
 
     class StubPlanner:
         def plan(self, message):
@@ -479,6 +481,7 @@ def test_agent_chat_uses_deterministic_fallback_when_llm_unavailable(monkeypatch
 def test_agent_ml_evidence_snapshot_route(monkeypatch):
     app = FastAPI()
     app.include_router(agent_router.router)
+    app.include_router(agent_router.chat_router)
 
     async def fake_forecast(_db):
         return {

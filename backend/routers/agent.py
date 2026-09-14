@@ -9,6 +9,7 @@ from typing import Any, AsyncGenerator, Optional
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.agent.executor import ToolExecutor
@@ -16,13 +17,15 @@ from backend.agent.answer_quality import compute_answer_quality
 from backend.agent.chart_payloads import build_chart_payloads
 from backend.agent.fallback_response import build_deterministic_response
 from backend.agent.planner import IntentPlanner
-from backend.agent.prompts import AGENT_SYSTEM_PROMPT
+from backend.agent.prompts import AGENT_SYSTEM_PROMPT, role_addendum
 from backend.agent.tools.ml_tools import get_deal_risk_summary, get_forecast_summary, get_rep_clusters_summary
 from backend.agent.verifier import EvidenceVerifier
 from backend.database import get_db
-from backend.auth.dependencies import require_permission
+from backend.auth.dependencies import get_user_context, require_any_permission, require_permission
+from backend.auth.models import UserContext
 from backend.auth.tenant import get_tenant_context
 from backend.llm import get_llm_provider
+from backend.models import Rep
 from backend.rag.rag_service import get_rag_service
 from backend.config import settings
 
@@ -30,6 +33,25 @@ router = APIRouter(
     prefix="/agent",
     tags=["AI Agent"],
     dependencies=[Depends(require_permission("run_agent_workflow")), Depends(get_tenant_context)],
+)
+
+# GET /ml-evidence and POST /workflows/sales-performance stay on the
+# stricter router above (run_agent_workflow only -- executive/revops_admin).
+# POST /chat and /chat/stream live here instead: view_own_metrics is the
+# permission that exists specifically for "see my own numbers", already
+# held by sales_rep and sales_manager, and is enough to reach the chat
+# endpoints -- ToolExecutor._execute_self_service (backend/agent/
+# executor.py) is what actually keeps their evidence scoped to their own
+# (or their team's) data once inside. A router-level dependency runs
+# unconditionally for every route on that router with no per-route
+# override, so admitting view_own_metrics on just these two endpoints
+# without loosening ml-evidence/workflows needed a second router, not a
+# change to the shared one -- same pattern already used for
+# GET /payout/statements/{rep_id}.
+chat_router = APIRouter(
+    prefix="/agent",
+    tags=["AI Agent"],
+    dependencies=[Depends(require_any_permission("run_agent_workflow", "view_own_metrics")), Depends(get_tenant_context)],
 )
 
 planner = IntentPlanner()
@@ -45,6 +67,20 @@ class ChatMessage(BaseModel):
 class AgentRequest(BaseModel):
     message: str
     history: list[ChatMessage] = []
+    # Set by the frontend's rep/team picker for sales_rep/sales_manager
+    # sessions (there's no per-user login in this demo, same reason
+    # RepHomePage/TeamCommandCenterPage need their own pickers) -- ignored
+    # entirely for executive/revops_admin, who reach the full company-wide
+    # tool surface regardless.
+    rep_id: Optional[str] = None
+    team_id: Optional[str] = None
+
+
+async def _resolve_rep_ids_scope(db: AsyncSession, team_id: Optional[str]) -> Optional[list[str]]:
+    if not team_id:
+        return None
+    rows = (await db.execute(select(Rep.id).where(Rep.team_id == team_id))).all()
+    return [str(r[0]) for r in rows]
 
 
 class AgentResponse(BaseModel):
@@ -222,8 +258,8 @@ def _build_agent_response(
     )
 
 
-@router.post("/chat", response_model=AgentResponse)
-async def agent_chat(req: AgentRequest, db: AsyncSession = Depends(get_db)):
+@chat_router.post("/chat", response_model=AgentResponse)
+async def agent_chat(req: AgentRequest, db: AsyncSession = Depends(get_db), ctx: UserContext = Depends(get_user_context)):
     sensitive_action = _detect_sensitive_action(req.message)
     if sensitive_action and not _has_explicit_approval(req.message):
         guardrail_reply = (
@@ -256,6 +292,9 @@ async def agent_chat(req: AgentRequest, db: AsyncSession = Depends(get_db)):
         )
 
     state = planner.plan(req.message)
+    state.role = ctx.role
+    state.rep_id = req.rep_id
+    state.rep_ids_scope = await _resolve_rep_ids_scope(db, req.team_id)
     state = await executor.execute_for_intent(state, db_session=db)
     charts = build_chart_payloads(state.intent or "unknown", state.evidence_results)
     verified, warnings = verifier.verify_state(state)
@@ -418,11 +457,19 @@ async def agent_chat(req: AgentRequest, db: AsyncSession = Depends(get_db)):
         messages = [{"role": m.role, "content": m.content} for m in req.history]
         messages.append({"role": "user", "content": req.message})
 
+        # max_tokens was 700 -- confirmed live (5/5 runs, both chat_completion
+        # and stream_complete, same evidence/prompt) to cut a team-scoped
+        # reply off mid-sentence whenever the answer includes a rep-level
+        # table plus a payout summary plus observations. Not a
+        # streaming-specific bug: the same truncation reproduced on this
+        # non-streaming path too. 1500 still truncated 1/5 runs; 2048 ran
+        # clean 7/7 (5 stream_complete + 2 chat_completion) against the
+        # exact same evidence payload.
         llm_reply = await llm_provider.chat_completion(
             messages=messages,
-            system_prompt=f"{AGENT_SYSTEM_PROMPT}\n\nEVIDENCE:\n{evidence_json}",
+            system_prompt=f"{AGENT_SYSTEM_PROMPT}\n\n{role_addendum(ctx.role)}\n\nEVIDENCE:\n{evidence_json}",
             temperature=0.2,
-            max_tokens=700,
+            max_tokens=2048,
         )
     except Exception as exc:
         llm_reply = build_deterministic_response(
@@ -465,8 +512,8 @@ async def agent_chat(req: AgentRequest, db: AsyncSession = Depends(get_db)):
     )
 
 
-@router.post("/chat/stream")
-async def agent_chat_stream(req: AgentRequest, db: AsyncSession = Depends(get_db)):
+@chat_router.post("/chat/stream")
+async def agent_chat_stream(req: AgentRequest, db: AsyncSession = Depends(get_db), ctx: UserContext = Depends(get_user_context)):
     """
     SSE streaming variant of /agent/chat.
 
@@ -515,6 +562,9 @@ async def agent_chat_stream(req: AgentRequest, db: AsyncSession = Depends(get_db
         return StreamingResponse(_guardrail_stream(), media_type="text/event-stream")
 
     state = planner.plan(req.message)
+    state.role = ctx.role
+    state.rep_id = req.rep_id
+    state.rep_ids_scope = await _resolve_rep_ids_scope(db, req.team_id)
     state = await executor.execute_for_intent(state, db_session=db)
     charts = build_chart_payloads(state.intent or "unknown", state.evidence_results)
     verified, warnings = verifier.verify_state(state)
@@ -659,9 +709,9 @@ async def agent_chat_stream(req: AgentRequest, db: AsyncSession = Depends(get_db
 
             async for token in llm_provider.stream_complete(
                 messages=messages,
-                system_prompt=f"{AGENT_SYSTEM_PROMPT}\n\nEVIDENCE:\n{evidence_json}",
+                system_prompt=f"{AGENT_SYSTEM_PROMPT}\n\n{role_addendum(ctx.role)}\n\nEVIDENCE:\n{evidence_json}",
                 temperature=0.2,
-                max_tokens=700,
+                max_tokens=2048,
             ):
                 full_response_parts.append(token)
                 payload = json.dumps({"delta": token, "done": False})
