@@ -241,6 +241,24 @@ async def _resolve_scope_rep_ids(
     return None
 
 
+async def _resolve_scope_user_ids(db: AsyncSession, rep_ids: list[uuid.UUID]) -> list[uuid.UUID]:
+    """Bridge a rep_ids list to their PayoutRecord.user_id equivalents.
+
+    PayoutRecord has no rep_id -- it's keyed by user_id (UserProfile), so
+    scoping payout history to a rep/team requires the same email-based
+    Rep<->UserProfile join used by backend/agent/tools/payout_tools.py's
+    get_payout_summary. Reps with no matching UserProfile are silently
+    dropped, matching that same precedent (an unmatched rep contributes
+    nothing rather than raising).
+    """
+    if not rep_ids:
+        return []
+    rep_rows = (await db.execute(select(Rep.email).where(Rep.id.in_(rep_ids)))).scalars().all()
+    rep_emails = {(e or "").lower() for e in rep_rows}
+    user_rows = (await db.execute(select(UserProfile.id, UserProfile.email))).all()
+    return [u.id for u in user_rows if (u.email or "").lower() in rep_emails]
+
+
 async def _load_revenue_history(db: AsyncSession, rep_ids: list[uuid.UUID] | None = None) -> dict[str, float]:
     q = select(Revenue.period, func.sum(Revenue.amount).label("total")).group_by(Revenue.period).order_by(Revenue.period)
     if rep_ids is not None:
@@ -266,36 +284,25 @@ async def _load_history_for_forecast_type(
         series = await _load_revenue_history(db, rep_ids=rep_ids)
         source = "revenue"
 
-    elif rep_ids is not None:
-        # Only the "revenue" type is wired for rep/team scoping today -- the
-        # ForecastTab's only caller of this path always requests "revenue".
-        # Every other forecast_type still runs company-wide rather than
-        # silently mis-scoping ARR/pipeline/booking/payout history.
-        warnings.append(f"forecast_type '{ft}' does not support rep/team scoping; showing company-wide history.")
-
-    if ft == "ARR":
-        rows = (
-            await db.execute(
-                select(ArrWaterfallEntry.period, func.sum(ArrWaterfallEntry.arr_end).label("total"))
-                .group_by(ArrWaterfallEntry.period)
-                .order_by(ArrWaterfallEntry.period)
-            )
-        ).all()
+    elif ft == "ARR":
+        q = select(ArrWaterfallEntry.period, func.sum(ArrWaterfallEntry.arr_end).label("total")).group_by(ArrWaterfallEntry.period).order_by(ArrWaterfallEntry.period)
+        if rep_ids is not None:
+            q = q.where(ArrWaterfallEntry.rep_id.in_(rep_ids))
+        rows = (await db.execute(q)).all()
         series = {str(r.period): float(r.total or 0.0) for r in rows}
         source = "arr_waterfall.arr_end"
 
     elif ft in {"pipeline", "commit", "best_case"}:
-        rows = (
-            await db.execute(
-                select(
-                    Deal.stage,
-                    Deal.amount,
-                    Deal.close_probability,
-                    Deal.expected_close_date,
-                    Deal.created_at,
-                )
-            )
-        ).all()
+        q = select(
+            Deal.stage,
+            Deal.amount,
+            Deal.close_probability,
+            Deal.expected_close_date,
+            Deal.created_at,
+        )
+        if rep_ids is not None:
+            q = q.where(Deal.rep_id.in_(rep_ids))
+        rows = (await db.execute(q)).all()
         bucket: dict[str, float] = {}
         for row in rows:
             stage = str(row.stage or "")
@@ -315,13 +322,10 @@ async def _load_history_for_forecast_type(
         source = "deals.open_pipeline"
 
     elif ft == "booking":
-        booking_rows = (
-            await db.execute(
-                select(Booking.booking_date, func.sum(Booking.amount).label("total"))
-                .group_by(Booking.booking_date)
-                .order_by(Booking.booking_date)
-            )
-        ).all()
+        booking_q = select(Booking.booking_date, func.sum(Booking.amount).label("total")).group_by(Booking.booking_date).order_by(Booking.booking_date)
+        if rep_ids is not None:
+            booking_q = booking_q.where(Booking.rep_id.in_(rep_ids))
+        booking_rows = (await db.execute(booking_q)).all()
         bucket: dict[str, float] = {}
         for row in booking_rows:
             period = _month_key_from_date(row.booking_date)
@@ -331,14 +335,15 @@ async def _load_history_for_forecast_type(
         source = "bookings"
 
         if not series:
-            rows = (
-                await db.execute(
-                    select(Deal.actual_close_date, func.sum(Deal.amount).label("total"))
-                    .where(Deal.stage == "Closed Won")
-                    .group_by(Deal.actual_close_date)
-                    .order_by(Deal.actual_close_date)
-                )
-            ).all()
+            closed_won_q = (
+                select(Deal.actual_close_date, func.sum(Deal.amount).label("total"))
+                .where(Deal.stage == "Closed Won")
+                .group_by(Deal.actual_close_date)
+                .order_by(Deal.actual_close_date)
+            )
+            if rep_ids is not None:
+                closed_won_q = closed_won_q.where(Deal.rep_id.in_(rep_ids))
+            rows = (await db.execute(closed_won_q)).all()
             for row in rows:
                 period = _month_key_from_date(row.actual_close_date)
                 if period:
@@ -348,14 +353,15 @@ async def _load_history_for_forecast_type(
                 warnings.append("No bookings table history found; used Closed Won deals as booking proxy.")
 
     elif ft == "payout":
-        revenue_by_period = await _load_revenue_history(db)
-        payout_rows = (
-            await db.execute(
-                select(PayoutRecord.period, func.sum(PayoutRecord.payout_amount).label("total"))
-                .group_by(PayoutRecord.period)
-                .order_by(PayoutRecord.period)
-            )
-        ).all()
+        revenue_by_period = await _load_revenue_history(db, rep_ids=rep_ids)
+        payout_q = select(PayoutRecord.period, func.sum(PayoutRecord.payout_amount).label("total")).group_by(PayoutRecord.period).order_by(PayoutRecord.period)
+        if rep_ids is not None:
+            # PayoutRecord has no rep_id -- it's keyed by user_id (UserProfile),
+            # bridged to Rep via email (same join used by
+            # backend/agent/tools/payout_tools.py's get_payout_summary).
+            user_ids = await _resolve_scope_user_ids(db, rep_ids)
+            payout_q = payout_q.where(PayoutRecord.user_id.in_(user_ids))
+        payout_rows = (await db.execute(payout_q)).all()
         bucket: dict[str, float] = {}
         for row in payout_rows:
             months = _period_to_months(str(row.period or ""))
@@ -385,14 +391,11 @@ async def _load_history_for_forecast_type(
         source = "payouts"
 
     elif ft == "quota_attainment":
-        revenue_by_period = await _load_revenue_history(db)
-        quota_rows = (
-            await db.execute(
-                select(Quota.period, func.sum(Quota.amount).label("total"))
-                .group_by(Quota.period)
-                .order_by(Quota.period)
-            )
-        ).all()
+        revenue_by_period = await _load_revenue_history(db, rep_ids=rep_ids)
+        quota_q = select(Quota.period, func.sum(Quota.amount).label("total")).group_by(Quota.period).order_by(Quota.period)
+        if rep_ids is not None:
+            quota_q = quota_q.where(Quota.rep_id.in_(rep_ids))
+        quota_rows = (await db.execute(quota_q)).all()
 
         quota_monthly: dict[str, float] = {}
         for row in quota_rows:
@@ -411,7 +414,9 @@ async def _load_history_for_forecast_type(
         source = "revenue+quota"
 
     if not series and ft != "revenue":
-        fallback_series = await _load_revenue_history(db)
+        # Scoped queries must not silently fall back to company-wide revenue
+        # history -- that would leak unscoped numbers into a rep/team view.
+        fallback_series = await _load_revenue_history(db, rep_ids=rep_ids)
         if fallback_series:
             series = fallback_series
             source = "revenue_fallback"
